@@ -1,0 +1,17 @@
+# Environment variables - never commit these
+.env
+
+# Node dependencies - reinstalled via npm install
+node_modules/
+
+# Mac junk files
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# OCI wallet files (if you ever add wallet-based auth)
+wallet/
+*.p12
+*.sso
