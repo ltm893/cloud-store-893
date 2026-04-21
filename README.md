@@ -23,6 +23,7 @@ A simple Express.js shopping cart with a product listing, cart management, and i
 - Node.js 20+
 - Docker (via Homebrew + Colima on Mac)
 - Colima (Mac Docker runtime)
+- OCI CLI (`brew install oci-cli`)
 
 ### Install dependencies
 ```bash
@@ -112,6 +113,54 @@ Done via OCI Console — Developer Services → Container Instances → Create c
 
 ---
 
+## Managing the Container Instance
+
+Use the included shell script to start, stop, and check the status of the OCI container instance from the command line.
+
+### Setup
+
+Make the script executable (first time only):
+```bash
+chmod +x scripts/container.sh
+```
+
+The script auto-discovers your container instance OCID from OCI using the CLI. To skip the lookup on every run, save it to `~/.zshrc`:
+```bash
+export CLOUD_STORE_OCID="<your-container-instance-ocid>"
+```
+
+### Usage
+
+```bash
+# Start the container instance
+./scripts/container.sh start
+
+# Stop the container instance
+./scripts/container.sh stop
+
+# Check current status
+./scripts/container.sh status
+```
+
+### How the script works
+
+1. Checks OCI CLI is installed and available
+2. If `CLOUD_STORE_OCID` is set in the environment, uses it directly
+3. If not, looks up the `cloud-store-893` compartment OCID via OCI CLI
+4. Then finds the container instance named `container-instance-cloud-store-893` within it
+5. Fails with a clear error message if either lookup fails
+6. On first successful lookup, prints the OCID and suggests saving it to `~/.zshrc`
+
+### Error handling
+
+| Error | Cause | Fix |
+|---|---|---|
+| `OCI CLI not found` | oci-cli not installed | `brew install oci-cli` |
+| `Could not find compartment` | OCI CLI not configured or wrong tenancy | Run `oci setup config` |
+| `Could not find container instance` | Instance was deleted or renamed | Check OCI Console → Container Instances |
+
+---
+
 ## OCI Architecture
 
 ```
@@ -191,6 +240,8 @@ cloud-store-893/
 ├── package.json
 ├── Dockerfile         # node:20-alpine, EXPOSE 3000
 ├── .dockerignore      # excludes node_modules
+├── scripts/
+│   └── container.sh   # OCI container instance start/stop/status
 └── public/
     └── index.html     # Product listing + cart UI
 ```
