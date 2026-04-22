@@ -1,0 +1,21 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# ⚠️  Never commit terraform.tfvars to git — it contains secrets.
+
+# ── OCI Auth ──────────────────────────────────────────────────────────────────
+# OCI Console → Profile → My Profile → API Keys → Add API Key
+# The console shows tenancy_ocid, user_ocid, fingerprint after key creation.
+
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaa..."
+user_ocid        = "ocid1.user.oc1..aaaa..."
+fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
+private_key_path = "~/.oci/oci_api_key.pem"
+region           = "us-ashburn-1"
+
+# ── Project ───────────────────────────────────────────────────────────────────
+# object_storage_namespace: OCI Console → Governance → Tenancy Details
+object_storage_namespace = "your_namespace_here"
+ocir_region_key          = "iad"   # iad = us-ashburn-1
+
+# ── Database ──────────────────────────────────────────────────────────────────
+# Password rules: min 12 chars, at least one uppercase, lowercase, number, special char
+adb_admin_password = "YourStr0ng!Password"

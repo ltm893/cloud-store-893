@@ -15,3 +15,10 @@ npm-debug.log*
 wallet/
 *.p12
 *.sso
+
+# Terraform - secrets and generated state
+terraform/terraform.tfvars
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
