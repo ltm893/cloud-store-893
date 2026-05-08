@@ -2,71 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>OCI Cart</title>
-  <style>
-    body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
-    h1 { color: #872434; }
-    .product { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
-    .cart-item { display: flex; justify-content: space-between; padding: 10px; background: #f9f9f9; margin: 5px 0; }
-    button { background: #114B5F; color: white; border: none; padding: 8px 16px; cursor: pointer; border-radius: 4px; }
-    button.remove { background: #872434; }
-    #total { font-weight: bold; margin-top: 10px; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Cloud Store 893 POS</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h1>Cloud Store 893</h1>
+  <header class="topbar">
+    <h1>Cloud Store 893 POS</h1>
+    <div id="status" class="status">Ready</div>
+  </header>
 
-  <h2>Products</h2>
-  <div id="products"></div>
+  <main class="pos-layout">
+    <section>
+      <h2>Products</h2>
+      <div id="products" class="products-grid"></div>
+    </section>
 
-  <h2>Your Cart</h2>
-  <div id="cart"></div>
-  <div id="total"></div>
+    <aside class="cart-panel">
+      <h2>Current Sale</h2>
+      <div id="cart"></div>
+      <div class="cart-footer">
+        <div id="total" class="total"></div>
+        <label for="paymentMethod">Payment</label>
+        <select id="paymentMethod">
+          <option value="card">Card</option>
+          <option value="cash">Cash</option>
+          <option value="mobile">Mobile Pay</option>
+        </select>
+        <button id="checkoutBtn" class="checkout">Complete Sale</button>
+      </div>
+    </aside>
+  </main>
 
-  <script>
-    async function loadProducts() {
-      const res = await fetch('/api/products');
-      const products = await res.json();
-      document.getElementById('products').innerHTML = products.map(p => `
-        <div class="product">
-          <span>${p.name} — $${p.price.toFixed(2)}</span>
-          <button onclick="addToCart(${p.id})">Add to Cart</button>
-        </div>
-      `).join('');
-    }
+  <section class="history-wrap">
+    <h2>Recent Sales</h2>
+    <div id="salesHistory"></div>
+  </section>
 
-    async function loadCart() {
-      const res = await fetch('/api/cart');
-      const cart = await res.json();
-      const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-      document.getElementById('cart').innerHTML = cart.length === 0
-        ? '<p>Cart is empty</p>'
-        : cart.map(item => `
-          <div class="cart-item">
-            <span>${item.name} x${item.quantity} — $${(item.price * item.quantity).toFixed(2)}</span>
-            <button class="remove" onclick="removeFromCart(${item.id})">Remove</button>
-          </div>
-        `).join('');
-      document.getElementById('total').textContent = cart.length
-        ? `Total: $${total.toFixed(2)}` : '';
-    }
-
-    async function addToCart(productId) {
-      await fetch('/api/cart', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId })
-      });
-      loadCart();
-    }
-
-    async function removeFromCart(id) {
-      await fetch(`/api/cart/${id}`, { method: 'DELETE' });
-      loadCart();
-    }
-
-    loadProducts();
-    loadCart();
-  </script>
+  <script src="/app.js"></script>
 </body>
 </html>

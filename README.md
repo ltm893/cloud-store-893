@@ -26,10 +26,10 @@ and all OCI infrastructure is managed by Terraform.
 ## Deploy from scratch
 
 ### Prerequisites
-- Node.js 20+
 - Docker via Colima: `brew install colima docker` then `colima start`
 - OCI CLI: `brew install oci-cli` then `oci setup config`
 - Terraform: `brew install terraform`
+- SQLcl (automated database seed): see **Installing SQLcl** below — use the provided script
 
 ### 1. Configure Terraform
 
@@ -47,22 +47,91 @@ chmod +x scripts/deploy.sh   # first time only
 ./scripts/deploy.sh
 ```
 
-The script handles everything in order:
-1. Creates the OCIR repository
-2. Builds the linux/arm64 Docker image
-3. Logs in and pushes it to OCIR
-4. Provisions the VCN, Autonomous Database, and Container Instance via Terraform
+The script handles everything end-to-end:
+1. **Phase 1** — Creates the compartment and OCIR repository
+2. Builds and pushes the linux/arm64 Docker image to OCIR
+3. **Phase 2** — Provisions the VCN, Autonomous Database, and Container Instance via Terraform
+4. **Phase 3** — Waits for ORDS to be ready, then seeds the database via SQLcl (creates tables, enables ORDS endpoints, inserts sample products)
 5. Prints the app URL and all relevant OCIDs
 
-### 3. Add ORDS tables (first deploy only)
+> **Note:** You will be prompted for your OCI Auth Token during the `docker login` step.
+> See **Creating an OCI Auth Token** below if you haven't done this yet.
 
-After deploy, the ADB needs the PRODUCTS and CART_ITEMS tables created.
-Run the SQL from `scripts/seed.sql` in the OCI Database Actions SQL Worksheet.
+> **SQLcl not installed?** The deploy will complete but skip the seed.
+> Run `scripts/seed.sql` manually via OCI Database Actions:
+> `OCI Console → Autonomous Database → adb-cloud-store-893 → Database Actions → SQL`
 
-Access Database Actions:
+---
+
+## Installing SQLcl
+
+SQLcl is Oracle's command-line SQL client used by `deploy.sh` to seed the database.
+`brew install sqlcl` no longer works — the formula was removed from Homebrew.
+Use the provided install script instead, which handles everything correctly.
+
+### Why Java 21 specifically?
+
+SQLcl requires **Java 11–21**. Java 22+ introduced module system changes that break
+SQLcl's classloader (symptoms: `ClassNotFoundException` even when the jar is present).
+Java 21 is the current LTS release and the safest choice. You can have multiple JDKs
+installed — `JAVA_HOME` controls which one SQLcl uses.
+
+### Gotcha: zip extracts with root:wheel permissions
+
+Oracle's zip sets jars as `-rw-r-----` (root-readable only). Since Java runs as your
+user, it can't read the jars without a `chmod a+r` fix. The install script handles
+this automatically.
+
+### Install
+
+```bash
+chmod +x scripts/install-sqlcl.sh   # first time only
+./scripts/install-sqlcl.sh
 ```
-OCI Console → Oracle Database → Autonomous Database → adb-cloud-store-893 → Database Actions
+
+The script:
+1. Installs Temurin 21 via Homebrew if Java 21 isn't present
+2. Removes any existing `/opt/sqlcl`
+3. Downloads `sqlcl-latest.zip` directly from Oracle
+4. Extracts to `/opt/sqlcl` and fixes permissions (`chmod a+r`)
+5. Adds `/opt/sqlcl/bin` and `JAVA_HOME=21` to `~/.zshrc`
+6. Verifies with `sql -version`
+
+After the script finishes:
+
+```bash
+source ~/.zshrc
+sql -version
+# → SQLcl: Release 26.x.x.x Production Build: ...
 ```
+
+### Re-installing
+
+To wipe and reinstall cleanly (e.g. after a failed install):
+
+```bash
+sudo rm -rf /opt/sqlcl
+./scripts/install-sqlcl.sh
+```
+
+---
+
+## Creating an OCI Auth Token
+
+An Auth Token is a password OCI generates for you — it's used anywhere OCI needs
+a password that isn't your console login, including `docker login` to OCIR.
+
+1. Open the OCI Console and click your **Profile** icon (top-right)
+2. Click **My Profile**
+3. Scroll down to **Auth Tokens** in the left sidebar and click it
+4. Click **Generate Token**
+5. Enter a description — e.g. `cloud-store-893 docker login`
+6. Click **Generate Token**
+7. **Copy the token immediately** — OCI only shows it once
+
+When `deploy.sh` prompts for a password during `docker login`, paste the token.
+The username format is: `<object_storage_namespace>/<your_email>`
+(the script fills this in automatically from your OCI CLI config).
 
 ---
 
@@ -87,6 +156,19 @@ npm install
 node server.js
 # → http://localhost:3000
 ```
+
+## Native Samsung tablet app (Kotlin)
+
+A native Android POS client is included in `android-pos/` using Kotlin + Jetpack Compose.
+
+Quick start:
+
+1. Start backend from project root: `node server.js`
+2. Open `android-pos` in Android Studio
+3. Run on emulator/tablet
+
+For physical Samsung tablets, update `API_BASE_URL` in
+`android-pos/app/build.gradle.kts` from `10.0.2.2` to your computer's LAN IP.
 
 ---
 
@@ -155,8 +237,11 @@ cloud-store-893/
 │   ├── terraform.tfvars.example
 │   └── README.md
 └── scripts/
-    ├── deploy.sh          # end-to-end terraform + docker build/push
-    └── container.sh       # start / stop / status for the container instance
+    ├── deploy.sh          # end-to-end: terraform + docker build/push + DB seed
+    ├── install-sqlcl.sh   # download and install SQLcl correctly on macOS
+    ├── container.sh       # start / stop / status for the container instance
+    ├── list-resources.sh  # list all OCI resources in the compartment
+    └── seed.sql           # creates tables, enables ORDS, inserts sample products
 ```
 
 ---
@@ -181,7 +266,6 @@ cloud-store-893/
 
 ## Next Steps
 
-- [ ] Add `scripts/seed.sql` for PRODUCTS and CART_ITEMS table creation
 - [ ] Connect OCI Load Balancer in front of the container instance
 - [ ] Add CI/CD pipeline (GitHub Actions → OCIR → Terraform apply)
 - [ ] Add order persistence (ORDERS table in ADB)
