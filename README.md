@@ -149,26 +149,77 @@ Removes the container instance, ADB, networking, OCIR repo, and compartment.
 ## Local development
 
 ```bash
-# Copy and fill in your local ADB ORDS URL
-cp .env.example .env
-
+cp .env.example .env   # fill in ORDS_BASE_URL
 npm install
-node server.js
-# → http://localhost:3000
+npm run dev:up
+```
+
+`dev:up` runs `scripts/dev-up.sh`, which:
+
+1. Verifies `.env` has an `ORDS_BASE_URL`
+2. Compares it to `terraform output -raw ords_base_url` and warns on drift
+3. Probes `${ORDS_BASE_URL}/metadata-catalog/` to detect ADB-stopped vs.
+   ORDS-not-enabled vs. healthy
+4. Prints the LAN URL the tablet should target
+5. Execs `node --watch server.js` so file edits auto-reload
+
+Available npm scripts:
+
+| Script | Effect |
+|---|---|
+| `npm start` | `node server.js` (no watch) |
+| `npm run dev` | `node --watch server.js` (auto-reload, no preflight) |
+| `npm run dev:up` | preflight + `node --watch server.js` (recommended) |
+| `npm run sync-env` | rewrites `.env`'s `ORDS_BASE_URL` from `terraform output` |
+| `npm run lan-url` | prints `http://<your-mac-lan-ip>:3000/` |
+
+Typical flow after a `terraform apply` that may have changed the ADB
+hostname:
+
+```bash
+npm run sync-env
+npm run dev:up
 ```
 
 ## Native Samsung tablet app (Kotlin)
 
-A native Android POS client is included in `android-pos/` using Kotlin + Jetpack Compose.
+A native Android POS client lives in `android-pos/` (Kotlin + Jetpack
+Compose). Theming uses the **Lister palette** via `CloudStorePosTheme` in
+`android-pos/app/src/main/java/com/cloudstore/pos/ui/theme/`.
 
 Quick start:
 
-1. Start backend from project root: `node server.js`
-2. Open `android-pos` in Android Studio
-3. Run on emulator/tablet
+1. Backend running on the Mac: `npm run dev:up`
+2. Tablet on the same Wi-Fi as the Mac
+3. From the project root:
 
-For physical Samsung tablets, update `API_BASE_URL` in
-`android-pos/app/build.gradle.kts` from `10.0.2.2` to your computer's LAN IP.
+   ```bash
+   cd android-pos
+   ./gradlew :app:installDebug
+   ```
+
+`API_BASE_URL` is detected automatically at Gradle configuration time —
+the build runs `ipconfig getifaddr en0` (fallback `en1`) and bakes the
+result into `BuildConfig.API_BASE_URL`. You see the chosen URL in the
+build log, e.g. `[cloud-store-893] debug API_BASE_URL = http://10.0.0.122:3000/`.
+
+Overrides:
+
+```bash
+LAN_IP=192.168.4.7 ./gradlew :app:installDebug              # custom dev IP
+RELEASE_API_BASE_URL=https://prod.example.com/ \
+  ./gradlew :app:assembleRelease                            # release URL
+```
+
+POS UI features:
+
+- Cashier PIN screen (`BuildConfig.CASHIER_PIN`, default `8930`)
+- On-screen number pad (top-aligned, ~⅔ column height)
+- Read-only input field (system keyboard suppressed); **Scan** opens the
+  camera scanner, **Add** submits via barcode-or-product-ID dispatch
+- Numeric input ≤ 6 digits hits `POST /api/cart {productId}`; longer
+  values hit `POST /api/cart/barcode {barcode}`
+- Offline checkout queue with manual `Sync queued` flush
 
 ---
 
@@ -238,6 +289,9 @@ cloud-store-893/
 │   └── README.md
 └── scripts/
     ├── deploy.sh          # end-to-end: terraform + docker build/push + DB seed
+    ├── dev-up.sh          # local dev: ORDS preflight + node --watch server.js
+    ├── sync-env.sh        # rewrite .env's ORDS_BASE_URL from terraform output
+    ├── oci-costs.sh       # query OCI usage-api and print spend by service / range
     ├── install-sqlcl.sh   # download and install SQLcl correctly on macOS
     ├── container.sh       # start / stop / status for the container instance
     ├── list-resources.sh  # list all OCI resources in the compartment
@@ -264,8 +318,27 @@ cloud-store-893/
 
 ---
 
+## Cost monitoring
+
+```bash
+./scripts/oci-costs.sh                  # month-to-date by service
+./scripts/oci-costs.sh --prev-month     # previous full month
+./scripts/oci-costs.sh --week --total   # last 7 days, single total
+./scripts/oci-costs.sh --by-compartment
+./scripts/oci-costs.sh --since 2026-01-01 --until 2026-05-01
+./scripts/oci-costs.sh --help
+```
+
+Uses `oci usage-api` and prints a sorted table with a `TOTAL` row.
+On Always Free tier this should report `$0.0000 USD`. Requires a policy
+allowing your user/group to read usage-report in the tenancy.
+
+---
+
 ## Next Steps
 
 - [ ] Connect OCI Load Balancer in front of the container instance
 - [ ] Add CI/CD pipeline (GitHub Actions → OCIR → Terraform apply)
 - [ ] Add order persistence (ORDERS table in ADB)
+- [ ] Tighten `.gitignore` so Android `build/`, `.gradle/`, and `.idea/`
+      stop tracking
