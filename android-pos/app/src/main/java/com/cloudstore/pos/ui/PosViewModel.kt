@@ -99,23 +99,33 @@ class PosViewModel(
     }
 
     fun addByBarcode() {
-        val barcode = state.value.barcodeInput.trim()
-        addByBarcodeValue(barcode)
+        addByBarcodeValue(state.value.barcodeInput)
     }
 
-    fun addByBarcodeValue(barcode: String) {
-        if (barcode.isEmpty()) {
-            state.value = state.value.copy(status = "Enter barcode")
+    fun addByBarcodeValue(input: String) {
+        val cleaned = input.trim()
+        if (cleaned.isEmpty()) {
+            state.value = state.value.copy(status = "Enter barcode or product ID")
             return
         }
 
+        // Short numeric input (≤ 6 digits) is treated as a product_id;
+        // anything else is sent through the barcode endpoint.
+        val asId = cleaned.toIntOrNull()
+        val treatAsId = asId != null && cleaned.length <= 6
+
         viewModelScope.launch {
-            runCatching { repository.addProductByBarcode(barcode) }
+            runCatching {
+                if (treatAsId) repository.addProduct(asId!!) else repository.addProductByBarcode(cleaned)
+            }
                 .onSuccess {
-                    state.value = state.value.copy(barcodeInput = "", status = "Scanned $barcode")
+                    state.value = state.value.copy(
+                        barcodeInput = "",
+                        status = if (treatAsId) "Added by id $cleaned" else "Scanned $cleaned",
+                    )
                     refresh()
                 }
-                .onFailure { state.value = state.value.copy(status = "Scan failed: ${it.message}") }
+                .onFailure { state.value = state.value.copy(status = "Add failed: ${it.message}") }
         }
     }
 

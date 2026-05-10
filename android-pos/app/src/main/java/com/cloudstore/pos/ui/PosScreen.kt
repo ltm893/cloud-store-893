@@ -5,9 +5,9 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -18,11 +18,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,13 +35,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PosScreen(viewModel: PosViewModel) {
     val state = viewModel.state.value
@@ -76,6 +80,7 @@ fun PosScreen(viewModel: PosViewModel) {
             text = "Cloud Store POS",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
         )
         Text(text = state.status, style = MaterialTheme.typography.bodyMedium)
         if (state.queuedCheckoutCount > 0) {
@@ -96,57 +101,62 @@ fun PosScreen(viewModel: PosViewModel) {
                 .padding(top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // ── Left column: input row + Current Sale ────────────────────────
             Card(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Products", style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(
                         value = state.barcodeInput,
                         onValueChange = viewModel::setBarcodeInput,
-                        label = { Text("Scan / type barcode") },
+                        label = { Text("Scan or add ID") },
+                        singleLine = true,
+                        readOnly = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { viewModel.addByBarcode() },
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 8.dp),
-                    )
-                    Button(onClick = viewModel::addByBarcode, modifier = Modifier.padding(top = 8.dp)) {
-                        Text("Add by barcode")
-                    }
-                    Button(
-                        onClick = {
-                            if (hasCameraPermission) {
-                                scannerOpen = true
-                            } else {
-                                permissionLauncher.launch(Manifest.permission.CAMERA)
-                            }
-                        },
-                        modifier = Modifier.padding(top = 8.dp),
-                    ) {
-                        Text("Scan with camera")
-                    }
-                    FlowRow(
-                        modifier = Modifier.padding(top = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        state.products.forEach { product ->
-                            Button(onClick = { viewModel.addProduct(product.id) }) {
-                                Text("${product.name}  $${"%.2f".format(product.price)}")
-                            }
+                        Button(
+                            onClick = {
+                                if (hasCameraPermission) {
+                                    scannerOpen = true
+                                } else {
+                                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Scan")
+                        }
+                        Button(
+                            onClick = viewModel::addByBarcode,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Add")
                         }
                     }
-                }
-            }
 
-            Card(
-                modifier = Modifier
-                    .width(360.dp)
-                    .fillMaxHeight(),
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Current Sale", style = MaterialTheme.typography.titleMedium)
+                    Divider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    Text(
+                        text = "Current Sale",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                     LazyColumn(
                         modifier = Modifier
                             .weight(1f)
@@ -154,7 +164,10 @@ fun PosScreen(viewModel: PosViewModel) {
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(state.cart) { item ->
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
                                 Text("${item.name} x${item.quantity}")
                                 TextButton(onClick = { viewModel.removeCartItem(item.id) }) {
                                     Text("Remove")
@@ -185,14 +198,28 @@ fun PosScreen(viewModel: PosViewModel) {
                     }
                 }
             }
-        }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text("Recent Sales", style = MaterialTheme.typography.titleMedium)
-                state.recentSales.take(8).forEach { sale ->
-                    Text("${sale.orderNumber}  $${"%.2f".format(sale.total)}  ${sale.paymentMethod}")
+            // ── Right column: Number Pad (top-aligned, ~2/3 of column height) ─
+            Column(
+                modifier = Modifier
+                    .width(360.dp)
+                    .fillMaxHeight(),
+            ) {
+                Card(modifier = Modifier.weight(2f).fillMaxWidth()) {
+                    NumberPad(
+                        onDigit = { d ->
+                            viewModel.setBarcodeInput(state.barcodeInput + d)
+                        },
+                        onClear = { viewModel.setBarcodeInput("") },
+                        onBackspace = {
+                            viewModel.setBarcodeInput(state.barcodeInput.dropLast(1))
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                    )
                 }
+                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
@@ -209,6 +236,97 @@ fun PosScreen(viewModel: PosViewModel) {
 }
 
 @Composable
+private fun NumberPad(
+    onDigit: (Char) -> Unit,
+    onClear: () -> Unit,
+    onBackspace: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf("123", "456", "789").forEach { rowDigits ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowDigits.forEach { digit ->
+                    PadKey(
+                        text = digit.toString(),
+                        onClick = { onDigit(digit) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            PadKey(
+                text = "C",
+                onClick = onClear,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                emphasis = KeyEmphasis.Secondary,
+            )
+            PadKey(
+                text = "0",
+                onClick = { onDigit('0') },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            )
+            PadKey(
+                text = "\u232B",
+                onClick = onBackspace,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                emphasis = KeyEmphasis.Secondary,
+            )
+        }
+    }
+}
+
+private enum class KeyEmphasis { Primary, Secondary }
+
+@Composable
+private fun PadKey(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    emphasis: KeyEmphasis = KeyEmphasis.Primary,
+) {
+    val colors = when (emphasis) {
+        KeyEmphasis.Primary -> androidx.compose.material3.ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.secondary,
+            contentColor   = MaterialTheme.colorScheme.onSecondary,
+        )
+        KeyEmphasis.Secondary -> androidx.compose.material3.ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor   = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        contentPadding = PaddingValues(0.dp),
+        colors = colors,
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+@Composable
 private fun CashierLogin(
     pinInput: String,
     status: String,
@@ -221,12 +339,25 @@ private fun CashierLogin(
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Cashier Sign In", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(
+            text = "Cashier Sign In",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = pinInput,
             onValueChange = onPinChange,
             label = { Text("PIN") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.NumberPassword,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = { onUnlock() },
+            ),
             modifier = Modifier.fillMaxWidth(),
         )
         Button(onClick = onUnlock, modifier = Modifier.padding(top = 10.dp)) {

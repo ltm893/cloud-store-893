@@ -1,7 +1,48 @@
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.TimeUnit
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+// ── API_BASE_URL auto-detection ───────────────────────────────────────────────
+// Resolves the dev backend URL at Gradle configuration time:
+//   1. LAN_IP env var (manual override, e.g. `LAN_IP=192.168.1.50 ./gradlew ...`)
+//   2. macOS `ipconfig getifaddr en0` (Wi-Fi / primary)
+//   3. macOS `ipconfig getifaddr en1` (fallback for USB-C ethernet setups)
+//   4. Hardcoded fallback so non-mac CI / Linux builds still compile.
+//
+// Override the release value with RELEASE_API_BASE_URL when shipping to cloud.
+fun detectLanIp(): String? {
+    System.getenv("LAN_IP")?.takeIf { it.isNotBlank() }?.let { return it }
+    for (iface in listOf("en0", "en1")) {
+        try {
+            val out = ByteArrayOutputStream()
+            val proc = ProcessBuilder("ipconfig", "getifaddr", iface)
+                .redirectErrorStream(true)
+                .start()
+            proc.inputStream.copyTo(out)
+            val finished = proc.waitFor(2, TimeUnit.SECONDS)
+            if (finished && proc.exitValue() == 0) {
+                val ip = out.toString(Charsets.UTF_8.name()).trim()
+                if (ip.isNotEmpty()) return ip
+            } else if (!finished) {
+                proc.destroyForcibly()
+            }
+        } catch (_: Exception) {
+            // ipconfig is mac-only; ignore on Linux/Windows.
+        }
+    }
+    return null
+}
+
+val devLanIp = detectLanIp() ?: "10.0.0.122"
+val devApiPort = System.getenv("PORT") ?: "3000"
+val devApiBaseUrl = "http://$devLanIp:$devApiPort/"
+val releaseApiBaseUrl = System.getenv("RELEASE_API_BASE_URL") ?: devApiBaseUrl
+println("[cloud-store-893] debug   API_BASE_URL = $devApiBaseUrl")
+println("[cloud-store-893] release API_BASE_URL = $releaseApiBaseUrl")
 
 android {
     namespace = "com.cloudstore.pos"
@@ -19,7 +60,7 @@ android {
             useSupportLibrary = true
         }
 
-        buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.12:3000/\"")
+        buildConfigField("String", "API_BASE_URL", "\"$devApiBaseUrl\"")
         buildConfigField("String", "CASHIER_PIN", "\"8930\"")
     }
 
@@ -30,6 +71,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
         }
     }
 
