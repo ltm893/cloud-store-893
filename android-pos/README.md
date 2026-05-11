@@ -1,17 +1,18 @@
 # Cloud Store POS (Android / Kotlin)
 
-Native Samsung-tablet cash register app built with Kotlin + Jetpack Compose.
+Native Samsung-tablet cash register app for **Cloud Store 893**, built with
+Kotlin + Jetpack Compose. Theming: **Lister palette** (`ui/theme/`).
 
-## Current POS capabilities
+## Capabilities
 
-- Cashier PIN gate on launch (`CASHIER_PIN` in Gradle build config)
-- Barcode entry flow (`POST /api/cart/barcode`)
-- Camera barcode scanning (CameraX + ML Kit)
-- Offline checkout queue (failed checkout attempts are stored locally and can be synced)
+- Cashier PIN on launch (`CASHIER_PIN` in Gradle `BuildConfig`, default `8930`)
+- Barcode / product ID entry (`POST /api/cart`, `POST /api/cart/barcode`)
+- Camera scanning (CameraX + ML Kit)
+- Offline checkout queue with **Sync queued** (from **Show status**)
 
 ## API wiring
 
-The app talks to the existing Node backend:
+The app talks to the Node backend:
 
 - `GET /api/products`
 - `GET /api/cart`
@@ -20,32 +21,63 @@ The app talks to the existing Node backend:
 - `POST /api/checkout`
 - `GET /api/sales/recent`
 
-Base URL is set in `app/build.gradle.kts`:
+## Base URL (`API_BASE_URL`)
 
-```kotlin
-buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/\"")
-buildConfigField("String", "CASHIER_PIN", "\"8930\"")
+Do **not** hardcode the tablet URL in source for local dev. Gradle sets
+`BuildConfig.API_BASE_URL` at **configuration** time:
+
+1. Environment variable `LAN_IP` (if set)
+2. macOS `ipconfig getifaddr en0`, then `en1`
+3. Fallback `10.0.0.122` so non-mac CI still builds
+
+Watch the configure log:
+
+`[cloud-store-893] debug API_BASE_URL = http://…/`
+
+The **release** build type uses `RELEASE_API_BASE_URL` when set, otherwise the
+same detected dev URL.
+
+```bash
+LAN_IP=192.168.1.50 ./gradlew :app:assembleDebug
+RELEASE_API_BASE_URL=https://api.example.com/ ./gradlew :app:assembleRelease
 ```
 
-## Run locally
+## Run on a tablet (same LAN as the Mac)
 
-1. Start backend:
-   - From repo root: `node server.js`
-2. Open `android-pos` in Android Studio.
-3. Let Android Studio sync Gradle.
-4. Run on emulator or Samsung tablet.
+1. From repo root: `npm run dev:up` (or `node server.js` on port 3000).
+2. Tablet Wi-Fi same as the Mac; Mac firewall allows TCP **3000** if needed.
+3. Build and install debug (USB debugging on, device authorized):
 
-## Samsung tablet network setup
+   ```bash
+   cd android-pos
+   ./gradlew :app:assembleDebug
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   ```
 
-If app runs on a physical Samsung device, `10.0.2.2` will not work.
-Use your Mac LAN IP instead, for example:
+   Or `./gradlew :app:installDebug` when a single device is the default.
 
-```kotlin
-buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.12:3000/\"")
-```
+## UI layout (three horizontal bands)
 
-Then ensure:
+1. **Header** — Title **“Cloud Store 893 POS”** centered; **Show status** toggles
+   connection text, offline queue + **Sync queued**, and **Lock**.
+2. **Middle** — Left: scan field, **Scan** / **Add**, **Current Sale** list.
+   Right: number pad in a card using **half** the column height (top-aligned).
+3. **Bottom** — Left: sale totals and **Pay**. After **Pay**, payment picker
+   (compact) and **Complete Sale** sit in the **right** column under the pad.
 
-- tablet and backend host are on the same Wi-Fi
-- firewall allows inbound `3000`
-- backend binds on host (default Express setup is fine for local network testing)
+The main screen applies **`navigationBarsPadding()`** so pay controls clear the
+system gesture area with **edge-to-edge** enabled in `MainActivity`.
+
+## Release vs debug
+
+**Debug** APKs are debug-signed and fine for personal tablets and iteration.
+
+**Release** requires a `signingConfig` in `app/build.gradle.kts`; otherwise
+Gradle emits an **unsigned** APK that `adb install` will reject. Add signing
+before distributing or publishing.
+
+## Open in Android Studio
+
+Open the `android-pos` folder, sync Gradle, run on an emulator or device.
+Emulator loopback: use `LAN_IP=10.0.2.2` if the backend runs on the host
+machine from the emulator’s perspective.

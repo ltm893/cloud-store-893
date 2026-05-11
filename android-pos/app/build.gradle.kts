@@ -62,6 +62,9 @@ android {
 
         buildConfigField("String", "API_BASE_URL", "\"$devApiBaseUrl\"")
         buildConfigField("String", "CASHIER_PIN", "\"8930\"")
+        // Decimal rates for totals line (e.g. 0.0825 = 8.25%). Override per build type if needed.
+        buildConfigField("String", "POS_SALES_FEE_RATE", "\"0.0\"")
+        buildConfigField("String", "POS_TAX_RATE", "\"0.0\"")
     }
 
     buildTypes {

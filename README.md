@@ -185,41 +185,56 @@ npm run dev:up
 
 A native Android POS client lives in `android-pos/` (Kotlin + Jetpack
 Compose). Theming uses the **Lister palette** via `CloudStorePosTheme` in
-`android-pos/app/src/main/java/com/cloudstore/pos/ui/theme/`.
+`android-pos/app/src/main/java/com/cloudstore/pos/ui/theme/`. See
+`android-pos/README.md` for module-specific notes.
 
 Quick start:
 
 1. Backend running on the Mac: `npm run dev:up`
 2. Tablet on the same Wi-Fi as the Mac
-3. From the project root:
+3. Install a debug build (USB debugging, device authorized):
 
    ```bash
    cd android-pos
-   ./gradlew :app:installDebug
+   ./gradlew :app:assembleDebug
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
 
-`API_BASE_URL` is detected automatically at Gradle configuration time —
-the build runs `ipconfig getifaddr en0` (fallback `en1`) and bakes the
-result into `BuildConfig.API_BASE_URL`. You see the chosen URL in the
-build log, e.g. `[cloud-store-893] debug API_BASE_URL = http://10.0.0.122:3000/`.
+   Or `./gradlew :app:installDebug` if a single default device is connected.
+
+`API_BASE_URL` is resolved at **Gradle configuration** time (not runtime):
+`ipconfig getifaddr en0` with fallback `en1`, then `BuildConfig.API_BASE_URL`.
+The chosen URL is printed in the build log, e.g.
+`[cloud-store-893] debug API_BASE_URL = http://10.0.0.122:3000/`.
 
 Overrides:
 
 ```bash
-LAN_IP=192.168.4.7 ./gradlew :app:installDebug              # custom dev IP
+LAN_IP=192.168.4.7 ./gradlew :app:installDebug               # custom dev IP
 RELEASE_API_BASE_URL=https://prod.example.com/ \
-  ./gradlew :app:assembleRelease                            # release URL
+  ./gradlew :app:assembleRelease                            # release URL only
 ```
 
-POS UI features:
+Release APKs need a **`signingConfig`** in `android-pos/app/build.gradle.kts`
+before `adb install` will accept them; for day-to-day dev on your own tablet,
+**debug** is enough.
 
-- Cashier PIN screen (`BuildConfig.CASHIER_PIN`, default `8930`)
-- On-screen number pad (top-aligned, ~⅔ column height)
-- Read-only input field (system keyboard suppressed); **Scan** opens the
-  camera scanner, **Add** submits via barcode-or-product-ID dispatch
-- Numeric input ≤ 6 digits hits `POST /api/cart {productId}`; longer
-  values hit `POST /api/cart/barcode {barcode}`
-- Offline checkout queue with manual `Sync queued` flush
+POS UI (high level):
+
+- **Band 1:** Title **“Cloud Store 893 POS”** centered; **Show status** /
+  **Hide status** reveals connection text, offline queue (**Sync queued**),
+  and **Lock**.
+- **Band 2:** Left — scan field, **Scan** / **Add**, **Current Sale** list.
+  Right — number pad in a card using **half** the column height (top-aligned).
+- **Band 3:** Left — sale totals and **Pay**. After **Pay**, **Payment** (compact
+  picker) and **Complete Sale** appear in the **right** column under the pad.
+- Cashier PIN (`BuildConfig.CASHIER_PIN`, default `8930`); read-only barcode
+  field (number pad + scanner); **Scan** uses CameraX + ML Kit.
+- Numeric input ≤ 6 digits → `POST /api/cart {productId}`; longer values →
+  `POST /api/cart/barcode {barcode}`.
+- Offline checkout queue; flush from the status drawer (**Sync queued**).
+- Root screen uses **`navigationBarsPadding()`** so the pay controls clear
+  the gesture bar when **edge-to-edge** is enabled in `MainActivity`.
 
 ---
 
@@ -276,6 +291,7 @@ cloud-store-893/
 ├── Dockerfile             # node:20-alpine, linux/arm64, PORT=3000
 ├── .dockerignore
 ├── .env.example           # template for local dev ORDS URL
+├── android-pos/           # Kotlin + Compose tablet POS (see android-pos/README.md)
 ├── terraform/
 │   ├── main.tf            # OCI provider
 │   ├── variables.tf       # all inputs

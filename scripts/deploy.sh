@@ -25,6 +25,20 @@ divider() { echo "\n${BLUE}─────────────────�
 # ── Helper: read a value from terraform.tfvars ────────────────────────────────
 tfvar() { grep "^${1}" "${TFVARS}" | sed 's/.*= *"//' | sed 's/".*//' | tr -d ' ' }
 
+# ── Helper: locate SQLcl binary ───────────────────────────────────────────────
+# Wraps detection in a subshell so set -e failures don't kill the script.
+find_sqlcl() {
+  # 1. Try bare 'sql' on PATH (works after adding /opt/sqlcl/bin to ~/.zshrc)
+  if command -v sql &>/dev/null; then
+    echo "sql"
+    return
+  fi
+  # 2. Try standard manual install location
+  if [[ -x "/opt/sqlcl/bin/sql" ]]; then
+    echo "/opt/sqlcl/bin/sql"
+  fi
+}
+
 # ── Prereq checks ─────────────────────────────────────────────────────────────
 divider
 info "Checking prerequisites..."
@@ -32,22 +46,35 @@ info "Checking prerequisites..."
 command -v terraform &>/dev/null || error "terraform not found. Run: brew tap hashicorp/tap && brew install hashicorp/tap/terraform"
 command -v docker    &>/dev/null || error "docker not found."
 command -v oci       &>/dev/null || error "OCI CLI not found. Run: brew install oci-cli"
+docker info &>/dev/null          || error "Docker daemon not running. Run: colima start"
+[[ -f "${TFVARS}" ]]             || error "terraform/terraform.tfvars not found. Copy terraform.tfvars.example → terraform.tfvars and fill in your values."
 
-docker info &>/dev/null || error "Docker daemon not running. Run: colima start"
-
-[[ -f "${TFVARS}" ]] || error "terraform/terraform.tfvars not found.\nCopy terraform.tfvars.example → terraform.tfvars and fill in your values."
+# SQLcl — optional, needed for Phase 3 seed
+SQL_CMD=$(find_sqlcl || true)
+if [[ -n "$SQL_CMD" ]]; then
+  # Verify Java 11+ is present (SQLcl requirement)
+  if ! command -v java &>/dev/null; then
+    warn "SQLcl found but Java is missing — seed will be skipped. Install: brew install --cask temurin"
+    SQL_CMD=""
+  elif ! java -version 2>&1 | grep -qE 'version "(1[1-9]|[2-9][0-9])'; then
+    warn "SQLcl requires Java 11+ — seed will be skipped. Install: brew install --cask temurin"
+    SQL_CMD=""
+  else
+    info "SQLcl found: ${SQL_CMD}"
+  fi
+else
+  warn "SQLcl not found — seed will be skipped. Install: brew install --cask temurin && brew install sqlcl"
+fi
 
 # ── Read image path components from tfvars ────────────────────────────────────
 NAMESPACE=$(tfvar "object_storage_namespace")
 REGION_KEY=$(tfvar "ocir_region_key")
-PROJECT=$(tfvar "project_name" 2>/dev/null || echo "cloud-store-893")
-IMAGE_TAG=$(tfvar "ocir_image_tag" 2>/dev/null || echo "latest")
+PROJECT=$(tfvar "project_name")
+IMAGE_TAG=$(tfvar "ocir_image_tag")
 
-# project_name has a default in variables.tf — fall back if not in tfvars
-[[ -z "$PROJECT" ]] && PROJECT="cloud-store-893"
+[[ -z "$PROJECT"   ]] && PROJECT="cloud-store-893"
 [[ -z "$IMAGE_TAG" ]] && IMAGE_TAG="latest"
 [[ -z "$REGION_KEY" ]] && REGION_KEY="iad"
-
 [[ -z "$NAMESPACE" || "$NAMESPACE" == "your_namespace_here" ]] && \
   error "object_storage_namespace not set in terraform.tfvars.\nFind it: OCI Console → Profile menu → Tenancy → Object Storage Namespace"
 
@@ -61,16 +88,16 @@ info "Image path: ${IMAGE_PATH}"
 divider
 info "Phase 0 — terraform init"
 cd "${TF_DIR}"
-terraform init -upgrade
+terraform init -upgrade -no-color 2>&1 | grep -E '(Initializing|provider|complete|error)' || true
 
 # ── Phase 1: Create compartment + OCIR repo ────────────────────────────────────
 divider
-info "Phase 1 — Creating compartment and OCIR repo..."
+info "Phase 1 — Compartment and OCIR repo..."
 terraform apply \
   -target=oci_identity_compartment.main \
   -target=oci_artifacts_container_repository.main \
-  -auto-approve
-
+  -auto-approve -compact-warnings -no-color 2>&1 \
+  | grep -E '(Apply complete|No changes|already|created|ocid|error)' || true
 success "OCIR repo ready"
 
 # ── Build & push Docker image ──────────────────────────────────────────────────
@@ -91,24 +118,78 @@ success "Image pushed: ${IMAGE_PATH}"
 
 # ── Phase 2: Full apply ────────────────────────────────────────────────────────
 divider
-info "Phase 2 — Applying full Terraform config (ADB + network + container instance)..."
-warn "ADB provisioning takes 3–5 minutes — this is normal."
+info "Phase 2 — VCN, ADB, and Container Instance..."
+warn "ADB provisioning takes 3–5 minutes on first run — this is normal."
 cd "${TF_DIR}"
-terraform apply -auto-approve
+terraform apply -auto-approve -compact-warnings -no-color 2>&1 \
+  | grep -E '(Apply complete|No changes|already|created|ocid|error)' || true
 
-# ── Print results ─────────────────────────────────────────────────────────────
+# ── Print resource summary ─────────────────────────────────────────────────────
+divider
+info "Resource Summary"
+echo ""
+echo "  App URL:              $(terraform output -raw app_url              2>/dev/null || echo 'not available')"
+echo "  ORDS URL:             $(terraform output -raw ords_base_url        2>/dev/null || echo 'not available')"
+echo "  ADB OCID:             $(terraform output -raw adb_ocid             2>/dev/null || echo 'not available')"
+echo "  VCN OCID:             $(terraform output -raw vcn_ocid             2>/dev/null || echo 'not available')"
+echo "  Container OCID:       $(terraform output -raw container_instance_ocid 2>/dev/null || echo 'not available')"
+echo "  Compartment OCID:     $(terraform output -raw compartment_ocid    2>/dev/null || echo 'not available')"
+echo ""
+
+# ── Phase 3: Seed the database ────────────────────────────────────────────────
+divider
+info "Phase 3 — Seeding the database via SQLcl..."
+
+if [[ -z "$SQL_CMD" ]]; then
+  warn "SQLcl not available — skipping seed."
+  warn "Run manually: paste scripts/seed.sql into OCI Database Actions → SQL"
+else
+  cd "${TF_DIR}"
+  ADB_OCID=$(terraform output -raw adb_ocid 2>/dev/null)
+  ADB_PASSWORD=$(tfvar "adb_admin_password")
+  DB_NAME=$(tfvar "adb_db_name")
+  [[ -z "$DB_NAME" ]] && DB_NAME="CLOUDSTORE893"
+  DB_SERVICE="${DB_NAME:l}_high"   # e.g. cloudstore893_high
+
+  # Wait for ORDS to respond before connecting
+  ORDS_URL=$(terraform output -raw ords_base_url 2>/dev/null)
+  info "Waiting for ORDS at ${ORDS_URL}..."
+  ATTEMPT=0
+  MAX_ATTEMPTS=12  # 12 × 10s = 2 minutes
+  until curl -s --max-time 5 "${ORDS_URL}" -o /dev/null; do
+    ATTEMPT=$((ATTEMPT + 1))
+    [[ $ATTEMPT -ge $MAX_ATTEMPTS ]] && \
+      error "ORDS not ready after $((MAX_ATTEMPTS * 10))s — check ADB status in OCI Console."
+    warn "ORDS not ready — retrying in 10s... (${ATTEMPT}/${MAX_ATTEMPTS})"
+    sleep 10
+  done
+  success "ORDS is ready!"
+
+  # Download wallet to a temp dir
+  WALLET_DIR=$(mktemp -d)
+  WALLET_ZIP="${WALLET_DIR}/wallet.zip"
+  info "Downloading ADB wallet..."
+  oci db autonomous-database generate-wallet \
+    --autonomous-database-id "${ADB_OCID}" \
+    --password "WalletTemp1!" \
+    --file "${WALLET_ZIP}" || error "Wallet download failed — check OCI CLI auth."
+
+  # Run seed.sql
+  info "Running seed.sql against ${DB_SERVICE}..."
+  "${SQL_CMD}" -cloudconfig "${WALLET_ZIP}" \
+    "admin/${ADB_PASSWORD}@${DB_SERVICE}" \
+    @"${SCRIPT_DIR}/seed.sql"
+
+  rm -rf "${WALLET_DIR}"
+  success "Database seeded!"
+fi
+
+# ── Done ──────────────────────────────────────────────────────────────────────
 divider
 success "Deploy complete!"
-echo ""
-echo "  App URL:   $(terraform output -raw app_url 2>/dev/null || echo 'run: terraform output app_url')"
-echo "  ORDS URL:  $(terraform output -raw ords_base_url 2>/dev/null || echo 'run: terraform output ords_base_url')"
-echo ""
-INSTANCE_OCID=$(terraform output -raw container_instance_ocid 2>/dev/null || echo "")
-if [[ -n "$INSTANCE_OCID" ]]; then
-  echo "  Container Instance OCID: ${INSTANCE_OCID}"
-  echo ""
-  warn "Add to ~/.zshrc: export CLOUD_STORE_OCID=\"${INSTANCE_OCID}\""
+CONTAINER_OCID=$(cd "${TF_DIR}" && terraform output -raw container_instance_ocid 2>/dev/null || true)
+if [[ -n "$CONTAINER_OCID" ]]; then
+  warn "Save to ~/.zshrc: export CLOUD_STORE_OCID=\"${CONTAINER_OCID}\""
 fi
-echo ""
 warn "Container instance may take 1–2 minutes to become ACTIVE."
 info "Check status: ./scripts/container.sh status"

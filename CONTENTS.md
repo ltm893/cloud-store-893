@@ -1,6 +1,6 @@
 # Cloud Store 893 - Resume Notes
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 ## Where we left off
 
@@ -23,29 +23,27 @@ Last updated: 2026-05-10
 
 ## Tablet POS app — current state
 
-- Cashier PIN screen (`8930`).
-- Single-screen POS (Compose) with **Lister-palette theme** in
-  `android-pos/.../ui/theme/` (Burgundy / Dark Teal / Snow / Light Cyan /
-  Light Rose; dark-mode variants included).
-- Layout (post-rework):
-  - Header: "Cloud Store POS" + status line.
-  - Left card (`weight(1f)`): scan/ID input field, then a row with **Scan**
-    and **Add** buttons, then **Current Sale** list, total, payment picker,
-    and Complete Sale button.
-  - Right column: **Number Pad** in a top-aligned card taking ~2/3 of the
-    column height, with empty space below.
-- Input dispatch: numeric input ≤ 6 digits hits `POST /api/cart {productId}`;
-  longer values hit `POST /api/cart/barcode {barcode}`. Camera scanner still
-  works for real barcodes.
-- Single-line text field with `ImeAction.Done`; pressing Enter (or Done on
-  the soft keyboard) submits the same way the **Add** button does. The field
-  is `readOnly = true` so the system keyboard does not pop — the on-screen
-  number pad is the typing surface.
-- `API_BASE_URL` is now **auto-detected** at Gradle configuration time using
-  `ipconfig getifaddr en0` (fallback `en1`). Override with
-  `LAN_IP=… ./gradlew :app:installDebug` or
-  `RELEASE_API_BASE_URL=… …` for release builds. No more hand-editing the
-  hostname in `build.gradle.kts`.
+- Cashier PIN screen (`8930` via `BuildConfig`).
+- **Lister-palette** Compose theme in `android-pos/.../ui/theme/` (burgundy,
+  dark teal, snow, light cyan / light rose; dark variants).
+- **Layout (three bands):**
+  1. **Header** — **“Cloud Store 893 POS”** centered; **Show status** /
+     **Hide status** reveals status text, offline queue + **Sync queued**, and
+     **Lock**.
+  2. **Middle** — Left card: scan/ID field (read-only), **Scan** + **Add**,
+     **Current Sale** list. Right column (`360.dp`): number pad in a card using
+     **half** the column height (top-aligned).
+  3. **Bottom** — Left card: **Sale totals** + **Pay**. After **Pay**, the
+     compact payment picker and **Complete Sale** move to the **bottom-right**
+     column (under the pad column).
+- **Scan** opens CameraX + ML Kit; **Add** uses the same dispatch as the pad.
+- Numeric input ≤ 6 digits → `POST /api/cart {productId}`; longer values →
+  `POST /api/cart/barcode {barcode}`.
+- `API_BASE_URL` is set at **Gradle configuration** (`ipconfig getifaddr en0` /
+  `en1`, or `LAN_IP`). See root `README.md` and `android-pos/README.md`.
+- Install loop: `./gradlew :app:assembleDebug` then
+  `adb install -r app/build/outputs/apk/debug/app-debug.apk` (debug is enough
+  for a personal tablet until signing is configured for release).
 
 ## Backend / API status
 
@@ -69,56 +67,41 @@ Last updated: 2026-05-10
 4. Type `100000000001`, press **Add** → "OCI Foundations Study Guide" lands
    in cart (barcode lookup path).
 5. Press **Scan** → camera dialog opens; scan a printed barcode.
-6. **Complete Sale**.
-7. Toggle Wi-Fi off, complete another sale (queues offline).
-8. Toggle Wi-Fi back on; tap **Sync queued**.
+6. **Pay** → choose payment on the right → **Complete Sale**.
+7. **Show status** → toggle Wi-Fi off, complete another sale (queues offline).
+8. Wi-Fi back on → **Sync queued**.
 
 ## Housekeeping (open follow-ups)
 
-These were noticed during the May 10 commit but deferred:
+These were noticed during earlier work but may still apply — verify in git:
 
-1. **`.gitignore` gaps for the Android module.** Several
-   build/IDE-state directories are currently tracked and mutate on every
-   build, polluting `git status`:
-   - `android-pos/.gradle/`
-   - `android-pos/.idea/` (caches/, deploymentTargetSelector.xml at minimum)
-   - `android-pos/app/build/`
-   - `android-pos/build/`
+1. **`.gitignore` gaps for the Android module.** Build/IDE artifacts under
+   `android-pos/` can pollute `git status`. Add a proper Android `.gitignore`,
+   then `git rm -r --cached` for tracked build dirs if needed.
 
-   Fix: add a proper Android `.gitignore`, then
-   `git rm -r --cached <path>` for each of the above and commit.
+2. **`scripts/terraform.tfstate`** — stray state file under `scripts/` vs
+   canonical `terraform/`. Confirm unused and remove if so.
 
-2. **`scripts/terraform.tfstate`** — stray Terraform state file in
-   `scripts/`. The real state lives in `terraform/`; this looks like a
-   leftover from a script run. Verify it isn't referenced by anything and
-   delete.
+3. **`package-lock.json`** — refresh with `npm install` when dependencies
+   change; commit separately from feature work when possible.
 
-3. **`package-lock.json`** drifted to add `dotenv` even though `dotenv` was
-   already in `package.json`. A single `npm install` will refresh it; commit
-   that separately so it doesn't bundle with feature work.
+4. **`scripts/install-sqlcl.sh`** — ensure it is committed if README references
+   it.
 
-4. **`scripts/install-sqlcl.sh`** is untracked but referenced in `README.md`.
-   Decide whether to commit it or remove the README reference.
-
-5. **`scripts/deploy.sh`** has uncommitted changes from a prior session
-   (added `find_sqlcl` helper). Review and commit or revert separately —
-   not bundled with current feature work.
+5. **`scripts/deploy.sh`** — review any local edits vs `main` and commit when
+   ready.
 
 ## Suggested next work
 
-- Add a user-friendly error banner on the tablet when the backend is
-  unreachable (currently shows "Add failed: …" status text).
-- Beep/vibration on successful barcode scan for cashier feedback.
-- Replace hardcoded PIN with secure auth storage
-  (e.g. `cashiers` table in ADB with hashed PINs + `/api/auth/pin`).
-- Receipt screen / print export after Complete Sale.
-- Optional: re-introduce a "Recent Sales" panel (was removed during the
-  number-pad layout rework).
-- Optional: extend `dev-up.sh` to auto-start a stopped ADB via OCI CLI.
+- User-visible error banner when the backend is unreachable (beyond status text).
+- Beep/vibration on successful barcode scan.
+- Replace hardcoded PIN with secure auth (e.g. hashed PINs in ADB).
+- Receipt / print after **Complete Sale**.
+- Optional: **Recent Sales** panel; optional `dev-up.sh` ADB auto-start via OCI CLI.
 
 ## Branch & commit pointers
 
-- Active branch: `feature/kotlin-tablet-pos` (ahead of `main`).
-- Last commit: `Add local dev tooling and refresh tablet POS UI with number
-  pad`.
-- Push: `git push origin feature/kotlin-tablet-pos`.
+- Confirm active branch and last commit with `git branch --show-current` and
+  `git log -1 --oneline`.
+- Feature work has lived on `feature/kotlin-tablet-pos` in the past; push
+  target is typically `git push origin <branch>`.

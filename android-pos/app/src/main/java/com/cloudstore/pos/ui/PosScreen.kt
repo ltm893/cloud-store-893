@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,6 +32,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,10 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.cloudstore.pos.BuildConfig
+import com.cloudstore.pos.data.CartItem
+import java.util.Locale
 
 @Composable
 fun PosScreen(viewModel: PosViewModel) {
@@ -61,6 +67,23 @@ fun PosScreen(viewModel: PosViewModel) {
         scannerOpen = granted
     }
 
+    LaunchedEffect(state.isAuthenticated) {
+        if (!state.isAuthenticated) scannerOpen = false
+    }
+
+    var payPanelVisible by remember { mutableStateOf(false) }
+    var statusPanelExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.isAuthenticated) {
+        if (!state.isAuthenticated) payPanelVisible = false
+    }
+    LaunchedEffect(state.cart.isEmpty(), state.isAuthenticated) {
+        if (state.isAuthenticated && state.cart.isEmpty()) payPanelVisible = false
+    }
+    LaunchedEffect(state.status) {
+        if (state.status.startsWith("Sale complete")) payPanelVisible = false
+    }
+
     if (!state.isAuthenticated) {
         CashierLogin(
             pinInput = state.pinInput,
@@ -74,40 +97,82 @@ fun PosScreen(viewModel: PosViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .navigationBarsPadding()
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
-        Text(
-            text = "Cloud Store POS",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text(text = state.status, style = MaterialTheme.typography.bodyMedium)
-        if (state.queuedCheckoutCount > 0) {
+        val salesFeeRate = BuildConfig.POS_SALES_FEE_RATE.toDoubleOrNull() ?: 0.0
+        val taxRate = BuildConfig.POS_TAX_RATE.toDoubleOrNull() ?: 0.0
+
+        // ── Title (centered) + status (top-end) ───────────────────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 0.dp, bottom = 2.dp),
+        ) {
             Text(
-                text = "Queued checkouts: ${state.queuedCheckoutCount}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
+                text = "Cloud Store 893 POS",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center),
             )
-            Button(onClick = viewModel::flushOfflineQueue, modifier = Modifier.padding(top = 4.dp)) {
-                Text("Sync queued")
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .width(360.dp),
+            ) {
+                TextButton(
+                    onClick = { statusPanelExpanded = !statusPanelExpanded },
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = if (statusPanelExpanded) "Hide status" else "Show status",
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                if (statusPanelExpanded) {
+                    if (state.status != "Ready" && state.status.isNotBlank()) {
+                        Text(
+                            text = state.status,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 2.dp, bottom = 4.dp),
+                        )
+                    }
+                    OfflineQueueStatus(
+                        queuedCount = state.queuedCheckoutCount,
+                        onSyncQueued = viewModel::flushOfflineQueue,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    TextButton(
+                        onClick = viewModel::lock,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                    ) {
+                        Text("Lock", fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
 
+        // ── Scan & items | Number pad ─────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(top = 12.dp),
+                .padding(top = 0.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // ── Left column: input row + Current Sale ────────────────────────
+            // ── Scan & items (left) ─────────────────────────────────────────
             Card(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                     OutlinedTextField(
                         value = state.barcodeInput,
                         onValueChange = viewModel::setBarcodeInput,
@@ -121,14 +186,15 @@ fun PosScreen(viewModel: PosViewModel) {
                         keyboardActions = KeyboardActions(
                             onDone = { viewModel.addByBarcode() },
                         ),
+                        textStyle = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.fillMaxWidth(),
                     )
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Button(
                             onClick = {
@@ -138,29 +204,35 @@ fun PosScreen(viewModel: PosViewModel) {
                                     permissionLauncher.launch(Manifest.permission.CAMERA)
                                 }
                             },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         ) {
-                            Text("Scan")
+                            Text("Scan", style = MaterialTheme.typography.labelLarge)
                         }
                         Button(
                             onClick = viewModel::addByBarcode,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         ) {
-                            Text("Add")
+                            Text("Add", style = MaterialTheme.typography.labelLarge)
                         }
                     }
 
-                    Divider(modifier = Modifier.padding(vertical = 12.dp))
+                    Divider(modifier = Modifier.padding(vertical = 6.dp))
 
                     Text(
                         text = "Current Sale",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
                     LazyColumn(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(top = 8.dp),
+                            .padding(top = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(state.cart) { item ->
@@ -175,37 +247,20 @@ fun PosScreen(viewModel: PosViewModel) {
                             }
                         }
                     }
-
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-                    Text(
-                        text = "Total: $${"%.2f".format(state.total)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-
-                    PaymentMethodPicker(
-                        selected = state.paymentMethod,
-                        onSelected = viewModel::setPaymentMethod,
-                    )
-
-                    Button(
-                        onClick = viewModel::checkout,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                    ) {
-                        Text("Complete Sale")
-                    }
                 }
             }
 
-            // ── Right column: Number Pad (top-aligned, ~2/3 of column height) ─
+            // ── Number pad (right) ───────────────────────────────────────────
             Column(
                 modifier = Modifier
                     .width(360.dp)
                     .fillMaxHeight(),
             ) {
-                Card(modifier = Modifier.weight(2f).fillMaxWidth()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.5f),
+                ) {
                     NumberPad(
                         onDigit = { d ->
                             viewModel.setBarcodeInput(state.barcodeInput + d)
@@ -219,7 +274,63 @@ fun PosScreen(viewModel: PosViewModel) {
                             .padding(12.dp),
                     )
                 }
-                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+
+        // ── Totals + Pay (left) | payment flow under numpad (right) ────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                    SaleTotalsPanel(
+                        cart = state.cart,
+                        salesFeeRate = salesFeeRate,
+                        taxRate = taxRate,
+                    )
+                    if (!payPanelVisible) {
+                        Button(
+                            onClick = { payPanelVisible = true },
+                            enabled = state.cart.isNotEmpty(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                                .height(44.dp),
+                            contentPadding = PaddingValues(vertical = 4.dp),
+                        ) {
+                            Text("Pay")
+                        }
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier.width(360.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (payPanelVisible) {
+                    PaymentMethodPicker(
+                        selected = state.paymentMethod,
+                        onSelected = viewModel::setPaymentMethod,
+                        compact = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(
+                        onClick = viewModel::checkout,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp),
+                    ) {
+                        Text("Complete Sale")
+                    }
+                }
             }
         }
     }
@@ -232,6 +343,50 @@ fun PosScreen(viewModel: PosViewModel) {
             },
             onDismiss = { scannerOpen = false },
         )
+    }
+}
+
+@Composable
+private fun OfflineQueueStatus(
+    queuedCount: Int,
+    onSyncQueued: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.End,
+    ) {
+        Text(
+            text = "Offline queue",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        if (queuedCount > 0) {
+            Text(
+                text = "Queued checkouts: $queuedCount",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedButton(
+                onClick = onSyncQueued,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+            ) {
+                Text("Sync queued")
+            }
+        } else {
+            Text(
+                text = "No queued checkouts",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
@@ -302,8 +457,8 @@ private fun PadKey(
 ) {
     val colors = when (emphasis) {
         KeyEmphasis.Primary -> androidx.compose.material3.ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.secondary,
-            contentColor   = MaterialTheme.colorScheme.onSecondary,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor   = MaterialTheme.colorScheme.onSecondaryContainer,
         )
         KeyEmphasis.Secondary -> androidx.compose.material3.ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -336,7 +491,7 @@ private fun CashierLogin(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(horizontal = 28.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
@@ -345,7 +500,7 @@ private fun CashierLogin(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
             value = pinInput,
             onValueChange = onPinChange,
@@ -363,33 +518,157 @@ private fun CashierLogin(
         Button(onClick = onUnlock, modifier = Modifier.padding(top = 10.dp)) {
             Text("Unlock POS")
         }
-        Text(text = status, modifier = Modifier.padding(top = 8.dp))
+        if (status != "Ready" && status.isNotBlank()) {
+            Text(text = status, modifier = Modifier.padding(top = 8.dp))
+        }
     }
 }
+
+/**
+ * Line totals for the cashier. [salesFeeRate] and [taxRate] come from `BuildConfig`.
+ * When either rate is non-zero, the server `POST /api/checkout` still persists the
+ * cart subtotal only (no tax/fee fields yet), so the recorded sale may differ until
+ * the backend is extended.
+ */
+@Composable
+private fun SaleTotalsPanel(
+    cart: List<CartItem>,
+    salesFeeRate: Double,
+    taxRate: Double,
+) {
+    val itemCount = cart.sumOf { it.quantity }
+    val itemTotal = cart.sumOf { it.price * it.quantity }
+    val salesFee = itemTotal * salesFeeRate
+    val taxable = itemTotal + salesFee
+    val taxAmt = taxable * taxRate
+    val grandTotal = taxable + taxAmt
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Sale total",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            TotalSaleStat(
+                modifier = Modifier.weight(1f),
+                label = "Items",
+                value = itemCount.toString(),
+            )
+            TotalSaleStat(
+                modifier = Modifier.weight(1f),
+                label = "Item total",
+                value = formatMoney(itemTotal),
+            )
+            TotalSaleStat(
+                modifier = Modifier.weight(1f),
+                label = salesFeeLabel(salesFeeRate),
+                value = formatMoney(salesFee),
+            )
+            TotalSaleStat(
+                modifier = Modifier.weight(1f),
+                label = taxLabel(taxRate),
+                value = formatMoney(taxAmt),
+            )
+            TotalSaleStat(
+                modifier = Modifier.weight(1f),
+                label = "Total",
+                value = formatMoney(grandTotal),
+                emphasize = true,
+            )
+        }
+    }
+}
+
+private fun formatMoney(amount: Double): String = "$${"%.2f".format(amount)}"
+
+@Composable
+private fun TotalSaleStat(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    emphasize: Boolean = false,
+) {
+    Column(
+        modifier = modifier.padding(horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 3,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            style = if (emphasize) {
+                MaterialTheme.typography.titleMedium
+            } else {
+                MaterialTheme.typography.bodyMedium
+            },
+            fontWeight = if (emphasize) FontWeight.Bold else FontWeight.Medium,
+            color = if (emphasize) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
+    }
+}
+
+private fun salesFeeLabel(rate: Double): String =
+    if (rate > 0.0) "Sales\n(${formatPercent(rate)})" else "Sales"
+
+private fun taxLabel(rate: Double): String =
+    if (rate > 0.0) "Tax\n(${formatPercent(rate)})" else "Tax"
+
+private fun formatPercent(rate: Double): String =
+    String.format(Locale.US, "%.2f%%", rate * 100)
 
 @Composable
 private fun PaymentMethodPicker(
     selected: String,
     onSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val options = listOf("card", "cash", "mobile")
 
-    Column(modifier = Modifier.padding(top = 8.dp)) {
-        OutlinedTextField(
-            value = selected,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Payment") },
-            modifier = Modifier.fillMaxWidth(),
-        )
+    Column(modifier = modifier) {
+        if (!compact) {
+            OutlinedTextField(
+                value = selected,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Payment") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         OutlinedButton(
             onClick = { expanded = true },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 6.dp),
+                .padding(top = if (compact) 0.dp else 6.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
         ) {
-            Text("Choose payment")
+            Text(
+                if (compact) {
+                    "Payment: $selected"
+                } else {
+                    "Choose payment"
+                },
+            )
         }
         DropdownMenu(
             expanded = expanded,

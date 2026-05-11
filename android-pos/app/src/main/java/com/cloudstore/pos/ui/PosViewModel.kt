@@ -90,6 +90,16 @@ class PosViewModel(
         flushOfflineQueue()
     }
 
+    fun lock() {
+        state.value = PosUiState(
+            isAuthenticated = false,
+            pinInput = "",
+            barcodeInput = "",
+            queuedCheckoutCount = queueStore.all().size,
+            status = "Signed out",
+        )
+    }
+
     fun addProduct(productId: Int) {
         viewModelScope.launch {
             runCatching { repository.addProduct(productId) }
