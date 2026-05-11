@@ -22,3 +22,17 @@ terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
+
+# Stray Terraform state outside terraform/ (never commit)
+scripts/*.tfstate
+scripts/*.tfstate.*
+
+# Android POS — Gradle, Studio, and all build outputs (rebuild with ./gradlew)
+android-pos/.gradle/
+android-pos/**/build/
+android-pos/local.properties
+android-pos/.idea/
+android-pos/*.iml
+android-pos/captures/
+android-pos/.externalNativeBuild/
+android-pos/.cxx/
