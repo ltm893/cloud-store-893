@@ -1,5 +1,5 @@
 output "compartment_ocid" {
-  description = "OCID of the cloud-store-893 compartment"
+  description = "OCID of the project compartment (name = var.project_name, default cloud-store)"
   value       = oci_identity_compartment.main.id
 }
 

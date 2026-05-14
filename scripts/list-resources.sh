@@ -1,7 +1,8 @@
 #!/bin/zsh
 # scripts/list-resources.sh
 #
-# Lists all OCI resources in the cloud-store-893 compartment.
+# Lists all OCI resources in the project compartment (default: cloud-store; matches Terraform project_name).
+# Override: CLOUD_STORE_COMPARTMENT_NAME=my-name ./scripts/list-resources.sh
 # Run this before deleting to see what exists, or after to confirm it's empty.
 #
 # Usage:
@@ -10,7 +11,7 @@
 
 set -e
 
-COMPARTMENT_NAME="cloud-store-893"
+COMPARTMENT_NAME="${CLOUD_STORE_COMPARTMENT_NAME:-cloud-store}"
 
 # ── Resolve compartment OCID ──────────────────────────────────────────────────
 if [[ -n "$1" ]]; then

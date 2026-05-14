@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.cloudstore.pos.BuildConfig
 import com.cloudstore.pos.data.CartItem
+import com.cloudstore.pos.data.StoreCustomer
+import kotlin.math.abs
 import java.util.Locale
 
 @Composable
@@ -229,6 +231,14 @@ fun PosScreen(viewModel: PosViewModel) {
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
+                    CustomerLinkPicker(
+                        customers = state.customers,
+                        selectedCustomerId = state.selectedCustomerId,
+                        onSelect = viewModel::setSelectedCustomerId,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp, bottom = 4.dp),
+                    )
                     LazyColumn(
                         modifier = Modifier
                             .weight(1f)
@@ -236,15 +246,11 @@ fun PosScreen(viewModel: PosViewModel) {
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(state.cart) { item ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text("${item.name} x${item.quantity}")
-                                TextButton(onClick = { viewModel.removeCartItem(item.id) }) {
-                                    Text("Remove")
-                                }
-                            }
+                            CartLineRow(
+                                item = item,
+                                linked893 = state.linked893Cart,
+                                onRemove = { viewModel.removeCartItem(item.id) },
+                            )
                         }
                     }
                 }
@@ -291,7 +297,11 @@ fun PosScreen(viewModel: PosViewModel) {
             ) {
                 Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                     SaleTotalsPanel(
-                        cart = state.cart,
+                        itemCount = state.cart.sumOf { it.quantity },
+                        itemSubtotalPublic = state.subtotalPreMember,
+                        itemSubtotalPayable = state.subtotalPayable,
+                        memberDiscountPreTax = state.memberDiscountPreTax,
+                        linked893 = state.linked893Cart,
                         salesFeeRate = salesFeeRate,
                         taxRate = taxRate,
                     )
@@ -482,6 +492,105 @@ private fun PadKey(
 }
 
 @Composable
+private fun CustomerLinkPicker(
+    customers: List<StoreCustomer>,
+    selectedCustomerId: Int?,
+    onSelect: (Int?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = selectedCustomerId?.let { id ->
+        customers.find { it.id == id }?.let { c ->
+            if (c.is893) "${c.name} (893)" else c.name
+        } ?: "Customer #$id"
+    } ?: "Walk-in (no customer)"
+
+    Column(modifier = modifier) {
+        Text(
+            text = "Link customer",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+        ) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("Walk-in (no customer)") },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                },
+            )
+            customers.forEach { c ->
+                val text = if (c.is893) "${c.name} (893)" else c.name
+                DropdownMenuItem(
+                    text = { Text(text) },
+                    onClick = {
+                        onSelect(c.id)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CartLineRow(
+    item: CartItem,
+    linked893: Boolean,
+    onRemove: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${item.name} ×${item.quantity}",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRemove) {
+                Text("Remove")
+            }
+        }
+        val regLine = "Reg ${formatMoney(item.regularPrice)}" +
+            if (item.onSale && item.salePrice != null) {
+                " · Sale ${formatMoney(item.salePrice)}"
+            } else {
+                ""
+            }
+        Text(
+            text = regLine,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        val payNote = if (linked893 && abs(item.lineSubtotalPayable - item.lineSubtotalPublic) > 0.005) {
+            "Pre-tax line: ${formatMoney(item.lineSubtotalPublic)} → ${formatMoney(item.lineSubtotalPayable)} (893)"
+        } else {
+            "Pre-tax line: ${formatMoney(item.lineSubtotalPayable)}"
+        }
+        Text(
+            text = payNote,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
 private fun CashierLogin(
     pinInput: String,
     status: String,
@@ -526,20 +635,21 @@ private fun CashierLogin(
 
 /**
  * Line totals for the cashier. [salesFeeRate] and [taxRate] come from `BuildConfig`.
- * When either rate is non-zero, the server `POST /api/checkout` still persists the
- * cart subtotal only (no tax/fee fields yet), so the recorded sale may differ until
- * the backend is extended.
+ * Fee and tax apply to [itemSubtotalPayable] (893-adjusted pre-tax item total when linked).
+ * The server persists pre-tax line totals only; tax/fee remain client-side until the backend adds them.
  */
 @Composable
 private fun SaleTotalsPanel(
-    cart: List<CartItem>,
+    itemCount: Int,
+    itemSubtotalPublic: Double,
+    itemSubtotalPayable: Double,
+    memberDiscountPreTax: Double,
+    linked893: Boolean,
     salesFeeRate: Double,
     taxRate: Double,
 ) {
-    val itemCount = cart.sumOf { it.quantity }
-    val itemTotal = cart.sumOf { it.price * it.quantity }
-    val salesFee = itemTotal * salesFeeRate
-    val taxable = itemTotal + salesFee
+    val salesFee = itemSubtotalPayable * salesFeeRate
+    val taxable = itemSubtotalPayable + salesFee
     val taxAmt = taxable * taxRate
     val grandTotal = taxable + taxAmt
 
@@ -550,6 +660,14 @@ private fun SaleTotalsPanel(
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
         )
+        if (linked893 && memberDiscountPreTax > 0.005) {
+            Text(
+                text = "893 member — pre-tax discount ${formatMoney(memberDiscountPreTax)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -563,8 +681,13 @@ private fun SaleTotalsPanel(
             )
             TotalSaleStat(
                 modifier = Modifier.weight(1f),
-                label = "Item total",
-                value = formatMoney(itemTotal),
+                label = "Shelf\nsubtotal",
+                value = formatMoney(itemSubtotalPublic),
+            )
+            TotalSaleStat(
+                modifier = Modifier.weight(1f),
+                label = "Item\npre-tax",
+                value = formatMoney(itemSubtotalPayable),
             )
             TotalSaleStat(
                 modifier = Modifier.weight(1f),

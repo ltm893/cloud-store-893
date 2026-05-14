@@ -32,9 +32,9 @@ variable "region" {
 # ── Project ───────────────────────────────────────────────────────────────────
 
 variable "project_name" {
-  description = "Base name applied to all OCI resource display names"
+  description = "Single OCI compartment name plus OCIR repo / VCN / container display-name prefix (default: cloud-store)"
   type        = string
-  default     = "cloud-store-893"
+  default     = "cloud-store"
 }
 
 variable "object_storage_namespace" {

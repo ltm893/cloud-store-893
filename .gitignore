@@ -22,6 +22,7 @@ terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
+terraform/terraform.tfstate.*.backup
 
 # Stray Terraform state outside terraform/ (never commit)
 scripts/*.tfstate

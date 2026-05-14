@@ -4,17 +4,25 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.cloudstore.pos.data.CartItem
+import com.cloudstore.pos.data.CartResponse
 import com.cloudstore.pos.data.OfflineQueueStore
 import com.cloudstore.pos.data.PendingCheckout
 import com.cloudstore.pos.data.PosRepository
 import com.cloudstore.pos.data.Product
 import com.cloudstore.pos.data.Sale
+import com.cloudstore.pos.data.StoreCustomer
 import kotlinx.coroutines.launch
 
 data class PosUiState(
     val loading: Boolean = false,
     val products: List<Product> = emptyList(),
+    val customers: List<StoreCustomer> = emptyList(),
+    val selectedCustomerId: Int? = null,
     val cart: List<CartItem> = emptyList(),
+    val subtotalPreMember: Double = 0.0,
+    val subtotalPayable: Double = 0.0,
+    val memberDiscountPreTax: Double = 0.0,
+    val linked893Cart: Boolean = false,
     val recentSales: List<Sale> = emptyList(),
     val paymentMethod: String = "card",
     val barcodeInput: String = "",
@@ -22,15 +30,20 @@ data class PosUiState(
     val isAuthenticated: Boolean = false,
     val pinInput: String = "",
     val queuedCheckoutCount: Int = 0,
-) {
-    val total: Double = cart.sumOf { it.price * it.quantity }
-}
+)
 
 class PosViewModel(
     private val repository: PosRepository,
     private val queueStore: OfflineQueueStore,
     private val expectedPin: String,
 ) : ViewModel() {
+    private data class FreshPos(
+        val products: List<Product>,
+        val customers: List<StoreCustomer>,
+        val cart: CartResponse,
+        val sales: List<Sale>,
+    )
+
     var state = androidx.compose.runtime.mutableStateOf(PosUiState())
         private set
 
@@ -44,15 +57,21 @@ class PosViewModel(
             state.value = state.value.copy(loading = true, status = "Loading...")
             runCatching {
                 val products = repository.products()
-                val cart = repository.cart()
+                val customers = repository.customers()
+                val cartResp = repository.cart(state.value.selectedCustomerId)
                 val sales = repository.recentSales()
-                Triple(products, cart, sales)
+                FreshPos(products, customers, cartResp, sales)
             }.onSuccess { result ->
-                val (products, cart, sales) = result
+                val (products, customers, cartResp, sales) = result
                 state.value = state.value.copy(
                     loading = false,
                     products = products,
-                    cart = cart,
+                    customers = customers,
+                    cart = cartResp.items,
+                    subtotalPreMember = cartResp.subtotalPreMember,
+                    subtotalPayable = cartResp.subtotalPayable,
+                    memberDiscountPreTax = cartResp.memberDiscountPreTax,
+                    linked893Cart = cartResp.linked893,
                     recentSales = sales,
                     status = "Ready",
                 )
@@ -63,6 +82,11 @@ class PosViewModel(
                 )
             }
         }
+    }
+
+    fun setSelectedCustomerId(id: Int?) {
+        state.value = state.value.copy(selectedCustomerId = id)
+        refresh()
     }
 
     fun setPaymentMethod(method: String) {
@@ -102,8 +126,9 @@ class PosViewModel(
 
     fun addProduct(productId: Int) {
         viewModelScope.launch {
-            runCatching { repository.addProduct(productId) }
-                .onSuccess { refresh() }
+            val cid = state.value.selectedCustomerId
+            runCatching { repository.addProduct(productId, cid) }
+                .onSuccess { applyCartResponse(it) }
                 .onFailure { state.value = state.value.copy(status = "Add failed: ${it.message}") }
         }
     }
@@ -119,30 +144,40 @@ class PosViewModel(
             return
         }
 
-        // Short numeric input (≤ 6 digits) is treated as a product_id;
-        // anything else is sent through the barcode endpoint.
         val asId = cleaned.toIntOrNull()
         val treatAsId = asId != null && cleaned.length <= 6
 
         viewModelScope.launch {
+            val cid = state.value.selectedCustomerId
             runCatching {
-                if (treatAsId) repository.addProduct(asId!!) else repository.addProductByBarcode(cleaned)
+                if (treatAsId) repository.addProduct(asId!!, cid) else repository.addProductByBarcode(cleaned, cid)
             }
-                .onSuccess {
+                .onSuccess { resp ->
+                    applyCartResponse(resp)
                     state.value = state.value.copy(
                         barcodeInput = "",
                         status = if (treatAsId) "Added by id $cleaned" else "Scanned $cleaned",
                     )
-                    refresh()
                 }
                 .onFailure { state.value = state.value.copy(status = "Add failed: ${it.message}") }
         }
     }
 
+    private fun applyCartResponse(resp: CartResponse) {
+        state.value = state.value.copy(
+            cart = resp.items,
+            subtotalPreMember = resp.subtotalPreMember,
+            subtotalPayable = resp.subtotalPayable,
+            memberDiscountPreTax = resp.memberDiscountPreTax,
+            linked893Cart = resp.linked893,
+        )
+    }
+
     fun removeCartItem(cartItemId: Int) {
         viewModelScope.launch {
-            runCatching { repository.removeCartItem(cartItemId) }
-                .onSuccess { refresh() }
+            val cid = state.value.selectedCustomerId
+            runCatching { repository.removeCartItem(cartItemId, cid) }
+                .onSuccess { applyCartResponse(it) }
                 .onFailure { state.value = state.value.copy(status = "Remove failed: ${it.message}") }
         }
     }
@@ -155,13 +190,19 @@ class PosViewModel(
             }
 
             val paymentMethod = state.value.paymentMethod
-            runCatching { repository.checkout(paymentMethod) }
+            val customerId = state.value.selectedCustomerId
+            runCatching { repository.checkout(paymentMethod, customerId) }
                 .onSuccess { receipt ->
-                    state.value = state.value.copy(status = "Sale complete: ${receipt.orderNumber}")
+                    val extra = buildList {
+                        if (receipt.linked893 == true) add("893 member")
+                        receipt.memberDiscountPreTax?.takeIf { it > 0.001 }?.let { add("−${"%.2f".format(it)} pre-tax") }
+                    }.joinToString(" · ").takeIf { it.isNotEmpty() }
+                    val msg = listOfNotNull("Sale complete: ${receipt.orderNumber}", extra).joinToString(" — ")
+                    state.value = state.value.copy(status = msg)
                     refresh()
                 }
                 .onFailure {
-                    queueStore.enqueue(paymentMethod)
+                    queueStore.enqueue(paymentMethod, customerId)
                     state.value = state.value.copy(
                         status = "Offline: checkout queued",
                         queuedCheckoutCount = queueStore.all().size,
@@ -180,7 +221,7 @@ class PosViewModel(
 
             val remaining = mutableListOf<PendingCheckout>()
             for (pending in queued) {
-                val result = runCatching { repository.checkout(pending.paymentMethod) }
+                val result = runCatching { repository.checkout(pending.paymentMethod, pending.customerId) }
                 if (result.isFailure) {
                     remaining.add(pending)
                 }
@@ -194,6 +235,7 @@ class PosViewModel(
             refresh()
         }
     }
+
 }
 
 class PosViewModelFactory(

@@ -15,6 +15,9 @@ region           = "us-ashburn-1"
 # object_storage_namespace: OCI Console → Governance → Tenancy Details
 object_storage_namespace = "your_namespace_here"
 ocir_region_key          = "iad"   # iad = us-ashburn-1
+# project_name — single compartment name + OCIR repo + display names (default: cloud-store).
+# Override only if you intentionally use a different compartment name everywhere.
+# project_name = "cloud-store"
 
 # ── Database ──────────────────────────────────────────────────────────────────
 # Password rules: min 12 chars, at least one uppercase, lowercase, number, special char

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# deploy.sh — Full Terraform + Docker deploy for cloud-store-893
+# deploy.sh — Full Terraform + Docker deploy (single compartment: cloud-store)
 #
 # Run this from the project root:
 #   chmod +x scripts/deploy.sh   (first time only)
@@ -21,6 +21,37 @@ success() { echo "${GREEN}✅ $1${NC}" }
 warn()    { echo "${YELLOW}⚠️  $1${NC}" }
 error()   { echo "${RED}❌ $1${NC}"; exit 1 }
 divider() { echo "\n${BLUE}────────────────────────────────────────${NC}\n" }
+
+# Run terraform and surface failures (piping to grep alone hides non-zero exits).
+run_terraform_apply() {
+  local label="$1"
+  shift
+  local logf
+  logf=$(mktemp)
+  "$@" 2>&1 | tee "$logf" | grep -E '(Apply complete|No changes|Plan:|Error:|error:|created|updated|destroyed|Replaced|ocid)' || true
+  local ec=${pipestatus[1]}
+  if [[ "$ec" -ne 0 ]]; then
+    local tail_out
+    tail_out=$(tail -80 "$logf" 2>/dev/null || true)
+    rm -f "$logf"
+    error "${label} failed (terraform exit ${ec}). Last lines:\n${tail_out}\n\nFull re-run: cd ${TF_DIR} && terraform apply"
+  fi
+  rm -f "$logf"
+}
+
+run_terraform_init() {
+  local logf
+  logf=$(mktemp)
+  terraform init -upgrade -no-color 2>&1 | tee "$logf" | grep -E '(Initializing|provider|complete|Error|error)' || true
+  local ec=${pipestatus[1]}
+  if [[ "$ec" -ne 0 ]]; then
+    local tail_out
+    tail_out=$(tail -80 "$logf" 2>/dev/null || true)
+    rm -f "$logf"
+    error "terraform init failed (exit ${ec}). Last lines:\n${tail_out}\n\ncd ${TF_DIR} && terraform init -upgrade"
+  fi
+  rm -f "$logf"
+}
 
 # ── Helper: read a value from terraform.tfvars ────────────────────────────────
 tfvar() { grep "^${1}" "${TFVARS}" | sed 's/.*= *"//' | sed 's/".*//' | tr -d ' ' }
@@ -72,7 +103,7 @@ REGION_KEY=$(tfvar "ocir_region_key")
 PROJECT=$(tfvar "project_name")
 IMAGE_TAG=$(tfvar "ocir_image_tag")
 
-[[ -z "$PROJECT"   ]] && PROJECT="cloud-store-893"
+[[ -z "$PROJECT"   ]] && PROJECT="cloud-store"
 [[ -z "$IMAGE_TAG" ]] && IMAGE_TAG="latest"
 [[ -z "$REGION_KEY" ]] && REGION_KEY="iad"
 [[ -z "$NAMESPACE" || "$NAMESPACE" == "your_namespace_here" ]] && \
@@ -88,16 +119,15 @@ info "Image path: ${IMAGE_PATH}"
 divider
 info "Phase 0 — terraform init"
 cd "${TF_DIR}"
-terraform init -upgrade -no-color 2>&1 | grep -E '(Initializing|provider|complete|error)' || true
+run_terraform_init
 
 # ── Phase 1: Create compartment + OCIR repo ────────────────────────────────────
 divider
 info "Phase 1 — Compartment and OCIR repo..."
-terraform apply \
+run_terraform_apply "Phase 1 (compartment + OCIR)" terraform apply \
   -target=oci_identity_compartment.main \
   -target=oci_artifacts_container_repository.main \
-  -auto-approve -compact-warnings -no-color 2>&1 \
-  | grep -E '(Apply complete|No changes|already|created|ocid|error)' || true
+  -auto-approve -compact-warnings -no-color
 success "OCIR repo ready"
 
 # ── Build & push Docker image ──────────────────────────────────────────────────
@@ -121,8 +151,7 @@ divider
 info "Phase 2 — VCN, ADB, and Container Instance..."
 warn "ADB provisioning takes 3–5 minutes on first run — this is normal."
 cd "${TF_DIR}"
-terraform apply -auto-approve -compact-warnings -no-color 2>&1 \
-  | grep -E '(Apply complete|No changes|already|created|ocid|error)' || true
+run_terraform_apply "Phase 2 (full stack)" terraform apply -auto-approve -compact-warnings -no-color
 
 # ── Print resource summary ─────────────────────────────────────────────────────
 divider

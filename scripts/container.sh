@@ -1,7 +1,13 @@
 #!/bin/zsh
 
-# cloud-store-893 Container Instance Manager
+# Container Instance manager for the Terraform project compartment.
+# Default compartment: cloud-store (matches terraform/variables.tf project_name).
+# Overrides: CLOUD_STORE_PROJECT_NAME=my-name ./scripts/container.sh status
+#
 # Usage: ./scripts/container.sh [start|stop|status]
+
+PROJECT_NAME="${CLOUD_STORE_PROJECT_NAME:-cloud-store}"
+CONTAINER_DISPLAY_NAME="container-instance-${PROJECT_NAME}"
 
 # Check OCI CLI is available
 if ! command -v oci &> /dev/null; then
@@ -14,14 +20,14 @@ fi
 if [[ -z "$CLOUD_STORE_OCID" ]]; then
   echo "🔍 CLOUD_STORE_OCID not set — looking up container instance from OCI..."
 
-  # Get compartment OCID for cloud-store-893
+  # Get compartment OCID (name = project_name / PROJECT_NAME)
   COMPARTMENT_OCID=$(oci iam compartment list \
     --all \
-    --query "data[?name=='cloud-store-893'].id | [0]" \
+    --query "data[?name=='${PROJECT_NAME}'].id | [0]" \
     --raw-output 2>/dev/null)
 
   if [[ -z "$COMPARTMENT_OCID" || "$COMPARTMENT_OCID" == "null" ]]; then
-    echo "❌ Could not find compartment 'cloud-store-893' in OCI."
+    echo "❌ Could not find compartment '${PROJECT_NAME}' in OCI."
     echo "   Check your OCI CLI config: oci iam compartment list"
     exit 1
   fi
@@ -29,11 +35,11 @@ if [[ -z "$CLOUD_STORE_OCID" ]]; then
   # Get the container instance OCID by name
   CLOUD_STORE_OCID=$(oci container-instances container-instance list \
     --compartment-id "$COMPARTMENT_OCID" \
-    --query "data.items[?\"display-name\"=='container-instance-cloud-store-893'].id | [0]" \
+    --query "data.items[?\"display-name\"=='${CONTAINER_DISPLAY_NAME}'].id | [0]" \
     --raw-output 2>/dev/null)
 
   if [[ -z "$CLOUD_STORE_OCID" || "$CLOUD_STORE_OCID" == "null" ]]; then
-    echo "❌ Could not find container instance 'container-instance-cloud-store-893'."
+    echo "❌ Could not find container instance '${CONTAINER_DISPLAY_NAME}'."
     echo "   Verify it exists in OCI Console → Developer Services → Container Instances"
     echo "   Or set it manually in ~/.zshrc:"
     echo "   export CLOUD_STORE_OCID=\"<your-container-instance-ocid>\""
@@ -49,7 +55,7 @@ fi
 # ── Commands ─────────────────────────────────────────────────────────────────
 case "$1" in
   start)
-    echo "🚀 Starting cloud-store-893 container instance..."
+    echo "🚀 Starting container instance (${PROJECT_NAME})..."
     oci container-instances container-instance start \
       --container-instance-id "$CLOUD_STORE_OCID"
     echo "⏳ Waiting for Active state..."
@@ -62,7 +68,7 @@ case "$1" in
     ;;
 
   stop)
-    echo "🛑 Stopping cloud-store-893 container instance..."
+    echo "🛑 Stopping container instance (${PROJECT_NAME})..."
     oci container-instances container-instance stop \
       --container-instance-id "$CLOUD_STORE_OCID"
     echo "⏳ Waiting for Inactive state..."
@@ -80,7 +86,7 @@ case "$1" in
       --container-instance-id "$CLOUD_STORE_OCID" \
       --query "data.\"lifecycle-state\"" \
       --raw-output)
-    echo "📦 cloud-store-893: $STATUS"
+    echo "📦 ${PROJECT_NAME}: $STATUS"
     ;;
 
   *)

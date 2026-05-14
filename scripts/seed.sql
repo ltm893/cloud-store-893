@@ -21,19 +21,39 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE cart_items'; EXCEPTION WHEN OTHERS THEN NULL
 /
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE products';   EXCEPTION WHEN OTHERS THEN NULL; END;
 /
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE customers';  EXCEPTION WHEN OTHERS THEN NULL; END;
+/
 
 
 -- ── 1. PRODUCTS table ─────────────────────────────────────────────────────────
 
 CREATE TABLE products (
-  id      NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  barcode VARCHAR2(32)   NOT NULL UNIQUE,
-  name    VARCHAR2(200)  NOT NULL,
-  price   NUMBER(10, 2)  NOT NULL
+  id         NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  barcode    VARCHAR2(32)   NOT NULL UNIQUE,
+  name       VARCHAR2(200)  NOT NULL,
+  price      NUMBER(10, 2)  NOT NULL,
+  sale_price NUMBER(10, 2)
 );
 
 
--- ── 2. CART_ITEMS table ───────────────────────────────────────────────────────
+-- ── 2. CUSTOMERS table (store customers; member_code '893' = 10% pre-tax) ─────
+
+CREATE TABLE customers (
+  id            NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name          VARCHAR2(200)  NOT NULL,
+  email         VARCHAR2(200),
+  phone         VARCHAR2(50),
+  address_line1 VARCHAR2(200),
+  address_line2 VARCHAR2(200),
+  city          VARCHAR2(100),
+  state         VARCHAR2(50),
+  postal_code   VARCHAR2(20),
+  card_fake     VARCHAR2(64),
+  member_code   VARCHAR2(32)
+);
+
+
+-- ── 3. CART_ITEMS table ───────────────────────────────────────────────────────
 
 CREATE TABLE cart_items (
   id         NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -41,18 +61,22 @@ CREATE TABLE cart_items (
   quantity   NUMBER        DEFAULT 1 NOT NULL
 );
 
--- ── 3. SALES table ────────────────────────────────────────────────────────────
+-- ── 4. SALES table ────────────────────────────────────────────────────────────
 
 CREATE TABLE sales (
-  id             NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  order_number   VARCHAR2(64)   NOT NULL UNIQUE,
-  total          NUMBER(10, 2)  NOT NULL,
-  payment_method VARCHAR2(50)   NOT NULL,
-  created_at     TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL
+  id                       NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  order_number             VARCHAR2(64)   NOT NULL UNIQUE,
+  total                    NUMBER(10, 2)  NOT NULL,
+  payment_method           VARCHAR2(50)   NOT NULL,
+  customer_id              NUMBER         REFERENCES customers(id),
+  subtotal_pre_member      NUMBER(10, 2)  NOT NULL,
+  member_discount_pre_tax  NUMBER(10, 2)  DEFAULT 0 NOT NULL,
+  linked_893               NUMBER(1)      DEFAULT 0 NOT NULL,
+  created_at               TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL
 );
 
 
--- ── 4. SALE_ITEMS table ───────────────────────────────────────────────────────
+-- ── 5. SALE_ITEMS table ───────────────────────────────────────────────────────
 
 CREATE TABLE sale_items (
   id           NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -64,9 +88,8 @@ CREATE TABLE sale_items (
 );
 
 
--- ── 5. CART_VIEW ──────────────────────────────────────────────────────────────
--- Joins cart_items + products so the app can read name/price with one ORDS call.
--- Returns: id (cart_items.id used for DELETE), product_id, name, price, quantity
+-- ── 6. CART_VIEW ──────────────────────────────────────────────────────────────
+-- Joins cart_items + products: list price, optional sale_price, quantity
 
 CREATE OR REPLACE VIEW cart_view AS
   SELECT
@@ -74,14 +97,13 @@ CREATE OR REPLACE VIEW cart_view AS
     ci.product_id,
     p.name,
     p.price,
+    p.sale_price,
     ci.quantity
   FROM cart_items ci
   JOIN products p ON p.id = ci.product_id;
 
 
--- ── 6. Enable ORDS on the ADMIN schema ───────────────────────────────────────
--- This maps /ords/admin/... to this schema.
--- p_url_mapping_pattern must match the path in your ORDS_BASE_URL.
+-- ── 7. Enable ORDS on the ADMIN schema ───────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_SCHEMA(
@@ -96,11 +118,7 @@ END;
 /
 
 
--- ── 7. Enable ORDS on PRODUCTS table ─────────────────────────────────────────
--- Exposes: GET /ords/admin/products/
---          POST /ords/admin/products/
---          PUT /ords/admin/products/:id
---          DELETE /ords/admin/products/:id
+-- ── 8. Enable ORDS on PRODUCTS table ─────────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -116,11 +134,23 @@ END;
 /
 
 
--- ── 8. Enable ORDS on CART_ITEMS table ───────────────────────────────────────
--- Exposes: GET /ords/admin/cart_items/
---          POST /ords/admin/cart_items/
---          PUT /ords/admin/cart_items/:id
---          DELETE /ords/admin/cart_items/:id
+-- ── 9. Enable ORDS on CUSTOMERS table ─────────────────────────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'CUSTOMERS',
+    p_object_type   => 'TABLE',
+    p_object_alias  => 'customers',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
+-- ── 10. Enable ORDS on CART_ITEMS table ───────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -136,9 +166,7 @@ END;
 /
 
 
--- ── 9. Enable ORDS on CART_VIEW ───────────────────────────────────────────────
--- Exposes: GET /ords/admin/cart_view/
--- Read-only (views don't support POST/PUT/DELETE via ORDS)
+-- ── 11. Enable ORDS on CART_VIEW ───────────────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -153,9 +181,8 @@ BEGIN
 END;
 /
 
--- ── 10. Enable ORDS on SALES table ────────────────────────────────────────────
--- Exposes: GET /ords/admin/sales/
---          POST /ords/admin/sales/
+
+-- ── 12. Enable ORDS on SALES table ────────────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -170,9 +197,7 @@ BEGIN
 END;
 /
 
--- ── 11. Enable ORDS on SALE_ITEMS table ───────────────────────────────────────
--- Exposes: GET /ords/admin/sale_items/
---          POST /ords/admin/sale_items/
+-- ── 13. Enable ORDS on SALE_ITEMS table ───────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -188,13 +213,41 @@ END;
 /
 
 
--- ── 12. Sample products ───────────────────────────────────────────────────────
+-- ── 14. Sample products ───────────────────────────────────────────────────────
 
-INSERT INTO products (barcode, name, price) VALUES ('100000000001', 'OCI Foundations Study Guide',  29.99);
-INSERT INTO products (barcode, name, price) VALUES ('100000000002', 'Terraform on OCI T-Shirt',     24.99);
-INSERT INTO products (barcode, name, price) VALUES ('100000000003', 'Cloud Architecture Poster',    14.99);
-INSERT INTO products (barcode, name, price) VALUES ('100000000004', 'Autonomous Database Mug',       9.99);
-INSERT INTO products (barcode, name, price) VALUES ('100000000005', 'Always Free Tier Sticker Pack', 4.99);
+INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000001', 'OCI Foundations Study Guide',  29.99, NULL);
+INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000002', 'Terraform on OCI T-Shirt',     24.99, NULL);
+INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000003', 'Cloud Architecture Poster',    14.99, 12.99);
+INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000004', 'Autonomous Database Mug',       9.99, NULL);
+INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000005', 'Always Free Tier Sticker Pack', 4.99, NULL);
+
+-- ── 15. Sample customers ──────────────────────────────────────────────────────
+
+INSERT INTO customers (name, email, phone, address_line1, city, state, postal_code, card_fake, member_code)
+VALUES (
+  'Alex Rivera',
+  'alex.rivera@example.com',
+  '555-010-8930',
+  '893 Cloud Way',
+  'Ashburn',
+  'VA',
+  '20147',
+  '4532015112830366',
+  '893'
+);
+
+INSERT INTO customers (name, email, phone, address_line1, city, state, postal_code, card_fake, member_code)
+VALUES (
+  'Jordan Guest',
+  'jordan@example.com',
+  '555-010-0001',
+  '100 Public Rd',
+  'Ashburn',
+  'VA',
+  '20147',
+  '4111111111111111',
+  NULL
+);
 
 COMMIT;
 
@@ -202,6 +255,8 @@ COMMIT;
 -- ── Verify ────────────────────────────────────────────────────────────────────
 
 SELECT 'products'  AS tbl, COUNT(*) AS row_count FROM products
+UNION ALL
+SELECT 'customers', COUNT(*) FROM customers
 UNION ALL
 SELECT 'cart_items', COUNT(*) FROM cart_items
 UNION ALL

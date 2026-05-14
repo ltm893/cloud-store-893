@@ -1,7 +1,7 @@
 # Cloud Store 893
 
 A containerized Node.js shopping cart deployed on Oracle Cloud Infrastructure (OCI).
-Built as a hands-on learning project for the OCI Foundations 2025 certification.
+
 
 ---
 
@@ -40,6 +40,8 @@ cp terraform.tfvars.example terraform.tfvars
 # object_storage_namespace, and adb_admin_password
 ```
 
+Full Terraform documentation (file layout, dependency graph, outputs, workload tear-down, state recovery): [terraform/README.md](terraform/README.md).
+
 ### 2. Run the deploy script
 
 ```bash
@@ -59,7 +61,7 @@ The script handles everything end-to-end:
 
 > **SQLcl not installed?** The deploy will complete but skip the seed.
 > Run `scripts/seed.sql` manually via OCI Database Actions:
-> `OCI Console → Autonomous Database → adb-cloud-store-893 → Database Actions → SQL`
+> `OCI Console → Autonomous Database → adb-cloud-store → Database Actions → SQL`
 
 ---
 
@@ -125,7 +127,7 @@ a password that isn't your console login, including `docker login` to OCIR.
 2. Click **My Profile**
 3. Scroll down to **Auth Tokens** in the left sidebar and click it
 4. Click **Generate Token**
-5. Enter a description — e.g. `cloud-store-893 docker login`
+5. Enter a description — e.g. `cloud-store docker login`
 6. Click **Generate Token**
 7. **Copy the token immediately** — OCI only shows it once
 
@@ -135,14 +137,23 @@ The username format is: `<object_storage_namespace>/<your_email>`
 
 ---
 
-## Tear down everything
+## Tear down workloads (compartment kept)
 
 ```bash
-cd terraform
-terraform destroy
+./scripts/terraform-destroy-workloads.sh
 ```
 
-Removes the container instance, ADB, networking, OCIR repo, and compartment.
+Removes Terraform-managed **workloads** in the `cloud-store` compartment (default
+`project_name`; change in `terraform.tfvars` if needed). The **compartment is not
+destroyed** (`lifecycle { prevent_destroy = true }` in `terraform/compartment.tf`).
+Targets are derived from `terraform state list`, so you do not maintain a static
+resource list in the script.
+
+A plain `cd terraform && terraform destroy` **fails planning** because that run
+includes destroying the compartment, which `prevent_destroy` blocks.
+
+To remove the **compartment** too: delete it in the OCI console only; repo scripts
+never remove the compartment from Terraform state.
 
 ---
 
@@ -257,25 +268,25 @@ The script auto-discovers the container instance OCID from OCI, or reads
 
 ```
 OCI Tenancy
-└── Compartment: cloud-store-893
+└── Compartment: cloud-store
     ├── Container Registry
-    │   └── Repository: cloud-store-893 (Public)
+    │   └── Repository: cloud-store (Public)
     │       └── Image: latest (linux/arm64)
     ├── Networking
-    │   └── VCN: vcn-cloud-store-893 (10.0.0.0/24)
-    │       ├── Subnet: subnet-cloud-store-893 (public)
-    │       ├── Internet Gateway: ig-cloud-store-893
-    │       ├── Route Table: 0.0.0.0/0 → ig-cloud-store-893
+    │   └── VCN: vcn-cloud-store (10.0.0.0/24)
+    │       ├── Subnet: subnet-cloud-store (public)
+    │       ├── Internet Gateway: ig-cloud-store
+    │       ├── Route Table: 0.0.0.0/0 → ig-cloud-store
     │       └── Security List:
     │           ├── Ingress: TCP 22 (SSH)
     │           ├── Ingress: TCP 3000 (App)
     │           └── Egress: All traffic
-    ├── Autonomous Database: adb-cloud-store-893 (ATP, Always Free)
+    ├── Autonomous Database: adb-cloud-store (ATP, Always Free)
     │   └── ORDS API: /ords/admin/products/ and /ords/admin/cart_items/
-    └── Container Instance: container-instance-cloud-store-893
+    └── Container Instance: container-instance-cloud-store
         └── Shape: CI.Standard.A1.Flex (Ampere ARM, Always Free)
-            └── Container: cloud-store-893-container-1
-                └── Image: iad.ocir.io/<namespace>/cloud-store-893:latest
+            └── Container: cloud-store-container-1
+                └── Image: iad.ocir.io/<namespace>/cloud-store:latest
                     Port: 3000
                     ENV: PORT=3000, ORDS_BASE_URL=<from terraform>
 ```
@@ -320,7 +331,7 @@ cloud-store-893/
 
 | Concept | Implementation |
 |---|---|
-| Compartment | All resources isolated under `cloud-store-893` |
+| Compartment | All resources isolated under `cloud-store` (default `project_name`) |
 | Terraform | All resources created and destroyed via IaC |
 | Container Registry (OCIR) | Docker image storage for ARM64 image |
 | Container Instances | Serverless container deployment (no VMs, no K8s) |
