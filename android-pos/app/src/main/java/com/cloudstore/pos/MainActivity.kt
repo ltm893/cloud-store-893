@@ -29,7 +29,6 @@ class MainActivity : ComponentActivity() {
                 factory = PosViewModelFactory(
                     repository = repository,
                     queueStore = queueStore,
-                    expectedPin = BuildConfig.CASHIER_PIN,
                 )
             )
             CloudStorePosTheme {

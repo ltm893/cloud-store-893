@@ -46,6 +46,9 @@ interface PosApi {
 
     @GET("api/sales/recent")
     suspend fun getRecentSales(): List<Sale>
+
+    @POST("api/cashier/unlock")
+    suspend fun unlockCashier(@Body body: Map<String, String>): UnlockResponse
 }
 
 class PosRepository(baseUrl: String) {
@@ -89,4 +92,9 @@ class PosRepository(baseUrl: String) {
         api.checkout(CheckoutRequest(paymentMethod = paymentMethod, customerId = customerId))
 
     suspend fun recentSales() = api.getRecentSales()
+
+    suspend fun unlockCashier(pin: String) {
+        val res = api.unlockCashier(mapOf("pin" to pin))
+        if (!res.ok) throw IllegalStateException("Unlock failed")
+    }
 }

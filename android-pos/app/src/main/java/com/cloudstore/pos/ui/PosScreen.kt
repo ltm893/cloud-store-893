@@ -1,7 +1,9 @@
 package com.cloudstore.pos.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -21,16 +23,26 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +63,8 @@ import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.StoreCustomer
 import kotlin.math.abs
 import java.util.Locale
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 @Composable
 fun PosScreen(viewModel: PosViewModel) {
@@ -96,69 +110,109 @@ fun PosScreen(viewModel: PosViewModel) {
         return
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding()
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    ) {
-        val salesFeeRate = BuildConfig.POS_SALES_FEE_RATE.toDoubleOrNull() ?: 0.0
-        val taxRate = BuildConfig.POS_TAX_RATE.toDoubleOrNull() ?: 0.0
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val adminUrl = remember {
+        BuildConfig.API_BASE_URL.trimEnd('/') + "/admin/"
+    }
 
-        // ── Title (centered) + status (top-end) ───────────────────────────────
-        Box(
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                Text(
+                    text = "Menu",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+                NavigationDrawerItem(
+                    label = {
+                        Text(if (statusPanelExpanded) "Hide status" else "Show status")
+                    },
+                    selected = statusPanelExpanded,
+                    onClick = {
+                        statusPanelExpanded = !statusPanelExpanded
+                        scope.launch { drawerState.close() }
+                    },
+                )
+                NavigationDrawerItem(
+                    label = { Text("Admin") },
+                    selected = false,
+                    onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(adminUrl)))
+                        scope.launch { drawerState.close() }
+                    },
+                )
+                NavigationDrawerItem(
+                    label = { Text("Lock") },
+                    selected = false,
+                    onClick = {
+                        viewModel.lock()
+                        scope.launch { drawerState.close() }
+                    },
+                )
+            }
+        },
+    ) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 0.dp, bottom = 2.dp),
+                .fillMaxSize()
+                .navigationBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 8.dp),
         ) {
-            Text(
-                text = "Cloud Store 893 POS",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.Center),
-            )
-            Column(
-                horizontalAlignment = Alignment.End,
+            val salesFeeRate = BuildConfig.POS_SALES_FEE_RATE.toDoubleOrNull() ?: 0.0
+            val taxRate = BuildConfig.POS_TAX_RATE.toDoubleOrNull() ?: 0.0
+
+            Row(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .width(360.dp),
+                    .fillMaxWidth()
+                    .padding(bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(
-                    onClick = { statusPanelExpanded = !statusPanelExpanded },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                IconButton(
+                    onClick = { scope.launch { drawerState.open() } },
                 ) {
                     Text(
-                        text = if (statusPanelExpanded) "Hide status" else "Show status",
-                        fontWeight = FontWeight.SemiBold,
+                        text = "\u2630",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
-                if (statusPanelExpanded) {
-                    if (state.status != "Ready" && state.status.isNotBlank()) {
-                        Text(
-                            text = state.status,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 2.dp, bottom = 4.dp),
-                        )
-                    }
-                    OfflineQueueStatus(
-                        queuedCount = state.queuedCheckoutCount,
-                        onSyncQueued = viewModel::flushOfflineQueue,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    )
-                    TextButton(
-                        onClick = viewModel::lock,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                Text(
+                    text = "Cloud Store 893 POS",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(48.dp))
+            }
+
+            if (statusPanelExpanded) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     ) {
-                        Text("Lock", fontWeight = FontWeight.SemiBold)
+                        if (state.status != "Ready" && state.status.isNotBlank()) {
+                            Text(
+                                text = state.status,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        OfflineQueueStatus(
+                            queuedCount = state.queuedCheckoutCount,
+                            onSyncQueued = viewModel::flushOfflineQueue,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
                     }
                 }
             }
-        }
 
         // ── Scan & items | Number pad ─────────────────────────────────────────
         Row(
@@ -175,21 +229,29 @@ fun PosScreen(viewModel: PosViewModel) {
                     .fillMaxHeight(),
             ) {
                 Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                    val barcodeFocus = remember { FocusRequester() }
+                    val keyboard = LocalSoftwareKeyboardController.current
+                    val focusManager = LocalFocusManager.current
                     OutlinedTextField(
                         value = state.barcodeInput,
                         onValueChange = viewModel::setBarcodeInput,
                         label = { Text("Scan or add ID") },
                         singleLine = true,
-                        readOnly = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Number,
                             imeAction = ImeAction.Done,
                         ),
                         keyboardActions = KeyboardActions(
-                            onDone = { viewModel.addByBarcode() },
+                            onDone = {
+                                keyboard?.hide()
+                                focusManager.clearFocus()
+                                viewModel.addByBarcode()
+                            },
                         ),
                         textStyle = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(barcodeFocus),
                     )
 
                     Row(
@@ -343,6 +405,7 @@ fun PosScreen(viewModel: PosViewModel) {
                 }
             }
         }
+        }
     }
 
     if (scannerOpen) {
@@ -364,7 +427,6 @@ private fun OfflineQueueStatus(
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.End,
     ) {
         Text(
             text = "Offline queue",
@@ -597,10 +659,13 @@ private fun CashierLogin(
     onPinChange: (String) -> Unit,
     onUnlock: () -> Unit,
 ) {
+    val maskedPin = "•".repeat(pinInput.length)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 28.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
@@ -609,26 +674,59 @@ private fun CashierLogin(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = pinInput,
-            onValueChange = onPinChange,
-            label = { Text("PIN") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.NumberPassword,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = { onUnlock() },
-            ),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Button(onClick = onUnlock, modifier = Modifier.padding(top = 10.dp)) {
-            Text("Unlock POS")
+        Spacer(modifier = Modifier.height(16.dp))
+        Card(
+            modifier = Modifier
+                .width(360.dp)
+                .fillMaxHeight(0.85f),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                OutlinedTextField(
+                    value = maskedPin,
+                    onValueChange = {},
+                    label = { Text("PIN") },
+                    singleLine = true,
+                    readOnly = true,
+                    textStyle = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                NumberPad(
+                    onDigit = { d -> onPinChange(pinInput + d) },
+                    onClear = { onPinChange("") },
+                    onBackspace = { onPinChange(pinInput.dropLast(1)) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                )
+                Button(
+                    onClick = onUnlock,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .height(52.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                ) {
+                    Text("Done", style = MaterialTheme.typography.titleMedium)
+                }
+            }
         }
         if (status != "Ready" && status.isNotBlank()) {
-            Text(text = status, modifier = Modifier.padding(top = 8.dp))
+            Text(
+                text = status,
+                modifier = Modifier.padding(top = 12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (status.contains("Invalid") || status.contains("Cannot") || status.contains("error", ignoreCase = true)) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
         }
     }
 }

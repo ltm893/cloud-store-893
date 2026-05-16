@@ -11,6 +11,14 @@ if (!ORDS_BASE) {
 }
 
 app.use(express.json());
+
+const { registerCashierAuth } = require('./lib/cashier-auth');
+const { registerAdminAuth, requireAdminSession, protectAdminPages } = require('./lib/admin-auth');
+registerCashierAuth(app);
+registerAdminAuth(app);
+app.use('/admin', protectAdminPages);
+app.use('/api/admin', requireAdminSession);
+
 app.use(express.static('public'));
 
 // ── ORDS helpers ──────────────────────────────────────────────────────────
@@ -30,13 +38,27 @@ async function ordsTryGet(path) {
   return data;
 }
 
+/** ORDS accepts ISO-8601 with Z; rejects milliseconds (e.g. .000Z). */
+function ordsTimestamp(date = new Date()) {
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 async function ordsPost(path, body) {
   const res = await fetch(`${ORDS_BASE}/${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`ORDS POST ${path} → ${res.status}`);
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const errBody = await res.json();
+      detail = errBody.message || errBody.error || JSON.stringify(errBody);
+    } catch {
+      detail = await res.text().catch(() => '');
+    }
+    throw new Error(`ORDS POST ${path} → ${res.status}${detail ? `: ${detail}` : ''}`);
+  }
   return res.json();
 }
 
@@ -333,6 +355,7 @@ app.post('/api/checkout', async (req, res) => {
       subtotal_pre_member: summary.subtotalPreMember,
       member_discount_pre_tax: summary.memberDiscountPreTax,
       linked_893: linked893 ? 1 : 0,
+      created_at: ordsTimestamp(),
     });
 
     for (const item of summary.items) {
@@ -368,6 +391,9 @@ app.post('/api/checkout', async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+
+const { registerAdminRoutes } = require('./lib/admin-routes');
+registerAdminRoutes(app, { ordsGet, ordsPost, ordsPut, ordsDelete, ordsTimestamp });
 
 app.get('/api/sales/recent', async (req, res) => {
   try {

@@ -75,6 +75,20 @@ variable "app_port" {
   default     = 3000
 }
 
+variable "cashier_pin" {
+  description = "Cashier PIN for POST /api/cashier/unlock (tablet POS)"
+  type        = string
+  default     = "8930"
+  sensitive   = true
+}
+
+variable "admin_pin" {
+  description = "Admin UI PIN (defaults to cashier_pin when empty in container.tf)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # ── Autonomous Database ───────────────────────────────────────────────────────
 
 variable "adb_db_name" {

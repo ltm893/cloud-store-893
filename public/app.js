@@ -6,8 +6,12 @@ const salesHistoryEl = document.getElementById('salesHistory');
 const checkoutBtn = document.getElementById('checkoutBtn');
 const paymentMethodEl = document.getElementById('paymentMethod');
 const customerSelectEl = document.getElementById('customerSelect');
+const menuBtn = document.getElementById('menuBtn');
+const appMenuEl = document.getElementById('appMenu');
+const toggleStatusBtn = document.getElementById('toggleStatusBtn');
 
 let selectedCustomerId = null;
+let statusVisible = false;
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -189,6 +193,19 @@ async function checkout() {
 }
 
 checkoutBtn.addEventListener('click', checkout);
+
+menuBtn.addEventListener('click', () => {
+  appMenuEl.hidden = !appMenuEl.hidden;
+});
+
+toggleStatusBtn.addEventListener('click', () => {
+  statusVisible = !statusVisible;
+  statusEl.classList.toggle('status-hidden', !statusVisible);
+  toggleStatusBtn.textContent = statusVisible ? 'Hide status' : 'Show status';
+  appMenuEl.hidden = true;
+});
+
+statusEl.classList.add('status-hidden');
 
 customerSelectEl.addEventListener('change', () => {
   const v = customerSelectEl.value;

@@ -12,6 +12,7 @@ import com.cloudstore.pos.data.Product
 import com.cloudstore.pos.data.Sale
 import com.cloudstore.pos.data.StoreCustomer
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 data class PosUiState(
     val loading: Boolean = false,
@@ -35,7 +36,6 @@ data class PosUiState(
 class PosViewModel(
     private val repository: PosRepository,
     private val queueStore: OfflineQueueStore,
-    private val expectedPin: String,
 ) : ViewModel() {
     private data class FreshPos(
         val products: List<Product>,
@@ -105,13 +105,34 @@ class PosViewModel(
 
     fun unlock() {
         val entered = state.value.pinInput
-        if (entered != expectedPin) {
-            state.value = state.value.copy(status = "Invalid PIN")
+        if (entered.isBlank()) {
+            state.value = state.value.copy(status = "Enter PIN")
             return
         }
-        state.value = state.value.copy(isAuthenticated = true, pinInput = "", status = "Signed in")
-        refresh()
-        flushOfflineQueue()
+        viewModelScope.launch {
+            state.value = state.value.copy(status = "Signing in...")
+            runCatching { repository.unlockCashier(entered) }
+                .onSuccess {
+                    state.value = state.value.copy(
+                        isAuthenticated = true,
+                        pinInput = "",
+                        status = "Signed in",
+                    )
+                    refresh()
+                    flushOfflineQueue()
+                }
+                .onFailure { err ->
+                    val msg = when (err) {
+                        is HttpException -> when (err.code()) {
+                            401 -> "Invalid PIN"
+                            404 -> "Server needs update (missing login API)"
+                            else -> "Server error (${err.code()})"
+                        }
+                        else -> "Cannot reach server — check Wi‑Fi and API URL"
+                    }
+                    state.value = state.value.copy(status = msg)
+                }
+        }
     }
 
     fun lock() {
@@ -241,12 +262,11 @@ class PosViewModel(
 class PosViewModelFactory(
     private val repository: PosRepository,
     private val queueStore: OfflineQueueStore,
-    private val expectedPin: String,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(PosViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return PosViewModel(repository, queueStore, expectedPin) as T
+            return PosViewModel(repository, queueStore) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

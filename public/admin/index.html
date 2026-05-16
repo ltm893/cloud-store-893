@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Store 893 — Admin</title>
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <header class="admin-topbar">
+    <button type="button" id="menuBtn" class="menu-btn" aria-label="Menu">☰</button>
+    <h1>Cloud Store 893 Admin</h1>
+    <a href="/" class="back-pos">← POS</a>
+    <button type="button" id="logoutBtn" class="logout-btn">Sign out</button>
+  </header>
+
+  <nav id="sideNav" class="side-nav" aria-label="Tables">
+    <div id="tableNav" class="table-nav"></div>
+  </nav>
+
+  <main class="admin-main">
+    <div id="status" class="status" role="status"></div>
+    <section id="tablePanel" class="table-panel">
+      <h2 id="tableTitle">—</h2>
+      <p id="tableHint" class="hint"></p>
+      <form id="createForm" class="create-form"></form>
+      <div class="table-wrap">
+        <table id="dataTable">
+          <thead id="dataHead"></thead>
+          <tbody id="dataBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="editDialog">
+    <form id="editForm" method="dialog">
+      <h3>Edit row</h3>
+      <div id="editFields"></div>
+      <div class="dialog-actions">
+        <button type="button" id="editCancel">Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/admin/admin.js"></script>
+</body>
+</html>

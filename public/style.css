@@ -25,14 +25,61 @@ h1, h2 {
 
 .topbar {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 8px 12px;
   margin-bottom: 16px;
+}
+
+.topbar h1 {
+  flex: 1;
+  margin: 0;
+  min-width: 160px;
+}
+
+.menu-btn {
+  font-size: 1.25rem;
+  line-height: 1;
+  border: 1px solid #e5e7eb;
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.app-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 0;
+}
+
+.app-menu[hidden] {
+  display: none;
+}
+
+.app-menu a,
+.app-menu button {
+  text-align: left;
+  font-size: 0.95rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: var(--panel);
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--text);
 }
 
 .status {
   color: var(--muted);
   font-size: 0.95rem;
+  margin-left: auto;
+}
+
+.status.status-hidden {
+  display: none;
 }
 
 .pos-layout {

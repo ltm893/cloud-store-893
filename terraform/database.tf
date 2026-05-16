@@ -16,4 +16,13 @@ resource "oci_database_autonomous_database" "main" {
   is_auto_scaling_enabled  = false
 
   freeform_tags = { project = var.project_name }
+
+  # Always Free ADB rejects in-place updates to OCPU/storage; ignore API drift.
+  lifecycle {
+    ignore_changes = [
+      cpu_core_count,
+      data_storage_size_in_tbs,
+      is_auto_scaling_enabled,
+    ]
+  }
 }

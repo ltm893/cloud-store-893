@@ -52,6 +52,10 @@ data class Sale(
     @Json(name = "subtotalPreMember") val subtotalPreMember: Double = 0.0,
 )
 
+data class UnlockResponse(
+    val ok: Boolean = false,
+)
+
 data class CheckoutRequest(
     @Json(name = "paymentMethod") val paymentMethod: String,
     @Json(name = "customerId") val customerId: Int? = null,

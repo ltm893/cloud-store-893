@@ -42,6 +42,8 @@ resource "oci_container_instances_container_instance" "main" {
     environment_variables = {
       PORT          = tostring(var.app_port)
       ORDS_BASE_URL = local.ords_base_url
+      CASHIER_PIN   = var.cashier_pin
+      ADMIN_PIN     = var.admin_pin != "" ? var.admin_pin : var.cashier_pin
     }
   }
 
