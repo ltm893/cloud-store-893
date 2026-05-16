@@ -13,12 +13,12 @@ For a full **Terraform + Docker + DB seed** flow from the repo root, see [`../sc
 | File | Purpose |
 |------|---------|
 | [main.tf](main.tf) | Terraform block (`required_version`, `oracle/oci` provider `~> 6.0`) and `provider "oci"` wiring from variables. |
-| [variables.tf](variables.tf) | Auth (`tenancy_ocid`, `user_ocid`, `fingerprint`, `private_key_path`, `region`), naming (`project_name`, default `cloud-store`), OCIR (`object_storage_namespace`, `ocir_region_key`, `ocir_image_tag`), network CIDRs and `app_port`, ADB name and admin password. |
+| [variables.tf](variables.tf) | Auth, naming, OCIR, network, `app_port`, ADB password, `cashier_pin`, `admin_pin`. |
 | [compartment.tf](compartment.tf) | One `oci_identity_compartment` under the tenancy. |
 | [network.tf](network.tf) | VCN, internet gateway, route table (`0.0.0.0/0` → IGW), security list (SSH 22 + app port ingress, egress all), public subnet. |
 | [registry.tf](registry.tf) | `oci_artifacts_container_repository` — **public** repo so the container instance can pull without an image pull secret. |
-| [database.tf](database.tf) | Always Free `oci_database_autonomous_database` (OLTP / ATP, 1 OCPU, 1 TB). |
-| [container.tf](container.tf) | Availability-domain data, `oci_container_instances_container_instance` (A1 flex shape), VNIC data source for public IP, locals for OCIR image path and ORDS base URL. |
+| [database.tf](database.tf) | Always Free ATP; `lifecycle { ignore_changes }` on OCPU/storage (API drift). |
+| [container.tf](container.tf) | Container instance; env: `PORT`, `ORDS_BASE_URL`, `CASHIER_PIN`, `ADMIN_PIN`. |
 | [outputs.tf](outputs.tf) | OCIDs, `app_url`, `ocir_image_path`, `ords_base_url`, etc. |
 | [terraform.tfvars.example](terraform.tfvars.example) | Template for secrets and tenancy-specific values — copy to `terraform.tfvars` (gitignored). |
 
@@ -155,6 +155,40 @@ flowchart TB
 - **`adb_admin_password`** is `sensitive` in Terraform; it is still stored in state after apply (normal Terraform behavior — protect state files accordingly).
 - **`object_storage_namespace`** is required for the OCIR hostname segment.
 - **`project_name`** drives the compartment **name**, OCIR repo **display name**, and many resource display names (default `cloud-store`).
+- **`cashier_pin`** (sensitive, default `8930`) — tablet `POST /api/cashier/unlock`.
+- **`admin_pin`** (sensitive, optional) — admin UI; defaults to `cashier_pin` when empty.
+
+---
+
+## Troubleshooting: `terraform apply` and Always Free ADB
+
+If apply fails with:
+
+`403-Forbidden … Always Free Autonomous … Upgrade this database to use this feature`
+
+while updating `oci_database_autonomous_database`, Terraform is trying to change
+**OCPU or storage** on an existing Always Free instance (common drift: `cpu_core_count` 0 vs 1).
+
+**Fix in repo:** [database.tf](database.tf) includes:
+
+```hcl
+lifecycle {
+  ignore_changes = [cpu_core_count, data_storage_size_in_tbs, is_auto_scaling_enabled]
+}
+```
+
+After that, `terraform plan` should show **container instance only** (1 to add), not ADB changes.
+
+**Always push a fresh Docker image** before apply when updating app code:
+
+```bash
+IMAGE=$(terraform output -raw ocir_image_path)
+docker buildx build --platform linux/arm64 -t "$IMAGE" ..
+docker push "$IMAGE"
+terraform apply
+```
+
+Recreating the container instance may change **`app_url` public IP** — rebuild the tablet APK with the new host.
 
 ---
 

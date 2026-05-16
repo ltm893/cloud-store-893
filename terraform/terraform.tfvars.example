@@ -22,3 +22,7 @@ ocir_region_key          = "iad"   # iad = us-ashburn-1
 # ── Database ──────────────────────────────────────────────────────────────────
 # Password rules: min 12 chars, at least one uppercase, lowercase, number, special char
 adb_admin_password = "YourStr0ng!Password"
+
+# ── App PINs (container env — tablet login + admin UI) ───────────────────────
+# cashier_pin = "8930"
+# admin_pin   = "8930"   # optional; defaults to cashier_pin when empty

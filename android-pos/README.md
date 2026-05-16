@@ -1,83 +1,80 @@
 # Cloud Store POS (Android / Kotlin)
 
-Native Samsung-tablet cash register app for **Cloud Store 893**, built with
+Native Samsung-tablet cash register for **Cloud Store 893**, built with
 Kotlin + Jetpack Compose. Theming: **Lister palette** (`ui/theme/`).
 
 ## Capabilities
 
-- Cashier PIN on launch (`CASHIER_PIN` in Gradle `BuildConfig`, default `8930`)
+- **Cashier login** — on-screen numpad + **Done**; PIN checked via `POST /api/cashier/unlock` (server `CASHIER_PIN` in `.env` / OCI container env)
+- **☰ Menu** — show/hide status (connection, offline queue), **Admin** (browser → `/admin/`), **Lock**
 - Barcode / product ID entry (`POST /api/cart`, `POST /api/cart/barcode`)
 - Camera scanning (CameraX + ML Kit)
-- Offline checkout queue with **Sync queued** (from **Show status**)
+- Offline checkout queue — **Sync queued** in status panel (see caveats below)
 
 ## API wiring
 
-The app talks to the Node backend:
-
-- `GET /api/products`
-- `GET /api/cart`
-- `POST /api/cart`
-- `DELETE /api/cart/:id`
-- `POST /api/checkout`
-- `GET /api/sales/recent`
+| Endpoint | Use |
+|----------|-----|
+| `POST /api/cashier/unlock` | Login (`{ "pin": "…" }`) |
+| `GET /api/products` | Loaded on unlock (not shown in UI) |
+| `GET /api/customers` | Customer picker |
+| `GET /api/cart` | Current sale |
+| `POST /api/cart` / `POST /api/cart/barcode` | Add line |
+| `DELETE /api/cart/:id` | Remove line |
+| `POST /api/checkout` | Complete sale |
+| `GET /api/sales/recent` | Fetched on refresh (not shown yet) |
 
 ## Base URL (`API_BASE_URL`)
 
-Do **not** hardcode the tablet URL in source for local dev. Gradle sets
-`BuildConfig.API_BASE_URL` at **configuration** time:
+Baked into the APK at **Gradle configuration** time (`BuildConfig.API_BASE_URL`):
 
-1. Environment variable `LAN_IP` (if set)
+1. `LAN_IP` env var if set
 2. macOS `ipconfig getifaddr en0`, then `en1`
-3. Fallback `10.0.0.122` so non-mac CI still builds
+3. Fallback `10.0.0.122`
 
-Watch the configure log:
-
-`[cloud-store-893] debug API_BASE_URL = http://…/`
-
-The **release** build type uses `RELEASE_API_BASE_URL` when set, otherwise the
-same detected dev URL.
+Watch the configure log: `[cloud-store-893] debug API_BASE_URL = http://…/`
 
 ```bash
-LAN_IP=192.168.1.50 ./gradlew :app:assembleDebug
-RELEASE_API_BASE_URL=https://api.example.com/ ./gradlew :app:assembleRelease
+# Mac on same Wi‑Fi as backend (npm run dev:up)
+LAN_IP=$(ipconfig getifaddr en0) ./gradlew :app:assembleDebug
+
+# OCI — use host from: cd ../terraform && terraform output -raw app_url
+LAN_IP=150.136.44.64 ./gradlew :app:assembleDebug
+
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Run on a tablet (same LAN as the Mac)
+**Wrong URL symptoms:** `Failed to connect`, login **404** (server missing `/api/cashier/unlock` — redeploy Docker image), or **401** (wrong PIN).
 
-1. From repo root: `npm run dev:up` (or `node server.js` on port 3000).
-2. Tablet Wi-Fi same as the Mac; Mac firewall allows TCP **3000** if needed.
-3. Build and install debug (USB debugging on, device authorized):
+Changing `CASHIER_PIN` only requires updating `.env` (local) or Terraform/container env (OCI) and restarting Node — **no APK rebuild**.
 
-   ```bash
-   cd android-pos
-   ./gradlew :app:assembleDebug
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
-   ```
+## Login screen
 
-   Or `./gradlew :app:installDebug` when a single device is the default.
+- PIN entered via **number pad** (not soft keyboard).
+- **Done** submits unlock to the server.
+- Status line shows **Invalid PIN**, **Cannot reach server**, or **Server needs update (404)**.
 
-## UI layout (three horizontal bands)
+## Sale screen layout
 
-1. **Header** — Title **“Cloud Store 893 POS”** centered; **Show status** toggles
-   connection text, offline queue + **Sync queued**, and **Lock**.
-2. **Middle** — Left: scan field, **Scan** / **Add**, **Current Sale** list.
-   Right: number pad in a card using **half** the column height (top-aligned).
-3. **Bottom** — Left: sale totals and **Pay**. After **Pay**, payment picker
-   (compact) and **Complete Sale** sit in the **right** column under the pad.
+1. **Header** — ☰ menu, title
+2. **Status card** (when menu → Show status) — API message, offline queue, **Sync queued**
+3. **Middle** — scan field, **Scan** / **Add**, cart list | number pad
+4. **Bottom** — totals, **Pay** → payment + **Complete Sale**
 
-The main screen applies **`navigationBarsPadding()`** so pay controls clear the
-system gesture area with **edge-to-edge** enabled in `MainActivity`.
+`navigationBarsPadding()` keeps pay controls above the gesture bar.
+
+## Offline queue
+
+- Failed **Complete Sale** (network down) enqueues `{ paymentMethod, customerId }` only.
+- **Sync queued** calls checkout once per queued row against the **current** server cart.
+- To clear a bad queue: Android **Settings → Apps → Cloud Store POS → Clear data**, or reinstall.
 
 ## Release vs debug
 
-**Debug** APKs are debug-signed and fine for personal tablets and iteration.
-
-**Release** requires a `signingConfig` in `app/build.gradle.kts`; otherwise
-Gradle emits an **unsigned** APK that `adb install` will reject. Add signing
-before distributing or publishing.
+**Debug** is fine for a personal tablet. **Release** needs `signingConfig` in `app/build.gradle.kts`.
 
 ## Open in Android Studio
 
-Open the `android-pos` folder, sync Gradle, run on an emulator or device.
-Emulator loopback: use `LAN_IP=10.0.2.2` if the backend runs on the host
-machine from the emulator’s perspective.
+Open the `android-pos` folder, sync Gradle, run on device or emulator.
+
+Emulator → host machine: `LAN_IP=10.0.2.2 ./gradlew :app:installDebug`

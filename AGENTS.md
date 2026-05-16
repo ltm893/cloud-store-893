@@ -36,7 +36,11 @@
 
 ## Other notes
 
+- **Session handoff:** [CONTENTS.md](CONTENTS.md) — current state, APIs, OCI redeploy, tablet caveats.
 - **Local dev:** `npm run dev:up` from repo root; `npm run sync-env` after infra
-  changes that alter ORDS URL. See `README.md` and `CONTENTS.md`.
-- **Tablet builds:** `android-pos` Gradle auto-detects LAN IP for `API_BASE_URL`;
-  override with `LAN_IP=…` when needed.
+  changes that alter ORDS URL. See `README.md`.
+- **Env:** `.env` — `ORDS_BASE_URL`, `CASHIER_PIN`, `ADMIN_PIN` (see `.env.example`).
+- **Admin:** `/admin/` + `lib/admin-*.js`; PIN session cookie.
+- **Tablet builds:** `android-pos` Gradle sets `API_BASE_URL` at configure time;
+  override with `LAN_IP=…`. Cashier PIN is server-side (`POST /api/cashier/unlock`).
+- **OCI code updates:** `docker push` then `terraform apply`; 404 on unlock = stale image.

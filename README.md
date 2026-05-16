@@ -13,7 +13,8 @@ and all OCI infrastructure is managed by Terraform.
 
 **Stack:**
 - Node.js + Express (backend)
-- Vanilla HTML/CSS/JS (frontend)
+- Vanilla HTML/CSS/JS (web POS + admin UI)
+- Kotlin + Jetpack Compose (Samsung tablet POS in `android-pos/`)
 - Docker / Colima (containerization)
 - Terraform (infrastructure as code)
 - OCI Container Registry (image storage)
@@ -192,6 +193,62 @@ npm run sync-env
 npm run dev:up
 ```
 
+### Environment variables (`.env`)
+
+Copy `.env.example` → `.env`. Never commit `.env`.
+
+| Variable | Purpose |
+|----------|---------|
+| `ORDS_BASE_URL` | ADB ORDS admin base (from `npm run sync-env` or `terraform output`) |
+| `PORT` | Node listen port (default `3000`) |
+| `CASHIER_PIN` | Tablet login — `POST /api/cashier/unlock` (default `8930`) |
+| `ADMIN_PIN` | Admin UI at `/admin/` (defaults to `CASHIER_PIN` if unset) |
+
+Local dev uses `.env`. The OCI container instance gets `CASHIER_PIN` /
+`ADMIN_PIN` from Terraform (`terraform/container.tf`).
+
+### Admin UI
+
+- **URL:** `/admin/` (e.g. `http://localhost:3000/admin/` or `terraform output app_url` + `/admin/`)
+- **Sign-in:** `/admin/login.html` — PIN from `ADMIN_PIN` / `.env`
+- **API:** `/api/admin/*` — CRUD on `products`, `customers`, `cart_items`, `sales`, `sale_items`; read-only `cart_view`
+- **Implementation:** `lib/admin-*.js`, `lib/cashier-auth.js`, `public/admin/`
+
+### Web POS
+
+- **URL:** `/` — product grid, cart, checkout (no cashier PIN on web)
+
+---
+
+## Update the OCI container (after code changes)
+
+The tablet and browser talk to **whatever image is running** on the container instance. After changing `server.js` or admin UI, **push a new Docker image before** (or with) Terraform:
+
+```bash
+cd /Users/ltm893/Dev/projects/cloud-store-893   # repo root
+IMAGE=$(cd terraform && terraform output -raw ocir_image_path)
+
+docker buildx build --platform linux/arm64 -t "$IMAGE" .
+docker push "$IMAGE"
+
+cd terraform
+terraform apply    # recreates container if needed; see terraform/README.md
+```
+
+Verify cashier login API (expect **200**, not **404**):
+
+```bash
+APP=$(cd terraform && terraform output -raw app_url)
+curl -s -o /dev/null -w "%{http_code}\n" \
+  -X POST "$APP/api/cashier/unlock" \
+  -H 'Content-Type: application/json' \
+  -d '{"pin":"8930"}'
+```
+
+If `terraform apply` fails on **Always Free ADB** with a 403 about OCPU/storage updates, see [terraform/README.md](terraform/README.md) — `database.tf` uses `lifecycle { ignore_changes = … }` so only the container should change.
+
+---
+
 ## Native Samsung tablet app (Kotlin)
 
 A native Android POS client lives in `android-pos/` (Kotlin + Jetpack
@@ -199,53 +256,47 @@ Compose). Theming uses the **Lister palette** via `CloudStorePosTheme` in
 `android-pos/app/src/main/java/com/cloudstore/pos/ui/theme/`. See
 `android-pos/README.md` for module-specific notes.
 
-Quick start:
+Quick start (local backend on Mac):
 
-1. Backend running on the Mac: `npm run dev:up`
+1. `npm run dev:up` (with `.env` including `CASHIER_PIN`)
 2. Tablet on the same Wi-Fi as the Mac
-3. Install a debug build (USB debugging, device authorized):
+3. Build and install (set `LAN_IP` to your Mac’s Wi‑Fi address):
 
    ```bash
    cd android-pos
-   ./gradlew :app:assembleDebug
+   LAN_IP=$(ipconfig getifaddr en0) ./gradlew :app:assembleDebug
    adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
 
-   Or `./gradlew :app:installDebug` if a single default device is connected.
-
-`API_BASE_URL` is resolved at **Gradle configuration** time (not runtime):
-`ipconfig getifaddr en0` with fallback `en1`, then `BuildConfig.API_BASE_URL`.
-The chosen URL is printed in the build log, e.g.
-`[cloud-store-893] debug API_BASE_URL = http://10.0.0.122:3000/`.
-
-Overrides:
+Quick start (OCI backend — use **public IP** from `terraform output app_url`):
 
 ```bash
-LAN_IP=192.168.4.7 ./gradlew :app:installDebug               # custom dev IP
-RELEASE_API_BASE_URL=https://prod.example.com/ \
-  ./gradlew :app:assembleRelease                            # release URL only
+cd android-pos
+# Use IP only — no http:// or :3000
+LAN_IP=150.136.44.64 ./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Release APKs need a **`signingConfig`** in `android-pos/app/build.gradle.kts`
-before `adb install` will accept them; for day-to-day dev on your own tablet,
-**debug** is enough.
+`API_BASE_URL` is baked in at **Gradle configure** time (`BuildConfig`). Check the log line:
+`[cloud-store-893] debug API_BASE_URL = http://…/`
+
+| Target | Build command |
+|--------|----------------|
+| Mac on LAN | `LAN_IP=$(ipconfig getifaddr en0) ./gradlew :app:assembleDebug` |
+| OCI | `LAN_IP=<app-url-host> ./gradlew :app:assembleDebug` |
+| Release | `RELEASE_API_BASE_URL=http://<host>:3000/ ./gradlew :app:assembleRelease` |
+
+**Cashier PIN** is validated by the server (`CASHIER_PIN` in `.env` or container env), not in the APK. Changing the PIN does not require rebuilding the app.
+
+Full tablet notes: [android-pos/README.md](android-pos/README.md).
 
 POS UI (high level):
 
-- **Band 1:** Title **“Cloud Store 893 POS”** centered; **Show status** /
-  **Hide status** reveals connection text, offline queue (**Sync queued**),
-  and **Lock**.
-- **Band 2:** Left — scan field, **Scan** / **Add**, **Current Sale** list.
-  Right — number pad in a card using **half** the column height (top-aligned).
-- **Band 3:** Left — sale totals and **Pay**. After **Pay**, **Payment** (compact
-  picker) and **Complete Sale** appear in the **right** column under the pad.
-- Cashier PIN (`BuildConfig.CASHIER_PIN`, default `8930`); read-only barcode
-  field (number pad + scanner); **Scan** uses CameraX + ML Kit.
-- Numeric input ≤ 6 digits → `POST /api/cart {productId}`; longer values →
-  `POST /api/cart/barcode {barcode}`.
-- Offline checkout queue; flush from the status drawer (**Sync queued**).
-- Root screen uses **`navigationBarsPadding()`** so the pay controls clear
-  the gesture bar when **edge-to-edge** is enabled in `MainActivity`.
+- **☰ Menu** — **Show/Hide status** (connection + offline queue), **Admin** (opens `/admin/` in browser), **Lock**
+- **Login** — on-screen number pad + **Done** (calls `POST /api/cashier/unlock`)
+- **Sale screen** — scan field, **Scan** / **Add**, numpad, cart, **Pay** → **Complete Sale**
+- Numeric input ≤ 6 digits → `POST /api/cart {productId}`; longer → `POST /api/cart/barcode`
+- Offline checkout queue — **Sync queued** in status panel; queue stores payment only (see [CONTENTS.md](CONTENTS.md))
 
 ---
 
@@ -288,7 +339,7 @@ OCI Tenancy
             └── Container: cloud-store-container-1
                 └── Image: iad.ocir.io/<namespace>/cloud-store:latest
                     Port: 3000
-                    ENV: PORT=3000, ORDS_BASE_URL=<from terraform>
+                    ENV: PORT, ORDS_BASE_URL, CASHIER_PIN, ADMIN_PIN
 ```
 
 ---
@@ -297,11 +348,15 @@ OCI Tenancy
 
 ```
 cloud-store-893/
-├── server.js              # Express app — products + cart API routes via ORDS
+├── server.js              # Express — POS API, admin API, cashier unlock
+├── lib/                   # admin-auth, admin-routes, cashier-auth
+├── public/
+│   ├── index.html         # web POS
+│   └── admin/             # admin CRUD UI
 ├── package.json
-├── Dockerfile             # node:20-alpine, linux/arm64, PORT=3000
-├── .dockerignore
-├── .env.example           # template for local dev ORDS URL
+├── Dockerfile             # node:20-alpine, linux/arm64
+├── .env.example           # ORDS_BASE_URL, CASHIER_PIN, ADMIN_PIN
+├── CONTENTS.md            # session resume / handoff notes
 ├── android-pos/           # Kotlin + Compose tablet POS (see android-pos/README.md)
 ├── terraform/
 │   ├── main.tf            # OCI provider
@@ -364,8 +419,8 @@ allowing your user/group to read usage-report in the tenancy.
 
 ## Next Steps
 
-- [ ] Connect OCI Load Balancer in front of the container instance
-- [ ] Add CI/CD pipeline (GitHub Actions → OCIR → Terraform apply)
-- [ ] Add order persistence (ORDERS table in ADB)
-- [ ] Tighten `.gitignore` so Android `build/`, `.gradle/`, and `.idea/`
-      stop tracking
+- [ ] HTTPS / Load Balancer in front of the container instance
+- [ ] CI/CD (GitHub Actions → OCIR → container refresh)
+- [ ] Stronger admin auth (not shared PIN on public IP)
+- [ ] Tablet: discard offline queue; snapshot cart on queue
+- [ ] Receipt / print after **Complete Sale**

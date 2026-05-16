@@ -1,107 +1,147 @@
-# Cloud Store 893 - Resume Notes
+# Cloud Store 893 — session handoff
 
-Last updated: 2026-05-11
+Last updated: 2026-05-16
 
-## Where we left off
+Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
 
-- Local dev tooling is in place. After a fresh deploy, the canonical "start
-  developing" sequence is:
+---
 
-  ```bash
-  cd /Users/ltm893/Dev/projects/cloud-store-893
-  ./scripts/deploy.sh   # only when cloud is missing/destroyed
-  npm run sync-env      # sync .env's ORDS_BASE_URL from terraform output
-  npm run dev:up        # preflight + node --watch server.js
-  ```
+## Current state (what works)
 
-- `dev-up.sh` probes ORDS health (`/metadata-catalog/`) before starting the
-  Node tier. It distinguishes "ADB stopped" (no response), "ADB up but ORDS
-  schema not enabled" (404), and "healthy" (200), and prints the LAN URL the
-  tablet should target.
-- `oci-costs.sh` reports OCI spend (defaults to month-to-date, grouped by
-  service). Always Free tier is currently $0.
+| Area | Status |
+|------|--------|
+| **Web POS** (`/`) | Product grid, cart, checkout |
+| **Admin** (`/admin/`) | CRUD on DB tables; PIN login (`ADMIN_PIN`) |
+| **Tablet POS** | Numpad login → `POST /api/cashier/unlock`; sale flow; ☰ menu |
+| **Local dev** | `npm run dev:up` + `.env` |
+| **OCI** | Container + ADB; app at `terraform output app_url` |
+| **Git** | Feature work on branch `dev` (pushed May 2026) |
 
-## Tablet POS app — current state
+**PINs (defaults):** `CASHIER_PIN=8930`, `ADMIN_PIN=8930` (or admin defaults to cashier). Set in `.env` locally; on OCI via `terraform/container.tf` (`cashier_pin`, `admin_pin` variables).
 
-- Cashier PIN screen (`8930` via `BuildConfig`).
-- **Lister-palette** Compose theme in `android-pos/.../ui/theme/` (burgundy,
-  dark teal, snow, light cyan / light rose; dark variants).
-- **Layout (three bands):**
-  1. **Header** — **“Cloud Store 893 POS”** centered; **Show status** /
-     **Hide status** reveals status text, offline queue + **Sync queued**, and
-     **Lock**.
-  2. **Middle** — Left card: scan/ID field (read-only), **Scan** + **Add**,
-     **Current Sale** list. Right column (`360.dp`): number pad in a card using
-     **half** the column height (top-aligned).
-  3. **Bottom** — Left card: **Sale totals** + **Pay**. After **Pay**, the
-     compact payment picker and **Complete Sale** move to the **bottom-right**
-     column (under the pad column).
-- **Scan** opens CameraX + ML Kit; **Add** uses the same dispatch as the pad.
-- Numeric input ≤ 6 digits → `POST /api/cart {productId}`; longer values →
-  `POST /api/cart/barcode {barcode}`.
-- `API_BASE_URL` is set at **Gradle configuration** (`ipconfig getifaddr en0` /
-  `en1`, or `LAN_IP`). See root `README.md` and `android-pos/README.md`.
-- Install loop: `./gradlew :app:assembleDebug` then
-  `adb install -r app/build/outputs/apk/debug/app-debug.apk` (debug is enough
-  for a personal tablet until signing is configured for release).
+---
 
-## Backend / API status
+## Start developing (local)
 
-- `/api/products`, `/api/cart`, `/api/cart/barcode`, `/api/cart/:id`,
-  `/api/checkout`, `/api/sales/recent` all live.
-- Tables: `products`, `cart_items`, `sales`, `sale_items`, plus
-  `cart_view` (joins `cart_items` + `products` for the cart endpoint).
-- Foreign keys: `cart_items.product_id → products.id`,
-  `sale_items.product_id → products.id`.
-- ORDS schema enablement is part of `seed.sql` (steps 6–11). If
-  `npm run dev:up` reports HTTP 404 from `/metadata-catalog/`, paste the
-  ORDS-only PL/SQL block (or the full `seed.sql`) into Database Actions to
-  re-enable the REST endpoints.
+```bash
+cd /Users/ltm893/Dev/projects/cloud-store-893
+cp .env.example .env          # set ORDS_BASE_URL, CASHIER_PIN, ADMIN_PIN
+npm install
+npm run sync-env              # after terraform output changes
+npm run dev:up
+```
+
+- Web POS: http://127.0.0.1:3000/
+- Admin: http://127.0.0.1:3000/admin/
+- Tablet: `LAN_IP=$(ipconfig getifaddr en0) ./gradlew :app:installDebug` from `android-pos/`
+
+---
+
+## Start developing (OCI / tablet on cloud URL)
+
+1. **Push latest image** (required after server changes):
+
+   ```bash
+   IMAGE=$(cd terraform && terraform output -raw ocir_image_path)
+   docker buildx build --platform linux/arm64 -t "$IMAGE" .
+   docker push "$IMAGE"
+   ```
+
+2. **Apply Terraform** (container only if `database.tf` has `ignore_changes`):
+
+   ```bash
+   cd terraform && terraform apply
+   ```
+
+3. **Note new `app_url`** — public IP may change when the container instance is recreated.
+
+4. **Verify API:**
+
+   ```bash
+   APP=$(cd terraform && terraform output -raw app_url)
+   curl -s -o /dev/null -w "%{http_code}\n" \
+     -X POST "$APP/api/cashier/unlock" \
+     -H 'Content-Type: application/json' -d '{"pin":"8930"}'
+   ```
+
+   Must be **200**. **404** = old image still running (push + apply again).
+
+5. **Rebuild tablet APK** with new host:
+
+   ```bash
+   cd android-pos
+   LAN_IP=<host-from-app_url> ./gradlew :app:assembleDebug
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+---
+
+## API surface (Node → ORDS)
+
+| Route | Purpose |
+|-------|---------|
+| `GET /api/products` | Product list (POS) |
+| `GET/POST /api/cart`, `POST /api/cart/barcode`, `DELETE /api/cart/:id` | Cart |
+| `POST /api/checkout` | Sale (requires `created_at` on ORDS `sales/` insert) |
+| `GET /api/sales/recent` | Recent sales |
+| `POST /api/cashier/unlock` | Tablet login (`{ pin }`) |
+| `GET /api/admin/meta`, `GET/POST/PUT/DELETE /api/admin/:table` | Admin CRUD |
+| `POST /api/admin/login`, `GET /api/admin/session` | Admin session cookie |
+
+**Tables:** `products`, `customers`, `cart_items`, `sales`, `sale_items`, view `cart_view` — see `scripts/seed.sql`.
+
+---
+
+## Tablet POS (`android-pos/`)
+
+- **Login:** Numpad + **Done** → server PIN check (not in APK).
+- **Menu (☰):** Status panel, Admin (browser), Lock.
+- **Add item:** Numpad digit(s) + **Add**, or **Scan** (camera), or full barcode string.
+- **`API_BASE_URL`:** Gradle configure time — see build log; override with `LAN_IP=…`.
+- **Theme:** Lister palette in `ui/theme/` — see [AGENTS.md](AGENTS.md).
+
+### Offline queue caveat
+
+- Queue stores **payment method + customer only**, not cart contents.
+- **Sync queued** replays `POST /api/checkout` against the **current** server cart.
+- Stale queue entries (from failed syncs while offline) — **clear app data** or reinstall; do not sync 16+ junk entries with items in cart.
+- `flushOfflineQueue` runs on unlock and via **Sync queued**.
+
+---
+
+## Terraform notes
+
+- **`database.tf`:** `lifecycle { ignore_changes = [cpu_core_count, …] }` — Always Free ADB rejects OCPU/storage updates; without this, `terraform apply` fails with 403.
+- **`container.tf`:** env `CASHIER_PIN`, `ADMIN_PIN`, `ORDS_BASE_URL`, `PORT`.
+- **Recreating container** changes `app_url` and `container_instance_ocid` outputs.
+- Workload destroy: `./scripts/terraform-destroy-workloads.sh` (keeps compartment).
+
+---
 
 ## Quick test checklist
 
-1. `npm run dev:up` from the project root — confirm `✅ ORDS is healthy`.
-2. Launch the app on the tablet, enter PIN `8930`.
-3. On-screen number pad: type `3`, press **Add** → "Cloud Architecture
-   Poster" lands in Current Sale.
-4. Type `100000000001`, press **Add** → "OCI Foundations Study Guide" lands
-   in cart (barcode lookup path).
-5. Press **Scan** → camera dialog opens; scan a printed barcode.
-6. **Pay** → choose payment on the right → **Complete Sale**.
-7. **Show status** → toggle Wi-Fi off, complete another sale (queues offline).
-8. Wi-Fi back on → **Sync queued**.
+1. `npm run dev:up` — `✅ ORDS is healthy`
+2. `curl` cashier unlock → 200
+3. Open `/admin/` — login, list products
+4. Tablet: PIN **Done** → add product **1** → **Pay** → **Complete Sale**
+5. `☰` → Admin opens in browser
 
-## Housekeeping (open follow-ups)
+---
 
-These were noticed during earlier work but may still apply — verify in git:
+## Known issues / follow-ups
 
-1. **`.gitignore` gaps for the Android module.** Build/IDE artifacts under
-   `android-pos/` can pollute `git status`. Add a proper Android `.gitignore`,
-   then `git rm -r --cached` for tracked build dirs if needed.
+- Admin + cashier use **shared PIN in env** — not production-grade on a public IP; add HTTPS and stronger auth later.
+- Web POS has no cashier gate (intentional).
+- Android `build/` artifacts can dirty `git status` — keep `.gitignore` tight.
+- Optional: discard-queue button, cart snapshot in offline queue, receipt printing.
 
-2. **`scripts/terraform.tfstate`** — stray state file under `scripts/` vs
-   canonical `terraform/`. Confirm unused and remove if so.
+---
 
-3. **`package-lock.json`** — refresh with `npm install` when dependencies
-   change; commit separately from feature work when possible.
+## Branch & repo
 
-4. **`scripts/install-sqlcl.sh`** — ensure it is committed if README references
-   it.
+```bash
+git branch --show-current   # expect dev
+git log -1 --oneline
+```
 
-5. **`scripts/deploy.sh`** — review any local edits vs `main` and commit when
-   ready.
-
-## Suggested next work
-
-- User-visible error banner when the backend is unreachable (beyond status text).
-- Beep/vibration on successful barcode scan.
-- Replace hardcoded PIN with secure auth (e.g. hashed PINs in ADB).
-- Receipt / print after **Complete Sale**.
-- Optional: **Recent Sales** panel; optional `dev-up.sh` ADB auto-start via OCI CLI.
-
-## Branch & commit pointers
-
-- Confirm active branch and last commit with `git branch --show-current` and
-  `git log -1 --oneline`.
-- Feature work has lived on `feature/kotlin-tablet-pos` in the past; push
-  target is typically `git push origin <branch>`.
+Remote: `origin` → `github.com/ltm893/cloud-store-893.git`
