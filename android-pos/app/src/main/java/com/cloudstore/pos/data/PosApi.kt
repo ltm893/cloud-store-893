@@ -41,6 +41,9 @@ interface PosApi {
         @Query("customerId") customerId: Int? = null,
     ): CartResponse
 
+    @POST("api/cart/replace")
+    suspend fun replaceCart(@Body body: CartReplaceRequest): CartResponse
+
     @POST("api/checkout")
     suspend fun checkout(@Body body: CheckoutRequest): CheckoutResponse
 
@@ -87,6 +90,14 @@ class PosRepository(baseUrl: String) {
 
     suspend fun removeCartItem(cartItemId: Int, customerId: Int?) =
         api.removeFromCart(cartItemId, customerId)
+
+    suspend fun replaceCart(lines: List<QueuedCartLine>, customerId: Int?) =
+        api.replaceCart(
+            CartReplaceRequest(
+                items = lines.map { CartLineQuantity(it.productId, it.quantity) },
+                customerId = customerId,
+            ),
+        )
 
     suspend fun checkout(paymentMethod: String, customerId: Int?) =
         api.checkout(CheckoutRequest(paymentMethod = paymentMethod, customerId = customerId))

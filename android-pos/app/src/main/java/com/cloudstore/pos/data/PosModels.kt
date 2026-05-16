@@ -56,6 +56,16 @@ data class UnlockResponse(
     val ok: Boolean = false,
 )
 
+data class CartLineQuantity(
+    @Json(name = "productId") val productId: Int,
+    val quantity: Int,
+)
+
+data class CartReplaceRequest(
+    val items: List<CartLineQuantity>,
+    @Json(name = "customerId") val customerId: Int? = null,
+)
+
 data class CheckoutRequest(
     @Json(name = "paymentMethod") val paymentMethod: String,
     @Json(name = "customerId") val customerId: Int? = null,

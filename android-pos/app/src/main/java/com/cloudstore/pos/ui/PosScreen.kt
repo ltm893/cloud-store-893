@@ -66,6 +66,9 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 
+private val PosNumpadWidth = 360.dp
+private val PosNumpadHeight = 296.dp
+
 @Composable
 fun PosScreen(viewModel: PosViewModel) {
     val state = viewModel.state.value
@@ -89,9 +92,13 @@ fun PosScreen(viewModel: PosViewModel) {
 
     var payPanelVisible by remember { mutableStateOf(false) }
     var statusPanelExpanded by remember { mutableStateOf(false) }
+    var customerFindOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.isAuthenticated) {
-        if (!state.isAuthenticated) payPanelVisible = false
+        if (!state.isAuthenticated) {
+            payPanelVisible = false
+            customerFindOpen = false
+        }
     }
     LaunchedEffect(state.cart.isEmpty(), state.isAuthenticated) {
         if (state.isAuthenticated && state.cart.isEmpty()) payPanelVisible = false
@@ -136,6 +143,50 @@ fun PosScreen(viewModel: PosViewModel) {
                         scope.launch { drawerState.close() }
                     },
                 )
+                NavigationDrawerItem(
+                    label = {
+                        Text(if (customerFindOpen) "Show keypad" else "Find customer")
+                    },
+                    selected = customerFindOpen,
+                    onClick = {
+                        customerFindOpen = !customerFindOpen
+                        scope.launch { drawerState.close() }
+                    },
+                )
+                if (state.selectedCustomerId != null) {
+                    NavigationDrawerItem(
+                        label = { Text("Unlink customer") },
+                        selected = false,
+                        onClick = {
+                            viewModel.setSelectedCustomerId(null)
+                            customerFindOpen = false
+                            scope.launch { drawerState.close() }
+                        },
+                    )
+                }
+                if (state.queuedCheckoutCount > 0) {
+                    NavigationDrawerItem(
+                        label = {
+                            Text(
+                                if (state.queueSyncing) "Syncing queue…"
+                                else "Sync queued (${state.queuedCheckoutCount})",
+                            )
+                        },
+                        selected = false,
+                        onClick = {
+                            viewModel.flushOfflineQueue()
+                            scope.launch { drawerState.close() }
+                        },
+                    )
+                    NavigationDrawerItem(
+                        label = { Text("Discard queue (${state.queuedCheckoutCount})") },
+                        selected = false,
+                        onClick = {
+                            viewModel.clearOfflineQueue()
+                            scope.launch { drawerState.close() }
+                        },
+                    )
+                }
                 NavigationDrawerItem(
                     label = { Text("Admin") },
                     selected = false,
@@ -187,31 +238,13 @@ fun PosScreen(viewModel: PosViewModel) {
                     textAlign = TextAlign.Center,
                     modifier = Modifier.weight(1f),
                 )
-                Spacer(modifier = Modifier.width(48.dp))
-            }
-
-            if (statusPanelExpanded) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 6.dp),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    ) {
-                        if (state.status != "Ready" && state.status.isNotBlank()) {
-                            Text(
-                                text = state.status,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                        OfflineQueueStatus(
-                            queuedCount = state.queuedCheckoutCount,
-                            onSyncQueued = viewModel::flushOfflineQueue,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                }
+                Text(
+                    text = "v${BuildConfig.VERSION_NAME}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(48.dp),
+                    textAlign = TextAlign.End,
+                )
             }
 
         // ── Scan & items | Number pad ─────────────────────────────────────────
@@ -293,14 +326,29 @@ fun PosScreen(viewModel: PosViewModel) {
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    CustomerLinkPicker(
-                        customers = state.customers,
-                        selectedCustomerId = state.selectedCustomerId,
-                        onSelect = viewModel::setSelectedCustomerId,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp, bottom = 4.dp),
-                    )
+                    state.selectedCustomerId?.let { customerId ->
+                        val customer = state.customers.find { it.id == customerId }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp, bottom = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = customerDisplayName(customer, customerId),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                onClick = { viewModel.setSelectedCustomerId(null) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) {
+                                Text("Unlink")
+                            }
+                        }
+                    }
                     LazyColumn(
                         modifier = Modifier
                             .weight(1f)
@@ -318,29 +366,76 @@ fun PosScreen(viewModel: PosViewModel) {
                 }
             }
 
-            // ── Number pad (right) ───────────────────────────────────────────
+            // ── Status slot + fixed-size number pad (right) ───────────────────
+            val showStatusSlot =
+                statusPanelExpanded || state.queuedCheckoutCount > 0
             Column(
                 modifier = Modifier
-                    .width(360.dp)
+                    .width(PosNumpadWidth)
                     .fillMaxHeight(),
             ) {
+                if (showStatusSlot) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        ) {
+                            if (state.status != "Ready" && state.status.isNotBlank()) {
+                                Text(
+                                    text = state.status,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                            OfflineQueueStatus(
+                                queuedCount = state.queuedCheckoutCount,
+                                syncing = state.queueSyncing,
+                                onSyncQueued = viewModel::flushOfflineQueue,
+                                onDiscardQueued = viewModel::clearOfflineQueue,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight(0.5f),
+                        .height(PosNumpadHeight),
                 ) {
-                    NumberPad(
-                        onDigit = { d ->
-                            viewModel.setBarcodeInput(state.barcodeInput + d)
-                        },
-                        onClear = { viewModel.setBarcodeInput("") },
-                        onBackspace = {
-                            viewModel.setBarcodeInput(state.barcodeInput.dropLast(1))
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(12.dp),
-                    )
+                    if (customerFindOpen) {
+                        CustomerFindPanel(
+                            customers = state.customers,
+                            linkedCustomerId = state.selectedCustomerId,
+                            onLink = { id ->
+                                viewModel.setSelectedCustomerId(id)
+                                customerFindOpen = false
+                            },
+                            onUnlink = {
+                                viewModel.setSelectedCustomerId(null)
+                                customerFindOpen = false
+                            },
+                            onClose = { customerFindOpen = false },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                        )
+                    } else {
+                        NumberPad(
+                            onDigit = { d ->
+                                viewModel.setBarcodeInput(state.barcodeInput + d)
+                            },
+                            onClear = { viewModel.setBarcodeInput("") },
+                            onBackspace = {
+                                viewModel.setBarcodeInput(state.barcodeInput.dropLast(1))
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                        )
+                    }
                 }
             }
         }
@@ -383,7 +478,7 @@ fun PosScreen(viewModel: PosViewModel) {
                 }
             }
             Column(
-                modifier = Modifier.width(360.dp),
+                modifier = Modifier.width(PosNumpadWidth),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 if (payPanelVisible) {
@@ -422,7 +517,9 @@ fun PosScreen(viewModel: PosViewModel) {
 @Composable
 private fun OfflineQueueStatus(
     queuedCount: Int,
+    syncing: Boolean,
     onSyncQueued: () -> Unit,
+    onDiscardQueued: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -439,16 +536,33 @@ private fun OfflineQueueStatus(
             Text(
                 text = "Queued checkouts: $queuedCount",
                 style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.End,
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedButton(
-                onClick = onSyncQueued,
+            Text(
+                text = "Sync replays each saved cart. Discard clears entries that cannot be recovered.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 4.dp),
+            )
+            OutlinedButton(
+                onClick = onSyncQueued,
+                enabled = !syncing,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
             ) {
-                Text("Sync queued")
+                Text(if (syncing) "Syncing…" else "Sync queued")
+            }
+            OutlinedButton(
+                onClick = onDiscardQueued,
+                enabled = !syncing,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+            ) {
+                Text("Discard queue")
             }
         } else {
             Text(
@@ -553,56 +667,177 @@ private fun PadKey(
     }
 }
 
+private fun customerDisplayName(customer: StoreCustomer?, customerId: Int): String {
+    if (customer != null) {
+        return if (customer.is893) "${customer.name} (893)" else customer.name
+    }
+    return "Customer #$customerId"
+}
+
 @Composable
-private fun CustomerLinkPicker(
+private fun CustomerFindPanel(
     customers: List<StoreCustomer>,
-    selectedCustomerId: Int?,
-    onSelect: (Int?) -> Unit,
+    linkedCustomerId: Int?,
+    onLink: (Int) -> Unit,
+    onUnlink: () -> Unit,
+    onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val label = selectedCustomerId?.let { id ->
-        customers.find { it.id == id }?.let { c ->
-            if (c.is893) "${c.name} (893)" else c.name
-        } ?: "Customer #$id"
-    } ?: "Walk-in (no customer)"
+    var query by remember { mutableStateOf("") }
+    var selectedId by remember { mutableStateOf<Int?>(null) }
+
+    val matches = remember(query, customers) {
+        val q = query.trim()
+        if (q.isEmpty()) {
+            emptyList()
+        } else {
+            val asId = q.toIntOrNull()
+            customers.filter { c ->
+                if (asId != null) {
+                    c.id == asId || c.id.toString().startsWith(q)
+                } else {
+                    c.name.contains(q, ignoreCase = true) ||
+                        c.email?.contains(q, ignoreCase = true) == true ||
+                        c.phone?.contains(q, ignoreCase = true) == true
+                }
+            }.take(12)
+        }
+    }
+
+    LaunchedEffect(matches) {
+        selectedId = when {
+            matches.size == 1 -> matches.first().id
+            selectedId != null && matches.none { it.id == selectedId } -> null
+            else -> selectedId
+        }
+    }
+
+    val selectedCustomer = selectedId?.let { id -> customers.find { it.id == id } }
 
     Column(modifier = modifier) {
-        Text(
-            text = "Link customer",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        OutlinedButton(
-            onClick = { expanded = true },
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Find customer",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            TextButton(onClick = onClose) {
+                Text("Keypad")
+            }
+        }
+
+        linkedCustomerId?.let { id ->
+            val linked = customers.find { it.id == id }
+            Text(
+                text = "Linked: ${customerDisplayName(linked, id)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            TextButton(
+                onClick = onUnlink,
+                modifier = Modifier.padding(top = 2.dp),
+            ) {
+                Text("Unlink customer")
+            }
+        }
+
+        OutlinedTextField(
+            value = query,
+            onValueChange = {
+                query = it
+                selectedId = null
+            },
+            label = { Text("ID or name") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+            textStyle = MaterialTheme.typography.bodyLarge,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 4.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                .padding(top = 6.dp),
+        )
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(top = 6.dp),
         ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            when {
+                query.trim().isEmpty() -> {
+                    Text(
+                        text = "Enter a customer ID or name to search.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                matches.isEmpty() -> {
+                    Text(
+                        text = "No customers found.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                else -> {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        items(matches, key = { it.id }) { customer ->
+                            val picked = customer.id == selectedId
+                            OutlinedButton(
+                                onClick = { selectedId = customer.id },
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                colors = if (picked) {
+                                    androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    )
+                                } else {
+                                    androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
+                                },
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = customerDisplayName(customer, customer.id),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (picked) FontWeight.SemiBold else FontWeight.Normal,
+                                    )
+                                    val detail = listOfNotNull(
+                                        customer.email?.takeIf { it.isNotBlank() },
+                                        customer.phone?.takeIf { it.isNotBlank() },
+                                    ).joinToString(" · ")
+                                    if (detail.isNotEmpty()) {
+                                        Text(
+                                            text = detail,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
+
+        Button(
+            onClick = { selectedCustomer?.let { onLink(it.id) } },
+            enabled = selectedCustomer != null,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
         ) {
-            DropdownMenuItem(
-                text = { Text("Walk-in (no customer)") },
-                onClick = {
-                    onSelect(null)
-                    expanded = false
+            Text(
+                if (selectedCustomer != null) {
+                    "Link ${customerDisplayName(selectedCustomer, selectedCustomer.id)}"
+                } else {
+                    "Link to customer"
                 },
             )
-            customers.forEach { c ->
-                val text = if (c.is893) "${c.name} (893)" else c.name
-                DropdownMenuItem(
-                    text = { Text(text) },
-                    onClick = {
-                        onSelect(c.id)
-                        expanded = false
-                    },
-                )
-            }
         }
     }
 }

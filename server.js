@@ -298,6 +298,43 @@ app.post('/api/cart/barcode', async (req, res) => {
   }
 });
 
+/** Replace server cart with exact line quantities (used when replaying offline checkouts). */
+app.post('/api/cart/replace', async (req, res) => {
+  try {
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const customerIdRaw = req.body?.customerId;
+
+    const existing = await ordsGet('cart_items/');
+    for (const row of existing) {
+      await ordsDelete(`cart_items/${row.id}`);
+    }
+
+    for (const line of items) {
+      const productId = Number(line.productId);
+      const quantity = Number(line.quantity);
+      if (!Number.isFinite(productId) || quantity < 1) continue;
+      await ordsPost('cart_items/', { product_id: productId, quantity });
+    }
+
+    let linked893 = false;
+    if (customerIdRaw !== undefined && customerIdRaw !== null && String(customerIdRaw).trim() !== '') {
+      const customerId = Number(customerIdRaw);
+      const row = await ordsTryGet(`customers/${customerId}`);
+      if (!row || Number(row.id) !== customerId) {
+        return res.status(400).json({ error: 'Invalid customerId' });
+      }
+      linked893 = is893Member(row);
+    }
+
+    const cart = await ordsGet('cart_view/');
+    const rows = Array.isArray(cart) ? cart : [];
+    res.json(summarizeCart(rows, linked893));
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/cart/:id', async (req, res) => {
   try {
     await ordsDelete(`cart_items/${req.params.id}`);

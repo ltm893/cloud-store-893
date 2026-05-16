@@ -7,6 +7,7 @@ import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.CartResponse
 import com.cloudstore.pos.data.OfflineQueueStore
 import com.cloudstore.pos.data.PendingCheckout
+import com.cloudstore.pos.data.QueuedCartLine
 import com.cloudstore.pos.data.PosRepository
 import com.cloudstore.pos.data.Product
 import com.cloudstore.pos.data.Sale
@@ -31,6 +32,7 @@ data class PosUiState(
     val isAuthenticated: Boolean = false,
     val pinInput: String = "",
     val queuedCheckoutCount: Int = 0,
+    val queueSyncing: Boolean = false,
 )
 
 class PosViewModel(
@@ -223,7 +225,8 @@ class PosViewModel(
                     refresh()
                 }
                 .onFailure {
-                    queueStore.enqueue(paymentMethod, customerId)
+                    val lines = state.value.cart.map { QueuedCartLine(it.productId, it.quantity) }
+                    queueStore.enqueue(paymentMethod, customerId, lines)
                     state.value = state.value.copy(
                         status = "Offline: checkout queued",
                         queuedCheckoutCount = queueStore.all().size,
@@ -236,25 +239,64 @@ class PosViewModel(
         viewModelScope.launch {
             val queued = queueStore.all()
             if (queued.isEmpty()) {
-                state.value = state.value.copy(queuedCheckoutCount = 0)
+                state.value = state.value.copy(queuedCheckoutCount = 0, status = "No queued checkouts")
                 return@launch
             }
 
+            state.value = state.value.copy(queueSyncing = true, status = "Syncing ${queued.size} queued…")
+
+            var synced = 0
+            var droppedStale = 0
             val remaining = mutableListOf<PendingCheckout>()
+            var lastError: String? = null
+
             for (pending in queued) {
-                val result = runCatching { repository.checkout(pending.paymentMethod, pending.customerId) }
-                if (result.isFailure) {
+                if (pending.cartLines.isEmpty()) {
+                    droppedStale++
+                    continue
+                }
+                val result = runCatching {
+                    repository.replaceCart(pending.cartLines, pending.customerId)
+                    repository.checkout(pending.paymentMethod, pending.customerId)
+                }
+                if (result.isSuccess) {
+                    synced++
+                } else {
                     remaining.add(pending)
+                    lastError = result.exceptionOrNull()?.message
                 }
             }
 
             queueStore.replace(remaining)
-            state.value = state.value.copy(
-                queuedCheckoutCount = remaining.size,
-                status = if (remaining.isEmpty()) "Queued checkouts synced" else "Some queued checkouts pending",
-            )
+            val msg = buildString {
+                if (synced > 0) append("Synced $synced sale(s)")
+                if (droppedStale > 0) {
+                    if (isNotEmpty()) append(" · ")
+                    append("dropped $droppedStale old entries (no cart saved)")
+                }
+                if (remaining.isNotEmpty()) {
+                    if (isNotEmpty()) append(" · ")
+                    append("${remaining.size} still pending")
+                    lastError?.let { append(": $it") }
+                }
+                if (isEmpty()) append("Nothing to sync")
+            }
+
             refresh()
+            state.value = state.value.copy(
+                queueSyncing = false,
+                queuedCheckoutCount = remaining.size,
+                status = msg,
+            )
         }
+    }
+
+    fun clearOfflineQueue() {
+        queueStore.clear()
+        state.value = state.value.copy(
+            queuedCheckoutCount = 0,
+            status = "Offline queue cleared",
+        )
     }
 
 }
