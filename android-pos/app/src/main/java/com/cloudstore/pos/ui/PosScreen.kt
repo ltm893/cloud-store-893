@@ -62,7 +62,6 @@ import com.cloudstore.pos.BuildConfig
 import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.StoreCustomer
 import kotlin.math.abs
-import java.util.Locale
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 
@@ -287,6 +286,7 @@ fun PosScreen(viewModel: PosViewModel) {
                             .focusRequester(barcodeFocus),
                     )
 
+                    val scanInputReady = state.barcodeInput.isNotBlank()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -301,6 +301,7 @@ fun PosScreen(viewModel: PosViewModel) {
                                     permissionLauncher.launch(Manifest.permission.CAMERA)
                                 }
                             },
+                            enabled = scanInputReady,
                             modifier = Modifier
                                 .weight(1f)
                                 .height(42.dp),
@@ -310,6 +311,7 @@ fun PosScreen(viewModel: PosViewModel) {
                         }
                         Button(
                             onClick = viewModel::addByBarcode,
+                            enabled = scanInputReady,
                             modifier = Modifier
                                 .weight(1f)
                                 .height(42.dp),
@@ -358,7 +360,7 @@ fun PosScreen(viewModel: PosViewModel) {
                         items(state.cart) { item ->
                             CartLineRow(
                                 item = item,
-                                linked893 = state.linked893Cart,
+                                linked893 = state.customerDiscountActive(),
                                 onRemove = { viewModel.removeCartItem(item.id) },
                             )
                         }
@@ -454,11 +456,10 @@ fun PosScreen(viewModel: PosViewModel) {
             ) {
                 Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                     SaleTotalsPanel(
-                        itemCount = state.cart.sumOf { it.quantity },
-                        itemSubtotalPublic = state.subtotalPreMember,
-                        itemSubtotalPayable = state.subtotalPayable,
-                        memberDiscountPreTax = state.memberDiscountPreTax,
-                        linked893 = state.linked893Cart,
+                        cart = state.cart,
+                        linkedCustomer = state.selectedCustomer(),
+                        customerLinked = state.customerLinked(),
+                        customerDiscount = state.customerDiscountActive(),
                         salesFeeRate = salesFeeRate,
                         taxRate = taxRate,
                     )
@@ -669,7 +670,7 @@ private fun PadKey(
 
 private fun customerDisplayName(customer: StoreCustomer?, customerId: Int): String {
     if (customer != null) {
-        return if (customer.is893) "${customer.name} (893)" else customer.name
+        return customer.name
     }
     return "Customer #$customerId"
 }
@@ -771,7 +772,8 @@ private fun CustomerFindPanel(
             when {
                 query.trim().isEmpty() -> {
                     Text(
-                        text = "Enter a customer ID or name to search.",
+                        text = "Enter a customer ID or name to search.\n" +
+                            "Link customers here; use Scan/Add for product IDs.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -875,7 +877,7 @@ private fun CartLineRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         val payNote = if (linked893 && abs(item.lineSubtotalPayable - item.lineSubtotalPublic) > 0.005) {
-            "Pre-tax line: ${formatMoney(item.lineSubtotalPublic)} → ${formatMoney(item.lineSubtotalPayable)} (893)"
+            "Pre-tax line: ${formatMoney(item.lineSubtotalPublic)} → ${formatMoney(item.lineSubtotalPayable)}"
         } else {
             "Pre-tax line: ${formatMoney(item.lineSubtotalPayable)}"
         }
@@ -967,22 +969,26 @@ private fun CashierLogin(
 }
 
 /**
- * Line totals for the cashier. [salesFeeRate] and [taxRate] come from `BuildConfig`.
- * Fee and tax apply to [itemSubtotalPayable] (893-adjusted pre-tax item total when linked).
- * The server persists pre-tax line totals only; tax/fee remain client-side until the backend adds them.
+ * Line totals for the cashier. Amounts are derived from [cart] lines so the bar stays in sync
+ * with the list above. Tax rate comes from `BuildConfig` / pos.properties.
  */
 @Composable
 private fun SaleTotalsPanel(
-    itemCount: Int,
-    itemSubtotalPublic: Double,
-    itemSubtotalPayable: Double,
-    memberDiscountPreTax: Double,
-    linked893: Boolean,
+    cart: List<CartItem>,
+    linkedCustomer: StoreCustomer?,
+    customerLinked: Boolean,
+    customerDiscount: Boolean,
     salesFeeRate: Double,
     taxRate: Double,
 ) {
-    val salesFee = itemSubtotalPayable * salesFeeRate
-    val taxable = itemSubtotalPayable + salesFee
+    val items = if (customerLinked) normalizeCartItems(cart, customerDiscount) else cart
+    val totals = if (customerLinked) {
+        computeCartTotalsForLinkedCustomer(items, customerDiscount)
+    } else {
+        computeCartTotals(items, customerDiscount = false)
+    }
+    val salesFee = totals.itemPreTax * salesFeeRate
+    val taxable = totals.itemPreTax + salesFee
     val taxAmt = taxable * taxRate
     val grandTotal = taxable + taxAmt
 
@@ -993,12 +999,12 @@ private fun SaleTotalsPanel(
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
         )
-        if (linked893 && memberDiscountPreTax > 0.005) {
+        linkedCustomer?.let { customer ->
             Text(
-                text = "893 member — pre-tax discount ${formatMoney(memberDiscountPreTax)}",
+                text = customerDisplayName(customer, customer.id),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.padding(top = 4.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -1010,26 +1016,43 @@ private fun SaleTotalsPanel(
             TotalSaleStat(
                 modifier = Modifier.weight(1f),
                 label = "Items",
-                value = itemCount.toString(),
+                value = totals.itemCount.toString(),
             )
+            if (customerLinked) {
+                TotalSaleStat(
+                    modifier = Modifier.weight(1f),
+                    label = "Subtotal",
+                    value = formatMoney(totals.shelfSubtotal),
+                )
+                TotalSaleStat(
+                    modifier = Modifier.weight(1f),
+                    label = "Discount",
+                    value = if (totals.showDiscount) {
+                        "−${formatMoney(totals.memberDiscount)}"
+                    } else {
+                        formatMoney(0.0)
+                    },
+                    valueColor = if (totals.showDiscount) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                TotalSaleStat(
+                    modifier = Modifier.weight(1f),
+                    label = "PreTax",
+                    value = formatMoney(totals.itemPreTax),
+                )
+            } else {
+                TotalSaleStat(
+                    modifier = Modifier.weight(1f),
+                    label = "Subtotal",
+                    value = formatMoney(totals.itemPreTax),
+                )
+            }
             TotalSaleStat(
                 modifier = Modifier.weight(1f),
-                label = "Shelf\nsubtotal",
-                value = formatMoney(itemSubtotalPublic),
-            )
-            TotalSaleStat(
-                modifier = Modifier.weight(1f),
-                label = "Item\npre-tax",
-                value = formatMoney(itemSubtotalPayable),
-            )
-            TotalSaleStat(
-                modifier = Modifier.weight(1f),
-                label = salesFeeLabel(salesFeeRate),
-                value = formatMoney(salesFee),
-            )
-            TotalSaleStat(
-                modifier = Modifier.weight(1f),
-                label = taxLabel(taxRate),
+                label = "Tax",
                 value = formatMoney(taxAmt),
             )
             TotalSaleStat(
@@ -1050,6 +1073,7 @@ private fun TotalSaleStat(
     value: String,
     modifier: Modifier = Modifier,
     emphasize: Boolean = false,
+    valueColor: androidx.compose.ui.graphics.Color? = null,
 ) {
     Column(
         modifier = modifier.padding(horizontal = 2.dp),
@@ -1071,7 +1095,7 @@ private fun TotalSaleStat(
                 MaterialTheme.typography.bodyMedium
             },
             fontWeight = if (emphasize) FontWeight.Bold else FontWeight.Medium,
-            color = if (emphasize) {
+            color = valueColor ?: if (emphasize) {
                 MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.onSurface
@@ -1081,15 +1105,6 @@ private fun TotalSaleStat(
         )
     }
 }
-
-private fun salesFeeLabel(rate: Double): String =
-    if (rate > 0.0) "Sales\n(${formatPercent(rate)})" else "Sales"
-
-private fun taxLabel(rate: Double): String =
-    if (rate > 0.0) "Tax\n(${formatPercent(rate)})" else "Tax"
-
-private fun formatPercent(rate: Double): String =
-    String.format(Locale.US, "%.2f%%", rate * 100)
 
 @Composable
 private fun PaymentMethodPicker(

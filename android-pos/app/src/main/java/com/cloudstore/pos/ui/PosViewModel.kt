@@ -20,6 +20,8 @@ data class PosUiState(
     val products: List<Product> = emptyList(),
     val customers: List<StoreCustomer> = emptyList(),
     val selectedCustomerId: Int? = null,
+    /** True when a customer is linked (all customers table rows get pre-tax discount). */
+    val selectedCustomerDiscount: Boolean = false,
     val cart: List<CartItem> = emptyList(),
     val subtotalPreMember: Double = 0.0,
     val subtotalPayable: Double = 0.0,
@@ -33,7 +35,15 @@ data class PosUiState(
     val pinInput: String = "",
     val queuedCheckoutCount: Int = 0,
     val queueSyncing: Boolean = false,
-)
+) {
+    fun selectedCustomer(): StoreCustomer? =
+        selectedCustomerId?.let { id -> customers.find { it.id == id } }
+
+    /** True when a linked customer should receive the pre-tax discount. */
+    fun customerDiscountActive(): Boolean = selectedCustomerId != null
+
+    fun customerLinked(): Boolean = selectedCustomerId != null
+}
 
 class PosViewModel(
     private val repository: PosRepository,
@@ -48,6 +58,8 @@ class PosViewModel(
 
     var state = androidx.compose.runtime.mutableStateOf(PosUiState())
         private set
+
+    private var cartRefreshGeneration = 0
 
     init {
         state.value = state.value.copy(queuedCheckoutCount = queueStore.all().size)
@@ -69,14 +81,9 @@ class PosViewModel(
                     loading = false,
                     products = products,
                     customers = customers,
-                    cart = cartResp.items,
-                    subtotalPreMember = cartResp.subtotalPreMember,
-                    subtotalPayable = cartResp.subtotalPayable,
-                    memberDiscountPreTax = cartResp.memberDiscountPreTax,
-                    linked893Cart = cartResp.linked893,
                     recentSales = sales,
-                    status = "Ready",
                 )
+                applyCartResponse(cartResp, state.value.customerDiscountActive())
             }.onFailure { err ->
                 state.value = state.value.copy(
                     loading = false,
@@ -87,8 +94,49 @@ class PosViewModel(
     }
 
     fun setSelectedCustomerId(id: Int?) {
-        state.value = state.value.copy(selectedCustomerId = id)
-        refresh()
+        val customer = id?.let { cid -> state.value.customers.find { it.id == cid } }
+        state.value = state.value.copy(
+            selectedCustomerId = id,
+            selectedCustomerDiscount = id != null,
+        )
+        refreshCart()
+    }
+
+    fun linkCustomerById(customerId: Int) {
+        val customer = state.value.customers.find { it.id == customerId }
+        if (customer == null) {
+            state.value = state.value.copy(status = "Unknown customer id $customerId")
+            return
+        }
+        setSelectedCustomerId(customerId)
+        state.value = state.value.copy(
+            status = "Linked ${customer.name} — customer discount",
+        )
+    }
+
+    /** Reload cart lines and totals for the current (or cleared) customer link. */
+    fun refreshCart() {
+        if (!state.value.isAuthenticated) return
+        val customerId = state.value.selectedCustomerId
+        val discountAtRequest = state.value.customerDiscountActive()
+        val generation = ++cartRefreshGeneration
+        viewModelScope.launch {
+            state.value = state.value.copy(loading = true)
+            runCatching { repository.cart(customerId) }
+                .onSuccess { resp ->
+                    if (generation != cartRefreshGeneration) return@onSuccess
+                    applyCartResponse(resp, discountAtRequest)
+                }
+                .onFailure { err ->
+                    if (generation != cartRefreshGeneration) return@onFailure
+                    state.value = state.value.copy(
+                        status = "Cart refresh failed: ${err.message ?: "Unable to connect"}",
+                    )
+                }
+            if (generation == cartRefreshGeneration) {
+                state.value = state.value.copy(loading = false)
+            }
+        }
     }
 
     fun setPaymentMethod(method: String) {
@@ -151,7 +199,7 @@ class PosViewModel(
         viewModelScope.launch {
             val cid = state.value.selectedCustomerId
             runCatching { repository.addProduct(productId, cid) }
-                .onSuccess { applyCartResponse(it) }
+                .onSuccess { applyCartResponse(it, state.value.customerDiscountActive()) }
                 .onFailure { state.value = state.value.copy(status = "Add failed: ${it.message}") }
         }
     }
@@ -170,13 +218,25 @@ class PosViewModel(
         val asId = cleaned.toIntOrNull()
         val treatAsId = asId != null && cleaned.length <= 6
 
+        // Scan field adds products when the ID matches a product (even if the same number is a customer ID).
+        // Link customers via Find customer when IDs overlap (e.g. product 2 and customer 2).
+        if (treatAsId && asId != null) {
+            val hasProduct = state.value.products.any { it.id == asId }
+            val hasCustomer = state.value.customers.any { it.id == asId }
+            if (!hasProduct && hasCustomer) {
+                linkCustomerById(asId)
+                state.value = state.value.copy(barcodeInput = "")
+                return
+            }
+        }
+
         viewModelScope.launch {
             val cid = state.value.selectedCustomerId
             runCatching {
                 if (treatAsId) repository.addProduct(asId!!, cid) else repository.addProductByBarcode(cleaned, cid)
             }
                 .onSuccess { resp ->
-                    applyCartResponse(resp)
+                    applyCartResponse(resp, state.value.customerDiscountActive())
                     state.value = state.value.copy(
                         barcodeInput = "",
                         status = if (treatAsId) "Added by id $cleaned" else "Scanned $cleaned",
@@ -186,13 +246,28 @@ class PosViewModel(
         }
     }
 
-    private fun applyCartResponse(resp: CartResponse) {
+    private fun applyCartResponse(
+        resp: CartResponse,
+        customerDiscount: Boolean = state.value.customerDiscountActive(),
+    ) {
+        val items = normalizeCartItems(resp.items, customerDiscount)
+        val totals = computeCartTotals(items, customerDiscount)
+        val status = when {
+            customerDiscount && !resp.linked893 ->
+                "Customer linked — pricing may be stale; try Unlink and link again"
+            customerDiscount && totals.memberDiscount < 0.005 && items.isNotEmpty() ->
+                "Customer linked — no discount on cart lines yet"
+            customerDiscount -> "Customer discount applied"
+            state.value.status == "Loading..." -> "Ready"
+            else -> state.value.status
+        }
         state.value = state.value.copy(
-            cart = resp.items,
-            subtotalPreMember = resp.subtotalPreMember,
-            subtotalPayable = resp.subtotalPayable,
-            memberDiscountPreTax = resp.memberDiscountPreTax,
-            linked893Cart = resp.linked893,
+            cart = items,
+            subtotalPreMember = totals.shelfSubtotal,
+            subtotalPayable = totals.itemPreTax,
+            memberDiscountPreTax = totals.memberDiscount,
+            linked893Cart = customerDiscount && resp.linked893,
+            status = status,
         )
     }
 
@@ -200,7 +275,7 @@ class PosViewModel(
         viewModelScope.launch {
             val cid = state.value.selectedCustomerId
             runCatching { repository.removeCartItem(cartItemId, cid) }
-                .onSuccess { applyCartResponse(it) }
+                .onSuccess { applyCartResponse(it, state.value.customerDiscountActive()) }
                 .onFailure { state.value = state.value.copy(status = "Remove failed: ${it.message}") }
         }
     }
@@ -217,7 +292,7 @@ class PosViewModel(
             runCatching { repository.checkout(paymentMethod, customerId) }
                 .onSuccess { receipt ->
                     val extra = buildList {
-                        if (receipt.linked893 == true) add("893 member")
+                        if (receipt.linked893 == true) add("customer discount")
                         receipt.memberDiscountPreTax?.takeIf { it > 0.001 }?.let { add("−${"%.2f".format(it)} pre-tax") }
                     }.joinToString(" · ").takeIf { it.isNotEmpty() }
                     val msg = listOfNotNull("Sale complete: ${receipt.orderNumber}", extra).joinToString(" — ")

@@ -77,7 +77,7 @@ async function ordsDelete(path) {
   if (!res.ok) throw new Error(`ORDS DELETE ${path} → ${res.status}`);
 }
 
-// ── Pricing (pre-tax): public shelf/sale totals vs 893 member (10% off pre-tax) ─
+// ── Pricing (pre-tax): public shelf/sale totals vs linked customer (10% off pre-tax) ─
 
 function roundMoney(n) {
   return Math.round(Number(n) * 100) / 100;
@@ -96,7 +96,7 @@ function unitPricePublic(row) {
   return roundMoney(isOnSale(row) ? Number(row.sale_price) : list);
 }
 
-/** 893: sale lines pay sale_price × 0.9; non-sale lines pay regular price × 0.9 */
+/** Linked customer: sale lines pay sale_price × 0.9; non-sale lines pay regular price × 0.9 */
 function unitPricePay893(row) {
   const list = Number(row.price);
   if (isOnSale(row)) return roundMoney(Number(row.sale_price) * 0.9);
@@ -107,9 +107,16 @@ function unitPricePayable(row, linked893) {
   return linked893 ? unitPricePay893(row) : unitPricePublic(row);
 }
 
-function is893Member(customerRow) {
+/** Any valid row in customers gets 10% pre-tax discount when linked to the sale. */
+function customerDiscountApplies(customerRow) {
   if (!customerRow || typeof customerRow !== 'object') return false;
-  return String(customerRow.member_code ?? '').trim() === '893';
+  const id = Number(customerRow.id);
+  return Number.isFinite(id) && id > 0;
+}
+
+/** @deprecated name kept for JSON field linked893 */
+function is893Member(customerRow) {
+  return customerDiscountApplies(customerRow);
 }
 
 function enrichCartRow(row, linked893) {
@@ -188,7 +195,7 @@ app.get('/api/customers', async (req, res) => {
       email: c.email,
       phone: c.phone,
       memberCode: c.member_code ?? null,
-      is893: is893Member(c),
+      is893: customerDiscountApplies(c),
     }));
     res.json(out);
   } catch (err) {

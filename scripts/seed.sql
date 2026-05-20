@@ -36,7 +36,7 @@ CREATE TABLE products (
 );
 
 
--- ── 2. CUSTOMERS table (store customers; member_code '893' = 10% pre-tax) ─────
+-- ── 2. CUSTOMERS table (any linked customer gets 10% pre-tax discount) ─────────
 
 CREATE TABLE customers (
   id            NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

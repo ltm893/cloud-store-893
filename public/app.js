@@ -41,7 +41,7 @@ async function loadCustomers() {
     customers
       .map(
         (c) =>
-          `<option value="${c.id}">${escapeHtml(c.name)}${c.is893 ? ' (893)' : ''}</option>`,
+          `<option value="${c.id}">${escapeHtml(c.name)}</option>`,
       )
       .join('');
   customerSelectEl.value = selectedCustomerId != null ? String(selectedCustomerId) : '';
@@ -81,7 +81,7 @@ async function loadCart() {
   const subPublic = Number(payload.subtotalPreMember || 0);
   const subPay = Number(payload.subtotalPayable || 0);
   const disc = Number(payload.memberDiscountPreTax || 0);
-  const linked = !!payload.linked893;
+  const linked = !!payload.linked893; // true when any customer is linked at checkout
 
   cartEl.innerHTML = items.length
     ? items
@@ -93,7 +93,7 @@ async function loadCart() {
               : '';
           const line893 =
             linked && Math.abs(item.lineSubtotalPayable - item.lineSubtotalPublic) > 0.005
-              ? `<div class="cart-detail">Pre-tax: ${money(item.lineSubtotalPublic)} → ${money(item.lineSubtotalPayable)} (893)</div>`
+              ? `<div class="cart-detail">Pre-tax: ${money(item.lineSubtotalPublic)} → ${money(item.lineSubtotalPayable)}</div>`
               : `<div class="cart-detail">Pre-tax line: ${money(item.lineSubtotalPayable)}</div>`;
           return `
       <div class="cart-item">
@@ -111,7 +111,7 @@ async function loadCart() {
 
   let totalHtml = `<div><strong>Pre-tax payable:</strong> ${money(subPay)}</div>`;
   if (linked && disc > 0.005) {
-    totalHtml += `<div class="cart-summary-893">893 member — shelf subtotal ${money(subPublic)}, pre-tax discount ${money(disc)}</div>`;
+    totalHtml += `<div class="cart-summary-893">Customer discount — shelf subtotal ${money(subPublic)}, pre-tax discount ${money(disc)}</div>`;
   } else {
     totalHtml += `<div class="cart-muted">Shelf subtotal ${money(subPublic)}</div>`;
   }
@@ -182,7 +182,7 @@ async function checkout() {
   }
 
   const parts = [`Sale completed: ${payload.orderNumber}`];
-  if (payload.linked893) parts.push('893 member');
+  if (payload.linked893) parts.push('customer discount');
   if (payload.memberDiscountPreTax > 0.005) {
     parts.push(`pre-tax discount ${money(payload.memberDiscountPreTax)}`);
   }

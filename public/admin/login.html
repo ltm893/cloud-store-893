@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="screen-orientation" content="landscape">
   <title>Admin sign in — Cloud Store 893</title>
+  <script src="/admin/admin-orientation.js"></script>
   <style>
     :root {
       --bg: #faf3df;
@@ -68,9 +70,33 @@
       font-size: 1rem;
       cursor: pointer;
     }
+    .portrait-blocker {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 24px;
+      text-align: center;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .portrait-blocker p { margin: 0; max-width: 280px; font-size: 1.1rem; }
+    .portrait-blocker span { font-size: 2.5rem; }
+    @media (orientation: portrait) {
+      .portrait-blocker { display: flex; }
+      body.admin-landscape > :not(.portrait-blocker) { visibility: hidden; }
+    }
   </style>
 </head>
-<body>
+<body class="admin-landscape">
+  <div id="portraitBlocker" class="portrait-blocker" role="dialog" aria-label="Rotate device">
+    <span aria-hidden="true">↻</span>
+    <p>Rotate your device to <strong>landscape</strong> to use Admin.</p>
+  </div>
   <form class="card" id="loginForm">
     <h1>Admin sign in</h1>
     <p>Enter the admin PIN to manage store data.</p>

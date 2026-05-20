@@ -286,3 +286,41 @@ th {
   padding: 8px 14px;
   cursor: pointer;
 }
+
+/* Landscape-first admin (tablets); overlay when held in portrait */
+.portrait-blocker {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.portrait-blocker p {
+  margin: 0;
+  max-width: 280px;
+  font-size: 1.1rem;
+  line-height: 1.4;
+}
+
+.portrait-blocker span {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+@media (orientation: portrait) {
+  .portrait-blocker {
+    display: flex;
+  }
+
+  body.admin-landscape > :not(.portrait-blocker) {
+    visibility: hidden;
+  }
+}

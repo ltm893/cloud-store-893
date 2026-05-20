@@ -1,9 +1,11 @@
 import java.io.ByteArrayOutputStream
+import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // ── API_BASE_URL auto-detection ───────────────────────────────────────────────
@@ -44,6 +46,31 @@ val releaseApiBaseUrl = System.getenv("RELEASE_API_BASE_URL") ?: devApiBaseUrl
 println("[cloud-store-893] debug   API_BASE_URL = $devApiBaseUrl")
 println("[cloud-store-893] release API_BASE_URL = $releaseApiBaseUrl")
 
+// ── POS totals (sales fee + tax) from android-pos/pos.properties ─────────────
+val posPropertiesFile = rootProject.file("pos.properties")
+val posProperties = Properties()
+if (posPropertiesFile.exists()) {
+    posPropertiesFile.inputStream().use { posProperties.load(it) }
+} else {
+    println("[cloud-store-893] pos.properties not found — using default rates 0.0")
+}
+
+fun posRate(key: String, default: String = "0.0"): String {
+    val raw = posProperties.getProperty(key)?.trim().orEmpty()
+    val value = if (raw.isEmpty()) default else raw
+    val rate = value.toDoubleOrNull()
+        ?: throw GradleException("pos.properties: $key must be a decimal rate (e.g. 0.0825), got \"$value\"")
+    if (rate < 0.0 || rate > 1.0) {
+        throw GradleException("pos.properties: $key must be between 0 and 1 (decimal rate), got $rate")
+    }
+    return value
+}
+
+val posSalesFeeRate = posRate("pos.sales.fee.rate")
+val posTaxRate = posRate("pos.tax.rate")
+println("[cloud-store-893] POS_SALES_FEE_RATE = $posSalesFeeRate")
+println("[cloud-store-893] POS_TAX_RATE       = $posTaxRate")
+
 android {
     namespace = "com.cloudstore.pos"
     compileSdk = 34
@@ -61,9 +88,9 @@ android {
         }
 
         buildConfigField("String", "API_BASE_URL", "\"$devApiBaseUrl\"")
-        // Decimal rates for totals line (e.g. 0.0825 = 8.25%). Override per build type if needed.
-        buildConfigField("String", "POS_SALES_FEE_RATE", "\"0.0\"")
-        buildConfigField("String", "POS_TAX_RATE", "\"0.0\"")
+        // Decimal rates from android-pos/pos.properties (e.g. 0.0825 = 8.25%).
+        buildConfigField("String", "POS_SALES_FEE_RATE", "\"$posSalesFeeRate\"")
+        buildConfigField("String", "POS_TAX_RATE", "\"$posTaxRate\"")
     }
 
     buildTypes {
@@ -87,9 +114,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
     }
     packaging {
         resources {

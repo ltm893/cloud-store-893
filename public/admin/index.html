@@ -3,10 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="screen-orientation" content="landscape">
   <title>Cloud Store 893 — Admin</title>
   <link rel="stylesheet" href="/admin/admin.css">
+  <script src="/admin/admin-orientation.js"></script>
 </head>
-<body>
+<body class="admin-landscape">
+  <div id="portraitBlocker" class="portrait-blocker" role="dialog" aria-label="Rotate device">
+    <span aria-hidden="true">↻</span>
+    <p>Rotate your device to <strong>landscape</strong> to use Admin.</p>
+  </div>
   <header class="admin-topbar">
     <button type="button" id="menuBtn" class="menu-btn" aria-label="Menu">☰</button>
     <h1>Cloud Store 893 Admin</h1>

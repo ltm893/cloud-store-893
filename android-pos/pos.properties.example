@@ -1,0 +1,5 @@
+# Copy to pos.properties and adjust, then rebuild the APK.
+# Example: 8.25% tax → pos.tax.rate=0.0825
+
+pos.sales.fee.rate=0.0
+pos.tax.rate=0.0825

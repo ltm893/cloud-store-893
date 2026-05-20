@@ -36,17 +36,39 @@ Watch the configure log: `[cloud-store-893] debug API_BASE_URL = http://…/`
 
 ```bash
 # Mac on same Wi‑Fi as backend (npm run dev:up)
+./RebuildReinstall.sh
+
+# Or manually:
 LAN_IP=$(ipconfig getifaddr en0) ./gradlew :app:assembleDebug
-
-# OCI — use host from: cd ../terraform && terraform output -raw app_url
-LAN_IP=150.136.44.64 ./gradlew :app:assembleDebug
-
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+`RebuildReinstall.sh` detects `LAN_IP` from `en0`/`en1` (override with `LAN_IP=…`), builds debug, and installs via `adb`.
 
 **Wrong URL symptoms:** `Failed to connect`, login **404** (server missing `/api/cashier/unlock` — redeploy Docker image), or **401** (wrong PIN).
 
 Changing `CASHIER_PIN` only requires updating `.env` (local) or Terraform/container env (OCI) and restarting Node — **no APK rebuild**.
+
+## Sales tax and sales fee
+
+Rates are read from **`pos.properties`** at Gradle configure time and baked into the APK
+(`BuildConfig.POS_TAX_RATE`, `BuildConfig.POS_SALES_FEE_RATE`). Use **decimal fractions**, not
+percent labels — e.g. `pos.tax.rate=0.0825` for 8.25%.
+
+```properties
+pos.sales.fee.rate=0.0
+pos.tax.rate=0.0825
+```
+
+Copy `pos.properties.example` if you need a starting point. After editing, rebuild and reinstall:
+
+```bash
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Tax is computed on the tablet only (pre-tax payable + sales fee); the server still stores
+pre-tax line totals.
 
 ## Login screen
 
