@@ -6,7 +6,7 @@ Kotlin + Jetpack Compose. Theming: **Lister palette** (`ui/theme/`).
 ## Capabilities
 
 - **Cashier login** — on-screen numpad + **Done**; PIN checked via `POST /api/cashier/unlock` (server `CASHIER_PIN` in `.env` / OCI container env)
-- **☰ Menu** — show/hide status (connection, offline queue), **Admin** (browser → `/admin/`), **Lock**
+- **☰ Menu** — show/hide status (connection, offline queue), **Admin** (in-app WebView → `/admin/`), **Lock**
 - Barcode / product ID entry (`POST /api/cart`, `POST /api/cart/barcode`)
 - Camera scanning (CameraX + ML Kit)
 - Offline checkout queue — **Sync queued** in status panel (see caveats below)

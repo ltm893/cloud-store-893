@@ -1,11 +1,11 @@
 package com.cloudstore.pos.ui
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,9 +31,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -49,19 +49,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import com.cloudstore.pos.BuildConfig
 import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.StoreCustomer
-import kotlin.math.abs
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 
@@ -92,18 +96,29 @@ fun PosScreen(viewModel: PosViewModel) {
     var payPanelVisible by remember { mutableStateOf(false) }
     var statusPanelExpanded by remember { mutableStateOf(false) }
     var customerFindOpen by remember { mutableStateOf(false) }
+    var adminOpen by remember { mutableStateOf(false) }
+    var paymentDialogMessage by remember { mutableStateOf<String?>(null) }
+    var pendingPaymentMethod by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.isAuthenticated) {
         if (!state.isAuthenticated) {
             payPanelVisible = false
             customerFindOpen = false
+            adminOpen = false
+            paymentDialogMessage = null
+            pendingPaymentMethod = null
         }
     }
+
     LaunchedEffect(state.cart.isEmpty(), state.isAuthenticated) {
         if (state.isAuthenticated && state.cart.isEmpty()) payPanelVisible = false
     }
     LaunchedEffect(state.status) {
-        if (state.status.startsWith("Sale complete")) payPanelVisible = false
+        if (state.status.startsWith("Sale complete") || state.status.startsWith("Offline: checkout")) {
+            payPanelVisible = false
+            paymentDialogMessage = null
+            pendingPaymentMethod = null
+        }
     }
 
     if (!state.isAuthenticated) {
@@ -116,11 +131,16 @@ fun PosScreen(viewModel: PosViewModel) {
         return
     }
 
+    if (adminOpen) {
+        AdminWebScreen(
+            apiBaseUrl = BuildConfig.API_BASE_URL,
+            onClose = { adminOpen = false },
+        )
+        return
+    }
+
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val adminUrl = remember {
-        BuildConfig.API_BASE_URL.trimEnd('/') + "/admin/"
-    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -188,9 +208,9 @@ fun PosScreen(viewModel: PosViewModel) {
                 }
                 NavigationDrawerItem(
                     label = { Text("Admin") },
-                    selected = false,
+                    selected = adminOpen,
                     onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(adminUrl)))
+                        adminOpen = true
                         scope.launch { drawerState.close() }
                     },
                 )
@@ -360,7 +380,6 @@ fun PosScreen(viewModel: PosViewModel) {
                         items(state.cart) { item ->
                             CartLineRow(
                                 item = item,
-                                linked893 = state.customerDiscountActive(),
                                 onRemove = { viewModel.removeCartItem(item.id) },
                             )
                         }
@@ -424,6 +443,21 @@ fun PosScreen(viewModel: PosViewModel) {
                                 .fillMaxSize()
                                 .padding(12.dp),
                         )
+                    } else if (payPanelVisible) {
+                        PaymentMethodPicker(
+                            selected = state.paymentMethod,
+                            onOptionPicked = { method, label ->
+                                pendingPaymentMethod = method
+                                paymentDialogMessage = if (method == "card") {
+                                    "Use Card Paid"
+                                } else {
+                                    label
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                        )
                     } else {
                         NumberPad(
                             onDigit = { d ->
@@ -465,7 +499,11 @@ fun PosScreen(viewModel: PosViewModel) {
                     )
                     if (!payPanelVisible) {
                         Button(
-                            onClick = { payPanelVisible = true },
+                            onClick = {
+                                customerFindOpen = false
+                                viewModel.setPaymentMethod("card")
+                                payPanelVisible = true
+                            },
                             enabled = state.cart.isNotEmpty(),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -478,30 +516,26 @@ fun PosScreen(viewModel: PosViewModel) {
                     }
                 }
             }
-            Column(
-                modifier = Modifier.width(PosNumpadWidth),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                if (payPanelVisible) {
-                    PaymentMethodPicker(
-                        selected = state.paymentMethod,
-                        onSelected = viewModel::setPaymentMethod,
-                        compact = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Button(
-                        onClick = viewModel::checkout,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp),
-                    ) {
-                        Text("Complete Sale")
-                    }
+        }
+        }
+    }
+
+    paymentDialogMessage?.let { message ->
+        PaymentMessageDialog(
+            message = message,
+            onConfirm = {
+                pendingPaymentMethod?.let { method ->
+                    viewModel.setPaymentMethod(method)
+                    viewModel.checkout()
                 }
-            }
-        }
-        }
+                paymentDialogMessage = null
+                pendingPaymentMethod = null
+            },
+            onDismiss = {
+                paymentDialogMessage = null
+                pendingPaymentMethod = null
+            },
+        )
     }
 
     if (scannerOpen) {
@@ -847,7 +881,6 @@ private fun CustomerFindPanel(
 @Composable
 private fun CartLineRow(
     item: CartItem,
-    linked893: Boolean,
     onRemove: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -865,27 +898,39 @@ private fun CartLineRow(
                 Text("Remove")
             }
         }
-        val regLine = "Reg ${formatMoney(item.regularPrice)}" +
-            if (item.onSale && item.salePrice != null) {
-                " · Sale ${formatMoney(item.salePrice)}"
-            } else {
-                ""
+        if (item.onSale && item.salePrice != null) {
+            val burgundy = MaterialTheme.colorScheme.primary
+            val bodyColor = MaterialTheme.colorScheme.onSurface
+            val strikeWidth = with(LocalDensity.current) { 1.5.dp.toPx() }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Reg ${formatMoney(item.regularPrice)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = bodyColor,
+                    modifier = Modifier.drawBehind {
+                        val y = size.height / 2f
+                        drawLine(
+                            color = burgundy,
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            strokeWidth = strikeWidth,
+                        )
+                    },
+                )
+                Text(
+                    text = "Sale ${formatMoney(item.salePrice)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = burgundy,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
-        Text(
-            text = regLine,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        val payNote = if (linked893 && abs(item.lineSubtotalPayable - item.lineSubtotalPublic) > 0.005) {
-            "Pre-tax line: ${formatMoney(item.lineSubtotalPublic)} → ${formatMoney(item.lineSubtotalPayable)}"
         } else {
-            "Pre-tax line: ${formatMoney(item.lineSubtotalPayable)}"
+            Text(
+                text = "Reg ${formatMoney(item.regularPrice)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        Text(
-            text = payNote,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
     }
 }
 
@@ -1052,6 +1097,16 @@ private fun SaleTotalsPanel(
             }
             TotalSaleStat(
                 modifier = Modifier.weight(1f),
+                label = "Savings",
+                value = if (totals.saleSavings > 0.005) {
+                    "−${formatMoney(totals.saleSavings)}"
+                } else {
+                    formatMoney(0.0)
+                },
+                valueColor = MaterialTheme.colorScheme.primary,
+            )
+            TotalSaleStat(
+                modifier = Modifier.weight(1f),
                 label = "Tax",
                 value = formatMoney(taxAmt),
             )
@@ -1107,52 +1162,135 @@ private fun TotalSaleStat(
 }
 
 @Composable
-private fun PaymentMethodPicker(
-    selected: String,
-    onSelected: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    compact: Boolean = false,
+private fun PaymentMessageDialog(
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val options = listOf("card", "cash", "mobile")
-
-    Column(modifier = modifier) {
-        if (!compact) {
-            OutlinedTextField(
-                value = selected,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Payment") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        OutlinedButton(
-            onClick = { expanded = true },
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = if (compact) 0.dp else 6.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                .padding(horizontal = 24.dp),
         ) {
-            Text(
-                if (compact) {
-                    "Payment: $selected"
-                } else {
-                    "Choose payment"
-                },
-            )
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option) },
-                    onClick = {
-                        onSelected(option)
-                        expanded = false
-                    },
+            Column(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "Payment Type",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+                Button(
+                    onClick = onConfirm,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("OK")
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Inline select box: tap the field to expand options inside the same bordered box.
+ * Choosing an option updates the display and triggers [onOptionPicked] for the message dialog.
+ */
+@Composable
+private fun PaymentMethodPicker(
+    selected: String,
+    onOptionPicked: (method: String, label: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var displaySelection by remember(selected) { mutableStateOf(selected) }
+    LaunchedEffect(selected) {
+        displaySelection = selected
+    }
+    val options = listOf(
+        "card" to "Card",
+        "cash" to "Cash",
+        "mobile" to "Mobile Pay",
+    )
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "Payment Type",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { expanded = !expanded }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Pick",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = if (expanded) "▲" else "▼",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (expanded) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                    options.forEach { (value, label) ->
+                        val isSelected = value == displaySelection
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    displaySelection = value
+                                    expanded = false
+                                    onOptionPicked(value, label)
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        }
+                        if (value != options.last().first) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 10.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
+                        }
+                    }
+                }
             }
         }
     }

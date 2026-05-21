@@ -26,10 +26,21 @@ data class CartTotals(
     val shelfSubtotal: Double,
     val itemPreTax: Double,
     val memberDiscount: Double,
+    val saleSavings: Double,
     val linked893: Boolean,
 ) {
     val showMemberPricing: Boolean get() = linked893
     val showDiscount: Boolean get() = linked893 && memberDiscount > 0.005
+}
+
+/** Shelf savings from product sale prices (list − sale), before customer discount. */
+fun computeSaleSavings(cart: List<CartItem>): Double {
+    val raw = cart
+        .filter { it.onSale && it.salePrice != null }
+        .sumOf { item ->
+            roundMoney(item.regularPrice) * item.quantity - item.lineSubtotalPublic
+        }
+    return roundMoney(raw.coerceAtLeast(0.0))
 }
 
 /** Linked customer present — show full pricing breakdown (guest discount may be $0). */
@@ -46,6 +57,7 @@ fun computeCartTotalsForLinkedCustomer(cart: List<CartItem>, customerDiscount: B
         shelfSubtotal = roundMoney(shelf),
         itemPreTax = roundMoney(preTax),
         memberDiscount = discount,
+        saleSavings = computeSaleSavings(cart),
         linked893 = customerDiscount,
     )
 }
@@ -63,6 +75,7 @@ fun computeCartTotals(cart: List<CartItem>, customerDiscount: Boolean): CartTota
         shelfSubtotal = roundMoney(shelf),
         itemPreTax = roundMoney(preTax),
         memberDiscount = discount,
+        saleSavings = computeSaleSavings(cart),
         linked893 = customerDiscount,
     )
 }
