@@ -41,25 +41,29 @@ resource "oci_core_security_list" "main" {
   vcn_id         = oci_core_vcn.main.id
   display_name   = "sl-${var.project_name}"
 
-  # Ingress: SSH
-  ingress_security_rules {
-    protocol  = "6" # TCP
-    source    = "0.0.0.0/0"
-    stateless = false
-    tcp_options {
-      min = 22
-      max = 22
+  dynamic "ingress_security_rules" {
+    for_each = var.allow_ssh_ingress ? var.ingress_allowed_cidrs : []
+    content {
+      protocol  = "6" # TCP
+      source    = ingress_security_rules.value
+      stateless = false
+      tcp_options {
+        min = 22
+        max = 22
+      }
     }
   }
 
-  # Ingress: Node.js app
-  ingress_security_rules {
-    protocol  = "6"
-    source    = "0.0.0.0/0"
-    stateless = false
-    tcp_options {
-      min = var.app_port
-      max = var.app_port
+  dynamic "ingress_security_rules" {
+    for_each = var.ingress_allowed_cidrs
+    content {
+      protocol  = "6"
+      source    = ingress_security_rules.value
+      stateless = false
+      tcp_options {
+        min = var.app_port
+        max = var.app_port
+      }
     }
   }
 

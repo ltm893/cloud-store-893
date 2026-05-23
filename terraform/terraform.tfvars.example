@@ -26,3 +26,8 @@ adb_admin_password = "YourStr0ng!Password"
 # ── App PINs (container env — tablet login + admin UI) ───────────────────────
 # cashier_pin = "8930"
 # admin_pin   = "8930"   # optional; defaults to cashier_pin when empty
+# cashier_session_secure = true   # use when HTTPS terminates in front of the app
+
+# ── Network lockdown (optional) ─────────────────────────────────────────────
+# ingress_allowed_cidrs = ["203.0.113.50/32"]   # shop IP; default ["0.0.0.0/0"]
+# allow_ssh_ingress     = false

@@ -19,6 +19,64 @@ body {
   padding: 16px;
 }
 
+.pin-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+  padding: 16px;
+}
+
+.pin-gate[hidden] {
+  display: none;
+}
+
+.pin-card {
+  width: min(100%, 320px);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.pin-card h2 {
+  margin-top: 0;
+}
+
+.pin-hint {
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+.pin-card input {
+  width: 100%;
+  font-size: 1.25rem;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+}
+
+.pin-card button {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.pin-error {
+  color: var(--danger);
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+}
+
 h1, h2 {
   margin: 0 0 12px;
 }

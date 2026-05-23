@@ -75,6 +75,22 @@ variable "app_port" {
   default     = 3000
 }
 
+variable "ingress_allowed_cidrs" {
+  description = <<-EOT
+    CIDR blocks allowed inbound to the app port (and SSH when allow_ssh_ingress is true).
+    Default 0.0.0.0/0 keeps the current public app URL. For shop-only access, set your
+    public IP with /32 (e.g. ["203.0.113.50/32"]). Tablets on cellular need VPN or 0.0.0.0/0.
+  EOT
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "allow_ssh_ingress" {
+  description = "When false, no SSH (port 22) rule is created on the security list."
+  type        = bool
+  default     = true
+}
+
 variable "cashier_pin" {
   description = "Cashier PIN for POST /api/cashier/unlock (tablet POS)"
   type        = string
@@ -87,6 +103,12 @@ variable "admin_pin" {
   type        = string
   default     = ""
   sensitive   = true
+}
+
+variable "cashier_session_secure" {
+  description = "Set true when the app is served over HTTPS (adds Secure flag on cashier session cookie)."
+  type        = bool
+  default     = false
 }
 
 # ── Autonomous Database ───────────────────────────────────────────────────────

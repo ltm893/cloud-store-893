@@ -186,13 +186,16 @@ class PosViewModel(
     }
 
     fun lock() {
-        state.value = PosUiState(
-            isAuthenticated = false,
-            pinInput = "",
-            barcodeInput = "",
-            queuedCheckoutCount = queueStore.all().size,
-            status = "Signed out",
-        )
+        viewModelScope.launch {
+            runCatching { repository.logoutCashier() }
+            state.value = PosUiState(
+                isAuthenticated = false,
+                pinInput = "",
+                barcodeInput = "",
+                queuedCheckoutCount = queueStore.all().size,
+                status = "Signed out",
+            )
+        }
     }
 
     fun addProduct(productId: Int) {

@@ -22,6 +22,23 @@ and all OCI infrastructure is managed by Terraform.
 - OCI Autonomous Database ATP (Always Free, ORDS API)
 - OCI VCN / Subnet / Internet Gateway / Security List (networking)
 
+### Authentication (summary)
+
+Two **separate** app sessions — cashier (POS) and admin — each with its own cookie and optional IdP sign-in.
+
+| Surface | Session | Default sign-in | Optional |
+|---------|---------|-----------------|----------|
+| Web POS `/`, tablet | `cashier_session` | PIN → `POST /api/cashier/unlock` | OIDC (`/oauth/login`) |
+| Admin `/admin/` | `admin_session` | PIN on `/admin/login.html` | OIDC (`/oauth/admin/login`) |
+
+- **Protected:** cart, checkout, customers, sales APIs; all `/api/admin/*`.
+- **Public:** `GET /api/products` (catalog only).
+- **Local dev:** PINs and IdP settings in **`.env`** (see `.env.example`).
+- **OCI container:** PINs from **`terraform.tfvars`** (`cashier_pin`, `admin_pin`); IdP vars are **not** copied from `.env` automatically — add them via Terraform or the container console, then re-apply/restart.
+- **IdP:** Optional Oracle Identity Domain confidential clients; redirect URIs must match `APP_PUBLIC_URL` / callback paths on the host you deploy. Details: [docs/idp-setup.md](docs/idp-setup.md), app reset: [docs/idp-level1-reset.md](docs/idp-level1-reset.md).
+
+With IdP configured, `IDP_ALLOW_PIN=true` (default) keeps PIN login available alongside Oracle sign-in.
+
 ---
 
 ## Deploy from scratch
@@ -184,6 +201,7 @@ Available npm scripts:
 | `npm run dev:up` | preflight + `node --watch server.js` (recommended) |
 | `npm run sync-env` | rewrites `.env`'s `ORDS_BASE_URL` from `terraform output` |
 | `npm run lan-url` | prints `http://<your-mac-lan-ip>:3000/` |
+| `npm run test:auth` | curl checks that POS/admin APIs require sessions |
 
 Typical flow after a `terraform apply` that may have changed the ADB
 hostname:
@@ -201,22 +219,33 @@ Copy `.env.example` → `.env`. Never commit `.env`.
 |----------|---------|
 | `ORDS_BASE_URL` | ADB ORDS admin base (from `npm run sync-env` or `terraform output`) |
 | `PORT` | Node listen port (default `3000`) |
-| `CASHIER_PIN` | Tablet login — `POST /api/cashier/unlock` (default `8930`) |
-| `ADMIN_PIN` | Admin UI at `/admin/` (defaults to `CASHIER_PIN` if unset) |
+| `CASHIER_PIN` | Cashier unlock — `POST /api/cashier/unlock` (default `8930`) |
+| `ADMIN_PIN` | Admin UI PIN (defaults to `CASHIER_PIN` if unset) |
+| `APP_PUBLIC_URL` | Public base URL of the Node app (IdP redirects; use `terraform output app_url`) |
+| `IDP_POS_*` / `IDP_ADMIN_*` | Optional OIDC issuer, client id/secret, redirect URI per app |
+| `IDP_ALLOW_PIN` | When `true` (default), PIN remains available if IdP is configured |
+| `CASHIER_SESSION_SECURE` | Set `true` when served over HTTPS (Secure cookie flag) |
 
-Local dev uses `.env`. The OCI container instance gets `CASHIER_PIN` /
-`ADMIN_PIN` from Terraform (`terraform/container.tf`).
+**Where values apply**
+
+| Setting | Local (`npm run dev`) | OCI container |
+|---------|----------------------|---------------|
+| `ORDS_BASE_URL` | `.env` | Terraform → container env |
+| `CASHIER_PIN`, `ADMIN_PIN` | `.env` | `cashier_pin`, `admin_pin` in `terraform.tfvars` → `terraform apply` |
+| `IDP_*`, `APP_PUBLIC_URL` | `.env` | Not deployed by default — add to container env or extend `terraform/container.tf` |
+
+After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && terraform apply` (no image rebuild required).
 
 ### Admin UI
 
 - **URL:** `/admin/` (e.g. `http://localhost:3000/admin/` or `terraform output app_url` + `/admin/`)
-- **Sign-in:** `/admin/login.html` — PIN from `ADMIN_PIN` / `.env`
+- **Sign-in:** `/admin/login.html` — PIN and/or “Sign in with Oracle” when IdP env is set
 - **API:** `/api/admin/*` — CRUD on `products`, `customers`, `cart_items`, `sales`, `sale_items`; read-only `cart_view`
-- **Implementation:** `lib/admin-*.js`, `lib/cashier-auth.js`, `public/admin/`
+- **Implementation:** `lib/admin-auth.js`, `lib/admin-routes.js`, `lib/cashier-auth.js`, `lib/oidc-*.js`, `public/admin/`
 
 ### Web POS
 
-- **URL:** `/` — product grid, cart, checkout (no cashier PIN on web)
+- **URL:** `/` — product grid, cart, checkout; PIN gate (and optional IdP link) before cart/checkout APIs
 
 ---
 
@@ -339,7 +368,7 @@ OCI Tenancy
             └── Container: cloud-store-container-1
                 └── Image: iad.ocir.io/<namespace>/cloud-store:latest
                     Port: 3000
-                    ENV: PORT, ORDS_BASE_URL, CASHIER_PIN, ADMIN_PIN
+                    ENV: PORT, ORDS_BASE_URL, CASHIER_PIN, ADMIN_PIN (+ optional IDP_*)
 ```
 
 ---
@@ -355,7 +384,7 @@ cloud-store-893/
 │   └── admin/             # admin CRUD UI
 ├── package.json
 ├── Dockerfile             # node:20-alpine, linux/arm64
-├── .env.example           # ORDS_BASE_URL, CASHIER_PIN, ADMIN_PIN
+├── .env.example           # ORDS, PINs, optional IdP (see Authentication)
 ├── CONTENTS.md            # session resume / handoff notes
 ├── android-pos/           # Kotlin + Compose tablet POS (see android-pos/README.md)
 ├── terraform/
@@ -419,8 +448,9 @@ allowing your user/group to read usage-report in the tenancy.
 
 ## Next Steps
 
-- [ ] HTTPS / Load Balancer in front of the container instance
+- [ ] HTTPS / Load Balancer in front of the container instance (required for production IdP)
+- [ ] Wire optional `IDP_*` / `APP_PUBLIC_URL` through Terraform for OCI deploys
 - [ ] CI/CD (GitHub Actions → OCIR → container refresh)
-- [ ] Stronger admin auth (not shared PIN on public IP)
-- [ ] Tablet: discard offline queue; snapshot cart on queue
+- [ ] Restrict ingress (`ingress_allowed_cidrs` in `terraform.tfvars`) when not on public IP
+- [ ] Tablet: native OIDC or keep PIN-via-API; discard offline queue; snapshot cart on queue
 - [ ] Receipt / print after **Complete Sale**

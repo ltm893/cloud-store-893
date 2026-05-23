@@ -84,7 +84,11 @@ npm run dev:up
 | `GET/POST /api/cart`, `POST /api/cart/barcode`, `DELETE /api/cart/:id` | Cart |
 | `POST /api/checkout` | Sale (requires `created_at` on ORDS `sales/` insert) |
 | `GET /api/sales/recent` | Recent sales |
-| `POST /api/cashier/unlock` | Tablet login (`{ pin }`) |
+| `POST /api/cashier/unlock` | Cashier login (`{ pin }`) → session cookie |
+| `GET /api/cashier/session`, `POST /api/cashier/logout` | Session check / sign-out |
+| `GET /oauth/login`, `GET /oauth/callback` | POS IdP (when `IDP_POS_*` set) |
+| `GET /oauth/admin/login`, `GET /oauth/admin/callback` | Admin IdP (when `IDP_ADMIN_*` set) |
+| Cart, checkout, customers, sales | Require cashier session (products list is public) |
 | `GET /api/admin/meta`, `GET/POST/PUT/DELETE /api/admin/:table` | Admin CRUD |
 | `POST /api/admin/login`, `GET /api/admin/session` | Admin session cookie |
 
@@ -106,6 +110,14 @@ npm run dev:up
 - **Sync queued** replays `POST /api/checkout` against the **current** server cart.
 - Stale queue entries (from failed syncs while offline) — **clear app data** or reinstall; do not sync 16+ junk entries with items in cart.
 - `flushOfflineQueue` runs on unlock and via **Sync queued**.
+
+---
+
+## Security / IdP roadmap
+
+- **Phase 1 (in repo):** Cashier session cookies + optional ingress CIDR lockdown — see [docs/idp-setup.md](docs/idp-setup.md).
+- **Phase 2 (OCI Console):** Separate Identity Domain + OIDC clients for POS and admin.
+- **Start over (Level 1):** [docs/idp-level1-reset.md](docs/idp-level1-reset.md) — delete/recreate integrated apps only.
 
 ---
 

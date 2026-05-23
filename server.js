@@ -12,12 +12,13 @@ if (!ORDS_BASE) {
 
 app.use(express.json());
 
-const { registerCashierAuth } = require('./lib/cashier-auth');
+const { registerCashierAuth, requireCashierForPosApi } = require('./lib/cashier-auth');
 const { registerAdminAuth, requireAdminSession, protectAdminPages } = require('./lib/admin-auth');
 registerCashierAuth(app);
 registerAdminAuth(app);
 app.use('/admin', protectAdminPages);
 app.use('/api/admin', requireAdminSession);
+app.use(requireCashierForPosApi);
 
 app.use(express.static('public'));
 

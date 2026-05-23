@@ -1,4 +1,10 @@
+const fetchOpts = { credentials: 'include' };
+
 const productsEl = document.getElementById('products');
+const pinGateEl = document.getElementById('pinGate');
+const pinInputEl = document.getElementById('pinInput');
+const pinSubmitBtn = document.getElementById('pinSubmitBtn');
+const pinErrorEl = document.getElementById('pinError');
 const cartEl = document.getElementById('cart');
 const totalEl = document.getElementById('total');
 const statusEl = document.getElementById('status');
@@ -33,8 +39,72 @@ function customerQs() {
   return selectedCustomerId != null ? `?customerId=${encodeURIComponent(selectedCustomerId)}` : '';
 }
 
+function showPinGate(message) {
+  pinGateEl.hidden = false;
+  if (message) {
+    pinErrorEl.hidden = false;
+    pinErrorEl.textContent = message;
+  }
+}
+
+function hidePinGate() {
+  pinGateEl.hidden = true;
+  pinErrorEl.hidden = true;
+  pinErrorEl.textContent = '';
+}
+
+async function ensureCashierSession() {
+  const res = await fetch('/api/cashier/session', fetchOpts);
+  const data = await res.json();
+  if (data.ok) {
+    hidePinGate();
+    return true;
+  }
+  if (data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
+    window.location.href = data.idpLoginUrl;
+    return false;
+  }
+  showPinGate(data.idpEnabled ? 'Enter PIN or use IdP sign-in below' : '');
+  return false;
+}
+
+async function unlockCashier(pin) {
+  const res = await fetch('/api/cashier/unlock', {
+    ...fetchOpts,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showPinGate(data.error || 'Invalid PIN');
+    return false;
+  }
+  hidePinGate();
+  return true;
+}
+
+pinSubmitBtn.addEventListener('click', async () => {
+  const pin = pinInputEl.value.trim();
+  if (!pin) {
+    showPinGate('Enter PIN');
+    return;
+  }
+  pinSubmitBtn.disabled = true;
+  const ok = await unlockCashier(pin);
+  pinSubmitBtn.disabled = false;
+  if (ok) {
+    pinInputEl.value = '';
+    await initPos();
+  }
+});
+
+pinInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') pinSubmitBtn.click();
+});
+
 async function loadCustomers() {
-  const res = await fetch('/api/customers');
+  const res = await fetch('/api/customers', fetchOpts);
   const customers = await res.json();
   customerSelectEl.innerHTML =
     '<option value="">Walk-in (no customer)</option>' +
@@ -48,7 +118,7 @@ async function loadCustomers() {
 }
 
 async function loadProducts() {
-  const res = await fetch('/api/products');
+  const res = await fetch('/api/products', fetchOpts);
   const products = await res.json();
 
   productsEl.innerHTML = products
@@ -70,8 +140,12 @@ async function loadProducts() {
 }
 
 async function loadCart() {
-  const res = await fetch(`/api/cart${customerQs()}`);
+  const res = await fetch(`/api/cart${customerQs()}`, fetchOpts);
   const payload = await res.json();
+  if (res.status === 401) {
+    showPinGate('Cashier sign-in required');
+    return;
+  }
   if (!res.ok) {
     setStatus(payload.error || 'Cart load failed');
     return;
@@ -119,7 +193,7 @@ async function loadCart() {
 }
 
 async function loadSalesHistory() {
-  const res = await fetch('/api/sales/recent');
+  const res = await fetch('/api/sales/recent', fetchOpts);
   const sales = await res.json();
 
   salesHistoryEl.innerHTML = sales.length
@@ -145,6 +219,7 @@ async function loadSalesHistory() {
 
 async function addToCart(productId) {
   await fetch(`/api/cart${customerQs()}`, {
+    ...fetchOpts,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ productId }),
@@ -153,7 +228,7 @@ async function addToCart(productId) {
 }
 
 async function removeFromCart(id) {
-  await fetch(`/api/cart/${id}${customerQs()}`, { method: 'DELETE' });
+  await fetch(`/api/cart/${id}${customerQs()}`, { ...fetchOpts, method: 'DELETE' });
   await loadCart();
 }
 
@@ -169,6 +244,7 @@ async function checkout() {
   }
 
   const res = await fetch('/api/checkout', {
+    ...fetchOpts,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -213,16 +289,40 @@ customerSelectEl.addEventListener('change', () => {
   loadCart().catch(console.error);
 });
 
-async function init() {
+async function initPos() {
   try {
     setStatus('Loading POS...');
     await loadCustomers();
     await Promise.all([loadProducts(), loadCart(), loadSalesHistory()]);
     setStatus('Ready');
   } catch (error) {
+    if (error && error.message && String(error).includes('401')) {
+      showPinGate('Cashier sign-in required');
+      return;
+    }
     setStatus('Failed to load POS');
     console.error(error);
   }
+}
+
+async function init() {
+  const res = await fetch('/api/cashier/session', fetchOpts);
+  const data = await res.json();
+  const idpLink = document.getElementById('idpLoginLink');
+  if (idpLink && data.idpEnabled) {
+    idpLink.hidden = false;
+    if (data.idpLoginUrl) idpLink.href = data.idpLoginUrl;
+  }
+  if (data.ok) {
+    hidePinGate();
+    await initPos();
+    return;
+  }
+  if (data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
+    window.location.href = data.idpLoginUrl;
+    return;
+  }
+  showPinGate(data.idpEnabled ? 'Enter PIN or use IdP sign-in below' : '');
 }
 
 init();

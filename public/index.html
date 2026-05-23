@@ -17,6 +17,17 @@
     <div id="status" class="status">Ready</div>
   </header>
 
+  <div id="pinGate" class="pin-gate" hidden>
+    <div class="pin-card">
+      <h2>Cashier sign-in</h2>
+      <p class="pin-hint">Enter store PIN</p>
+      <input id="pinInput" type="password" inputmode="numeric" autocomplete="off" maxlength="8" />
+      <button type="button" id="pinSubmitBtn">Sign in</button>
+      <p class="pin-hint"><a id="idpLoginLink" href="/oauth/login" hidden>Sign in with store account (Oracle)</a></p>
+      <p id="pinError" class="pin-error" hidden></p>
+    </div>
+  </div>
+
   <main class="pos-layout">
     <section>
       <h2>Products</h2>
