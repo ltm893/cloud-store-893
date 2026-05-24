@@ -453,4 +453,6 @@ allowing your user/group to read usage-report in the tenancy.
 - [ ] CI/CD (GitHub Actions → OCIR → container refresh)
 - [ ] Restrict ingress (`ingress_allowed_cidrs` in `terraform.tfvars`) when not on public IP
 - [ ] Tablet: native OIDC or keep PIN-via-API; discard offline queue; snapshot cart on queue
+- [ ] **Cash rounding (server/books)** — tablet UI rounds to $0.05 today; persist on checkout, reports, web — see [CONTENTS.md](CONTENTS.md#cash-rounding-todo)
+- [ ] **Card terminal / payment pad** — no pad API today; Card is manual “paid” only — see [CONTENTS.md](CONTENTS.md#card-terminal--payment-pad-todo)
 - [ ] Receipt / print after **Complete Sale**

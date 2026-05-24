@@ -24,6 +24,17 @@ Kotlin + Jetpack Compose. Theming: **Lister palette** (`ui/theme/`).
 | `POST /api/checkout` | Complete sale |
 | `GET /api/sales/recent` | Fetched on refresh (not shown yet) |
 
+## JDK for Gradle builds
+
+Use **JDK 21 or 17** (e.g. Temurin). **JDK 26** fails with `JdkImageTransform` / `jlink` during `:app:compileDebugJavaWithJavac`.
+
+`RebuildReinstall.sh` sets `JAVA_HOME` automatically when possible. Otherwise:
+
+```bash
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+./gradlew :app:assembleDebug
+```
+
 ## Base URL (`API_BASE_URL`)
 
 Baked into the APK at **Gradle configuration** time (`BuildConfig.API_BASE_URL`):
@@ -46,6 +57,14 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 `RebuildReinstall.sh` detects `LAN_IP` from `en0`/`en1` (override with `LAN_IP=…`), builds debug, and installs via `adb`.
 
 **Wrong URL symptoms:** `Failed to connect`, login **404** (server missing `/api/cashier/unlock` — redeploy Docker image), or **401** (wrong PIN).
+
+**PIN works on Mac but add-to-cart returns 401 on tablet:** the APK must target your Mac’s **current** Wi‑Fi IP (not `localhost`). Rebuild with the IP shown by `npm run lan-url` or `scripts/dev-up.sh`, then reinstall:
+
+```bash
+LAN_IP=$(ipconfig getifaddr en0) ./RebuildReinstall.sh
+```
+
+Confirm the status line after **Done** does not say “Sign-in did not persist”. Mac browser and tablet must hit the **same** Node server (`dev-up` on your Mac, not only OCI).
 
 Changing `CASHIER_PIN` only requires updating `.env` (local) or Terraform/container env (OCI) and restarting Node — **no APK rebuild**.
 
@@ -81,7 +100,15 @@ pre-tax line totals.
 1. **Header** — ☰ menu, title
 2. **Status card** (when menu → Show status) — API message, offline queue, **Sync queued**
 3. **Middle** — scan field, **Scan** / **Add**, cart list | number pad
-4. **Bottom** — totals, **Pay** → payment + **Complete Sale**
+4. **Bottom** — totals, **Pay** → payment type; **Cash** opens the number pad for tendered amount and change, then **Complete Sale**
+
+### Cash — no pennies + change
+
+1. **Pay** → choose **Cash** (right panel becomes cash mode).
+2. Enter **cash received** on the number pad (or tap **Exact** or the three bill shortcuts — e.g. due **$4.50** → **$5**, **$10**, **$20**).
+3. **Give change** updates live; **Complete Sale** when enough cash was entered.
+
+Cash due and change use the total rounded **down** to the nearest **$0.05** (e.g. $19.06 → $19.05, $19.08 → $19.05). Card/Mobile use the exact register total.
 
 `navigationBarsPadding()` keeps pay controls above the gesture bar.
 

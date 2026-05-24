@@ -218,12 +218,21 @@ async function loadSalesHistory() {
 }
 
 async function addToCart(productId) {
-  await fetch(`/api/cart${customerQs()}`, {
+  const res = await fetch(`/api/cart${customerQs()}`, {
     ...fetchOpts,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ productId }),
   });
+  if (res.status === 401) {
+    showPinGate('Cashier sign-in required — sign in again (server may have restarted)');
+    return;
+  }
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    setStatus(payload.error || `Add to cart failed (${res.status})`);
+    return;
+  }
   await loadCart();
 }
 

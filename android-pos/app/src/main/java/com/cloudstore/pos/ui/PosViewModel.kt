@@ -12,6 +12,7 @@ import com.cloudstore.pos.data.PosRepository
 import com.cloudstore.pos.data.Product
 import com.cloudstore.pos.data.Sale
 import com.cloudstore.pos.data.StoreCustomer
+import com.cloudstore.pos.BuildConfig
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
@@ -85,9 +86,14 @@ class PosViewModel(
                 )
                 applyCartResponse(cartResp, state.value.customerDiscountActive())
             }.onFailure { err ->
+                val authLost = err is HttpException && err.code() == 401
                 state.value = state.value.copy(
                     loading = false,
-                    status = "Error: ${err.message ?: "Unable to connect"}",
+                    isAuthenticated = !authLost,
+                    status = when {
+                        authLost -> "Session expired — sign in again"
+                        else -> "Error: ${err.message ?: "Unable to connect"}"
+                    },
                 )
             }
         }
@@ -129,8 +135,13 @@ class PosViewModel(
                 }
                 .onFailure { err ->
                     if (generation != cartRefreshGeneration) return@onFailure
+                    val authLost = err is HttpException && err.code() == 401
                     state.value = state.value.copy(
-                        status = "Cart refresh failed: ${err.message ?: "Unable to connect"}",
+                        isAuthenticated = !authLost,
+                        status = when {
+                            authLost -> "Session expired — sign in again"
+                            else -> "Cart refresh failed: ${err.message ?: "Unable to connect"}"
+                        },
                     )
                 }
             if (generation == cartRefreshGeneration) {
@@ -178,9 +189,16 @@ class PosViewModel(
                             404 -> "Server needs update (missing login API)"
                             else -> "Server error (${err.code()})"
                         }
-                        else -> "Cannot reach server — check Wi‑Fi and API URL"
+                        else -> when {
+                            err.message?.contains("did not persist", ignoreCase = true) == true ->
+                                err.message!!
+                            else -> "Cannot reach server — check Wi‑Fi and API URL (${BuildConfig.API_BASE_URL})"
+                        }
                     }
-                    state.value = state.value.copy(status = msg)
+                    state.value = state.value.copy(
+                        isAuthenticated = false,
+                        status = msg,
+                    )
                 }
         }
     }
@@ -203,7 +221,16 @@ class PosViewModel(
             val cid = state.value.selectedCustomerId
             runCatching { repository.addProduct(productId, cid) }
                 .onSuccess { applyCartResponse(it, state.value.customerDiscountActive()) }
-                .onFailure { state.value = state.value.copy(status = "Add failed: ${it.message}") }
+                .onFailure { err ->
+                    val authLost = err is HttpException && err.code() == 401
+                    state.value = state.value.copy(
+                        isAuthenticated = !authLost,
+                        status = when {
+                            authLost -> "Session expired — sign in again"
+                            else -> "Add failed: ${err.message}"
+                        },
+                    )
+                }
         }
     }
 
@@ -223,7 +250,7 @@ class PosViewModel(
 
         // Scan field adds products when the ID matches a product (even if the same number is a customer ID).
         // Link customers via Find customer when IDs overlap (e.g. product 2 and customer 2).
-        if (treatAsId && asId != null) {
+        if (treatAsId) {
             val hasProduct = state.value.products.any { it.id == asId }
             val hasCustomer = state.value.customers.any { it.id == asId }
             if (!hasProduct && hasCustomer) {
@@ -245,7 +272,16 @@ class PosViewModel(
                         status = if (treatAsId) "Added by id $cleaned" else "Scanned $cleaned",
                     )
                 }
-                .onFailure { state.value = state.value.copy(status = "Add failed: ${it.message}") }
+                .onFailure { err ->
+                    val authLost = err is HttpException && err.code() == 401
+                    state.value = state.value.copy(
+                        isAuthenticated = !authLost,
+                        status = when {
+                            authLost -> "Session expired — sign in again"
+                            else -> "Add failed: ${err.message}"
+                        },
+                    )
+                }
         }
     }
 

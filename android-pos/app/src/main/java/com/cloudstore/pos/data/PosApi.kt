@@ -2,11 +2,8 @@ package com.cloudstore.pos.data
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import okhttp3.JavaNetCookieJar
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
-import java.net.CookieManager
-import java.net.CookiePolicy
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.Body
@@ -71,12 +68,8 @@ class PosRepository(baseUrl: String) {
             level = HttpLoggingInterceptor.Level.BASIC
         }
 
-        val cookieManager = CookieManager().apply {
-            setCookiePolicy(CookiePolicy.ACCEPT_ALL)
-        }
-
         val okHttp = OkHttpClient.Builder()
-            .cookieJar(JavaNetCookieJar(cookieManager))
+            .cookieJar(MemoryCookieJar())
             .addInterceptor(logger)
             .build()
 
@@ -121,6 +114,10 @@ class PosRepository(baseUrl: String) {
     suspend fun unlockCashier(pin: String) {
         val res = api.unlockCashier(mapOf("pin" to pin))
         if (!res.ok) throw IllegalStateException("Unlock failed")
+        val session = api.cashierSession()
+        if (!session.ok) {
+            throw IllegalStateException("Sign-in did not persist — rebuild APK with correct LAN_IP")
+        }
     }
 
     suspend fun logoutCashier() {

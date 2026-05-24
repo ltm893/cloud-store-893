@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -94,6 +95,8 @@ fun PosScreen(viewModel: PosViewModel) {
     }
 
     var payPanelVisible by remember { mutableStateOf(false) }
+    var cashPaymentOpen by remember { mutableStateOf(false) }
+    var cashTenderedInput by remember { mutableStateOf("") }
     var statusPanelExpanded by remember { mutableStateOf(false) }
     var customerFindOpen by remember { mutableStateOf(false) }
     var adminOpen by remember { mutableStateOf(false) }
@@ -103,6 +106,8 @@ fun PosScreen(viewModel: PosViewModel) {
     LaunchedEffect(state.isAuthenticated) {
         if (!state.isAuthenticated) {
             payPanelVisible = false
+            cashPaymentOpen = false
+            cashTenderedInput = ""
             customerFindOpen = false
             adminOpen = false
             paymentDialogMessage = null
@@ -116,6 +121,8 @@ fun PosScreen(viewModel: PosViewModel) {
     LaunchedEffect(state.status) {
         if (state.status.startsWith("Sale complete") || state.status.startsWith("Offline: checkout")) {
             payPanelVisible = false
+            cashPaymentOpen = false
+            cashTenderedInput = ""
             paymentDialogMessage = null
             pendingPaymentMethod = null
         }
@@ -420,11 +427,19 @@ fun PosScreen(viewModel: PosViewModel) {
                         }
                     }
                 }
-                Spacer(modifier = Modifier.weight(1f))
+                if (!cashPaymentOpen) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(PosNumpadHeight),
+                        .then(
+                            if (cashPaymentOpen) {
+                                Modifier.weight(1f)
+                            } else {
+                                Modifier.height(PosNumpadHeight)
+                            },
+                        ),
                 ) {
                     if (customerFindOpen) {
                         CustomerFindPanel(
@@ -443,15 +458,56 @@ fun PosScreen(viewModel: PosViewModel) {
                                 .fillMaxSize()
                                 .padding(12.dp),
                         )
+                    } else if (cashPaymentOpen) {
+                        val registerTotal = computeSaleGrandTotal(
+                            cart = state.cart,
+                            customerLinked = state.customerLinked(),
+                            customerDiscount = state.customerDiscountActive(),
+                            salesFeeRate = salesFeeRate,
+                            taxRate = taxRate,
+                        )
+                        val amountDue = computeCashAmountDue(
+                            cart = state.cart,
+                            customerLinked = state.customerLinked(),
+                            customerDiscount = state.customerDiscountActive(),
+                            salesFeeRate = salesFeeRate,
+                            taxRate = taxRate,
+                        )
+                        CashPaymentPanel(
+                            registerTotal = registerTotal,
+                            amountDue = amountDue,
+                            tenderedInput = cashTenderedInput,
+                            onTenderedChange = { cashTenderedInput = it },
+                            onExactAmount = {
+                                cashTenderedInput = formatCashEntry(amountDue)
+                            },
+                            onComplete = {
+                                viewModel.setPaymentMethod("cash")
+                                viewModel.checkout()
+                                cashPaymentOpen = false
+                                cashTenderedInput = ""
+                                payPanelVisible = false
+                            },
+                            onBack = {
+                                cashPaymentOpen = false
+                                cashTenderedInput = ""
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                        )
                     } else if (payPanelVisible) {
                         PaymentMethodPicker(
                             selected = state.paymentMethod,
-                            onOptionPicked = { method, label ->
-                                pendingPaymentMethod = method
-                                paymentDialogMessage = if (method == "card") {
-                                    "Use Card Paid"
+                            onBack = { payPanelVisible = false },
+                            onOptionPicked = { method ->
+                                if (method == "cash") {
+                                    viewModel.setPaymentMethod("cash")
+                                    cashTenderedInput = ""
+                                    cashPaymentOpen = true
                                 } else {
-                                    label
+                                    pendingPaymentMethod = method
+                                    paymentDialogMessage = "Use Card Paid"
                                 }
                             },
                             modifier = Modifier
@@ -497,21 +553,28 @@ fun PosScreen(viewModel: PosViewModel) {
                         salesFeeRate = salesFeeRate,
                         taxRate = taxRate,
                     )
-                    if (!payPanelVisible) {
-                        Button(
-                            onClick = {
-                                customerFindOpen = false
-                                viewModel.setPaymentMethod("card")
-                                payPanelVisible = true
-                            },
-                            enabled = state.cart.isNotEmpty(),
+                    if (!payPanelVisible && !cashPaymentOpen) {
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 8.dp)
-                                .height(44.dp),
-                            contentPadding = PaddingValues(vertical = 4.dp),
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.End,
                         ) {
-                            Text("Pay")
+                            Button(
+                                onClick = {
+                                    customerFindOpen = false
+                                    cashPaymentOpen = false
+                                    viewModel.setPaymentMethod("card")
+                                    payPanelVisible = true
+                                },
+                                enabled = state.cart.isNotEmpty(),
+                                modifier = Modifier
+                                    .fillMaxWidth(0.2f)
+                                    .height(44.dp),
+                                contentPadding = PaddingValues(vertical = 4.dp),
+                            ) {
+                                Text("Pay")
+                            }
                         }
                     }
                 }
@@ -611,28 +674,215 @@ private fun OfflineQueueStatus(
     }
 }
 
+private fun formatCashEntry(amount: Double): String {
+    val rounded = roundMoney(amount)
+    return if (rounded == rounded.toLong().toDouble()) {
+        rounded.toLong().toString()
+    } else {
+        "%.2f".format(rounded)
+    }
+}
+
+private fun parseCashTendered(raw: String): Double? {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty() || trimmed == ".") return null
+    return trimmed.toDoubleOrNull()
+}
+
+private fun appendCashDigit(current: String, digit: Char): String {
+    if (digit == '.') {
+        if (current.contains('.')) return current
+        return if (current.isEmpty()) "0." else "$current."
+    }
+    if (current.contains('.')) {
+        val frac = current.substringAfter('.')
+        if (frac.length >= 2) return current
+    } else if (current.length >= 7) {
+        return current
+    }
+    return current + digit
+}
+
+@Composable
+private fun CashPaymentPanel(
+    registerTotal: Double,
+    amountDue: Double,
+    tenderedInput: String,
+    onTenderedChange: (String) -> Unit,
+    onExactAmount: () -> Unit,
+    onComplete: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tendered = parseCashTendered(tenderedInput)
+    val change = if (tendered != null) roundMoney(tendered - amountDue) else null
+    val canComplete = tendered != null && tendered + 0.005 >= amountDue
+    val nickelAdjustment = roundMoney(amountDue - registerTotal)
+    val showNickelNote = kotlin.math.abs(nickelAdjustment) > 0.001
+    val quickBills = cashQuickDenominations(amountDue)
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .fillMaxHeight(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onBack, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
+                Text("Back")
+            }
+            Text(
+                text = "Cash",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (showNickelNote) {
+            CashAmountRow(
+                label = "Register total",
+                value = formatMoney(registerTotal),
+            )
+        }
+        CashAmountRow(
+            label = if (showNickelNote) "Cash due (no pennies)" else "Amount due",
+            value = formatMoney(amountDue),
+            emphasize = true,
+        )
+        CashAmountRow(
+            label = "Cash entered",
+            value = if (tenderedInput.isBlank()) "—" else "$${tenderedInput}",
+        )
+        val changeLabel = when {
+            change == null -> "Change"
+            change < -0.005 -> "Still need"
+            change < 0.005 -> "Change"
+            else -> "Give change"
+        }
+        val changeValue = when {
+            change == null -> "—"
+            change < -0.005 -> formatMoney(-change)
+            change < 0.005 -> formatMoney(0.0)
+            else -> formatMoney(change)
+        }
+        val changeOk = change != null && change >= 0.005
+        CashAmountRow(
+            label = changeLabel,
+            value = changeValue,
+            emphasize = changeOk,
+            valueColor = when {
+                change == null -> null
+                change < -0.005 -> MaterialTheme.colorScheme.error
+                changeOk -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            OutlinedButton(
+                onClick = onExactAmount,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(vertical = 4.dp),
+            ) {
+                Text("Exact", style = MaterialTheme.typography.labelMedium)
+            }
+            quickBills.forEach { bill ->
+                OutlinedButton(
+                    onClick = { onTenderedChange(formatCashEntry(bill.toDouble())) },
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                ) {
+                    Text("$$bill", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+        NumberPad(
+            onDigit = { d -> onTenderedChange(appendCashDigit(tenderedInput, d)) },
+            onClear = { onTenderedChange("") },
+            onBackspace = { onTenderedChange(tenderedInput.dropLast(1)) },
+            onDecimal = { onTenderedChange(appendCashDigit(tenderedInput, '.')) },
+            compact = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .heightIn(min = 136.dp)
+                .padding(top = 6.dp),
+        )
+        Button(
+            onClick = onComplete,
+            enabled = canComplete,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            contentPadding = PaddingValues(vertical = 6.dp),
+        ) {
+            Text("Complete Sale")
+        }
+    }
+}
+
+@Composable
+private fun CashAmountRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    emphasize: Boolean = false,
+    valueColor: androidx.compose.ui.graphics.Color? = null,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = if (emphasize) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+            fontWeight = if (emphasize) FontWeight.Bold else FontWeight.Medium,
+            color = valueColor ?: MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
 @Composable
 private fun NumberPad(
     onDigit: (Char) -> Unit,
     onClear: () -> Unit,
     onBackspace: () -> Unit,
+    onDecimal: (() -> Unit)? = null,
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val keyGap = if (compact) 6.dp else 8.dp
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(keyGap),
     ) {
         listOf("123", "456", "789").forEach { rowDigits ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(keyGap),
             ) {
                 rowDigits.forEach { digit ->
                     PadKey(
                         text = digit.toString(),
                         onClick = { onDigit(digit) },
+                        compact = compact,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight(),
@@ -644,22 +894,34 @@ private fun NumberPad(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(keyGap),
         ) {
             PadKey(
                 text = "C",
                 onClick = onClear,
+                compact = compact,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 emphasis = KeyEmphasis.Secondary,
             )
+            if (onDecimal != null) {
+                PadKey(
+                    text = ".",
+                    onClick = onDecimal,
+                    compact = compact,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    emphasis = KeyEmphasis.Secondary,
+                )
+            }
             PadKey(
                 text = "0",
                 onClick = { onDigit('0') },
+                compact = compact,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
             )
             PadKey(
                 text = "\u232B",
                 onClick = onBackspace,
+                compact = compact,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 emphasis = KeyEmphasis.Secondary,
             )
@@ -675,6 +937,7 @@ private fun PadKey(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     emphasis: KeyEmphasis = KeyEmphasis.Primary,
+    compact: Boolean = false,
 ) {
     val colors = when (emphasis) {
         KeyEmphasis.Primary -> androidx.compose.material3.ButtonDefaults.buttonColors(
@@ -695,7 +958,11 @@ private fun PadKey(
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.headlineMedium,
+                style = if (compact) {
+                    MaterialTheme.typography.titleLarge
+                } else {
+                    MaterialTheme.typography.headlineMedium
+                },
                 fontWeight = FontWeight.Bold,
             )
         }
@@ -1026,6 +1293,13 @@ private fun SaleTotalsPanel(
     salesFeeRate: Double,
     taxRate: Double,
 ) {
+    val grandTotal = computeSaleGrandTotal(
+        cart = cart,
+        customerLinked = customerLinked,
+        customerDiscount = customerDiscount,
+        salesFeeRate = salesFeeRate,
+        taxRate = taxRate,
+    )
     val items = if (customerLinked) normalizeCartItems(cart, customerDiscount) else cart
     val totals = if (customerLinked) {
         computeCartTotalsForLinkedCustomer(items, customerDiscount)
@@ -1035,7 +1309,6 @@ private fun SaleTotalsPanel(
     val salesFee = totals.itemPreTax * salesFeeRate
     val taxable = totals.itemPreTax + salesFee
     val taxAmt = taxable * taxRate
-    val grandTotal = taxable + taxAmt
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -1208,7 +1481,8 @@ private fun PaymentMessageDialog(
 @Composable
 private fun PaymentMethodPicker(
     selected: String,
-    onOptionPicked: (method: String, label: String) -> Unit,
+    onBack: () -> Unit,
+    onOptionPicked: (method: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -1219,18 +1493,31 @@ private fun PaymentMethodPicker(
     val options = listOf(
         "card" to "Card",
         "cash" to "Cash",
-        "mobile" to "Mobile Pay",
     )
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = "Payment Type",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 6.dp),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                onClick = onBack,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+            ) {
+                Text("Back")
+            }
+            Text(
+                text = "Payment Type",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(8.dp),
@@ -1267,7 +1554,7 @@ private fun PaymentMethodPicker(
                                 .clickable {
                                     displaySelection = value
                                     expanded = false
-                                    onOptionPicked(value, label)
+                                    onOptionPicked(value)
                                 }
                                 .padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,

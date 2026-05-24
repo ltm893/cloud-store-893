@@ -1,6 +1,9 @@
 # Environment variables - never commit these
 .env
 
+# Local dev auth session persistence (DEV_PERSIST_AUTH_SESSIONS via dev-up.sh)
+.dev-auth-sessions.json
+
 # Node dependencies - reinstalled via npm install
 node_modules/
 

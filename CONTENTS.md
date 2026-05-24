@@ -1,6 +1,6 @@
 # Cloud Store 893 — session handoff
 
-Last updated: 2026-05-16
+Last updated: 2026-05-24
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
 
@@ -12,7 +12,7 @@ Use this file to resume work in a new session. Canonical setup details live in [
 |------|--------|
 | **Web POS** (`/`) | Product grid, cart, checkout |
 | **Admin** (`/admin/`) | CRUD on DB tables; PIN login (`ADMIN_PIN`) |
-| **Tablet POS** | Numpad login → `POST /api/cashier/unlock`; sale flow; ☰ menu |
+| **Tablet POS** | Numpad login; sale flow; cash tender/change on pad; Card = manual “paid” (no terminal API) |
 | **Local dev** | `npm run dev:up` + `.env` |
 | **OCI** | Container + ADB; app at `terraform output app_url` |
 | **Git** | Feature work on branch `dev` (pushed May 2026) |
@@ -101,6 +101,7 @@ npm run dev:up
 - **Login:** Numpad + **Done** → server PIN check (not in APK).
 - **Menu (☰):** Status panel, Admin (browser), Lock.
 - **Add item:** Numpad digit(s) + **Add**, or **Scan** (camera), or full barcode string.
+- **Cash pay:** Payment type **Cash** → numpad for tendered / change; **no pennies** (nearest $0.05) in UI only — see [Cash rounding (TODO)](#cash-rounding-todo) for server/books.
 - **`API_BASE_URL`:** Gradle configure time — see build log; override with `LAN_IP=…`.
 - **Theme:** Lister palette in `ui/theme/` — see [AGENTS.md](AGENTS.md).
 
@@ -146,6 +147,50 @@ npm run dev:up
 - Web POS has no cashier gate (intentional).
 - Android `build/` artifacts can dirty `git status` — keep `.gitignore` tight.
 - Optional: discard-queue button, cart snapshot in offline queue, receipt printing.
+
+### Cash rounding (TODO)
+
+**Done (tablet UI):** Cash due, **Exact**, and change round **down** to **$0.05** (`roundToNickel` / `computeCashAmountDue` in `android-pos/.../CartTotals.kt`). Sale bar still shows the full register total; cash panel shows **Register total** vs **Cash due (no pennies)** when they differ.
+
+**Not done — pick up later:**
+
+- [ ] **`POST /api/checkout`** — when `paymentMethod === 'cash'`, compute tax-inclusive total (same formula as tablet), apply nickel rounding, persist on `sales` (e.g. `total`, `cash_due`, optional `cash_tendered` / `cash_change` / `register_total`).
+- [ ] **ORDS / `sales` table** — columns or documented fields for cash-rounded amount vs pre-tax subtotal (today checkout stores **pre-tax** `subtotalPayable` only).
+- [ ] **Web POS** — if cash tender UI is added, reuse same rounding; web cart today has no tax line like the tablet.
+- [ ] **Admin / reports** — show cash-rounded total for cash sales; align with drawer/accounting.
+- [ ] **Receipts / exports** — amount collected = nickel-rounded cash due, not raw register total.
+- [ ] **Offline queue (tablet)** — optional: store tendered/rounded due if server will validate on sync.
+
+Ref: `android-pos/README.md` (Cash — no pennies).
+
+### Card terminal / payment pad (TODO)
+
+**Today:** Tablet **Card** shows “Use Card Paid” then `POST /api/checkout` with `paymentMethod: "card"` only — **no** pin pad, auth code, or processor tie-in. Cash flow is integrated on the tablet; card is **manual / unintegrated**.
+
+**There is no single global “POS → card pad” message format.** Under the hood: **EMV** (chip/tap), **ISO 8583** (auth on the processor network). At the register you usually integrate via a **terminal vendor SDK** or **gateway** (Stripe Terminal, Square, Adyen, Fiserv, etc.) or regional specs like **Nexo** / **OPI** where supported.
+
+**Typical integrated flow (target architecture):**
+
+```text
+POS (tablet/Node) → SDK or local API → payment terminal → acquirer → card network
+```
+
+POS sends (conceptually): amount, currency, sale reference (`orderNumber`), optional tip — **not** raw track/chip data. Terminal returns: approved/declined, auth code, transaction id, masked PAN, card brand.
+
+**Integration styles:**
+
+| Style | Notes |
+|-------|--------|
+| **Fully / semi-integrated** | POS sends amount; customer pays on pad; result via API — preferred for PCI and reconciliation |
+| **Unintegrated (current)** | Cashier runs amount on external pad; POS records card sale after the fact |
+
+**Not done — pick up later:**
+
+- [ ] **Choose stack** — processor + terminal (or cloud: Stripe Terminal / Square / Adyen) vs existing merchant hardware.
+- [ ] **Node + tablet** — after approval, call checkout with `paymentMethod: "card"` plus stored `auth_code`, `transaction_id`, terminal ref (needs `sales` / API fields).
+- [ ] **Replace “Use Card Paid”** — drive real amount to terminal; block Complete until approved/declined; handle voids/refunds policy.
+- [ ] **Receipts / admin** — show auth code and masked card on sale history.
+- [ ] **HTTPS** — required for many cloud terminal SDKs (see Next Steps in README).
 
 ---
 

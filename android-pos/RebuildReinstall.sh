@@ -13,6 +13,23 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Android Gradle Plugin does not support running Gradle on JDK 26 yet (jlink / androidJdkImage fails).
+# Prefer 21, then 17, when JAVA_HOME is unset.
+if [[ -z "${JAVA_HOME:-}" ]] && command -v /usr/libexec/java_home >/dev/null 2>&1; then
+  for ver in 21 17; do
+    jhome="$(/usr/libexec/java_home -v "$ver" 2>/dev/null || true)"
+    if [[ -n "$jhome" ]]; then
+      export JAVA_HOME="$jhome"
+      break
+    fi
+  done
+fi
+if [[ -n "${JAVA_HOME:-}" ]]; then
+  echo "==> JAVA_HOME=$JAVA_HOME"
+else
+  echo "warning: set JAVA_HOME to JDK 21 or 17 (Temurin). JDK 26 breaks :app:compileDebugJavaWithJavac." >&2
+fi
+
 ADB="${ADB:-adb}"
 APK="app/build/outputs/apk/debug/app-debug.apk"
 

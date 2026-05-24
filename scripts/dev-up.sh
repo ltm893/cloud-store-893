@@ -103,7 +103,12 @@ fi
 
 # ── Start the local Node server ───────────────────────────────────────────────
 divider
+info "Web POS: use one host for the whole session (e.g. http://127.0.0.1:${PORT_VAL:-3000}/)"
+info "  localhost and 127.0.0.1 do not share cookies."
+info "  Cashier PIN: CASHIER_PIN in .env (not ADMIN_PIN). Sessions persist across node --watch restarts."
+
 cd "${PROJECT_ROOT}"
+export DEV_PERSIST_AUTH_SESSIONS=true
 if [[ "$WATCH" = "1" ]]; then
   info "Starting: node --watch server.js"
   exec node --watch server.js
