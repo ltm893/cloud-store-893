@@ -4,8 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,11 +28,10 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -50,7 +47,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -66,7 +62,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import com.cloudstore.pos.BuildConfig
 import com.cloudstore.pos.data.CartItem
+import com.cloudstore.pos.data.CheckoutPayment
 import com.cloudstore.pos.data.StoreCustomer
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 
@@ -102,30 +100,77 @@ fun PosScreen(viewModel: PosViewModel) {
     var adminOpen by remember { mutableStateOf(false) }
     var paymentDialogMessage by remember { mutableStateOf<String?>(null) }
     var pendingPaymentMethod by remember { mutableStateOf<String?>(null) }
+    var processingCheckoutMethod by remember { mutableStateOf<String?>(null) }
+    var processingDialogMessage by remember { mutableStateOf<String?>(null) }
+    var paymentProcessingProgress by remember { mutableStateOf(0f) }
+    var splitPaymentOpen by remember { mutableStateOf(false) }
+    var splitPaymentAmountInput by remember { mutableStateOf("") }
+    var splitPayments by remember { mutableStateOf(listOf<CheckoutPayment>()) }
+    var pendingCheckoutPayments by remember { mutableStateOf<List<CheckoutPayment>?>(null) }
 
     LaunchedEffect(state.isAuthenticated) {
         if (!state.isAuthenticated) {
             payPanelVisible = false
             cashPaymentOpen = false
             cashTenderedInput = ""
+            splitPaymentOpen = false
+            splitPaymentAmountInput = ""
+            splitPayments = emptyList()
             customerFindOpen = false
             adminOpen = false
             paymentDialogMessage = null
             pendingPaymentMethod = null
+            processingCheckoutMethod = null
+            processingDialogMessage = null
+            paymentProcessingProgress = 0f
+            pendingCheckoutPayments = null
         }
     }
 
     LaunchedEffect(state.cart.isEmpty(), state.isAuthenticated) {
-        if (state.isAuthenticated && state.cart.isEmpty()) payPanelVisible = false
+        if (state.isAuthenticated && state.cart.isEmpty()) {
+            payPanelVisible = false
+            cashPaymentOpen = false
+            splitPaymentOpen = false
+            splitPaymentAmountInput = ""
+            splitPayments = emptyList()
+            pendingCheckoutPayments = null
+        }
     }
     LaunchedEffect(state.status) {
         if (state.status.startsWith("Sale complete") || state.status.startsWith("Offline: checkout")) {
             payPanelVisible = false
             cashPaymentOpen = false
             cashTenderedInput = ""
+            splitPaymentOpen = false
+            splitPaymentAmountInput = ""
+            splitPayments = emptyList()
             paymentDialogMessage = null
             pendingPaymentMethod = null
+            processingCheckoutMethod = null
+            processingDialogMessage = null
+            paymentProcessingProgress = 0f
+            pendingCheckoutPayments = null
         }
+    }
+
+    LaunchedEffect(processingCheckoutMethod, processingDialogMessage, pendingCheckoutPayments) {
+        val method = processingCheckoutMethod ?: return@LaunchedEffect
+        processingDialogMessage ?: return@LaunchedEffect
+        val checkoutPayments = pendingCheckoutPayments
+        paymentProcessingProgress = 0f
+        val steps = 50
+        repeat(steps) { index ->
+            delay(100)
+            paymentProcessingProgress = (index + 1) / steps.toFloat()
+        }
+        viewModel.setPaymentMethod(method)
+        viewModel.checkout(payments = checkoutPayments)
+        processingCheckoutMethod = null
+        processingDialogMessage = null
+        pendingPaymentMethod = null
+        paymentProcessingProgress = 0f
+        pendingCheckoutPayments = null
     }
 
     if (!state.isAuthenticated) {
@@ -348,7 +393,7 @@ fun PosScreen(viewModel: PosViewModel) {
                         }
                     }
 
-                    Divider(modifier = Modifier.padding(vertical = 6.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
                     Text(
                         text = "Current Sale",
@@ -482,11 +527,12 @@ fun PosScreen(viewModel: PosViewModel) {
                                 cashTenderedInput = formatCashEntry(amountDue)
                             },
                             onComplete = {
-                                viewModel.setPaymentMethod("cash")
-                                viewModel.checkout()
                                 cashPaymentOpen = false
                                 cashTenderedInput = ""
                                 payPanelVisible = false
+                                pendingCheckoutPayments = null
+                                processingCheckoutMethod = "cash"
+                                processingDialogMessage = "Printing Receipt"
                             },
                             onBack = {
                                 cashPaymentOpen = false
@@ -496,16 +542,93 @@ fun PosScreen(viewModel: PosViewModel) {
                                 .fillMaxSize()
                                 .padding(12.dp),
                         )
+                    } else if (splitPaymentOpen) {
+                        val registerTotal = computeSaleGrandTotal(
+                            cart = state.cart,
+                            customerLinked = state.customerLinked(),
+                            customerDiscount = state.customerDiscountActive(),
+                            salesFeeRate = salesFeeRate,
+                            taxRate = taxRate,
+                        )
+                        val paidTotal = roundMoney(splitPayments.sumOf { it.amount })
+                        val remainingAmount = roundMoney((registerTotal - paidTotal).coerceAtLeast(0.0))
+                        SplitPaymentPanel(
+                            totalAmount = registerTotal,
+                            payments = splitPayments,
+                            amountInput = splitPaymentAmountInput,
+                            onAmountChange = { splitPaymentAmountInput = it },
+                            onFillRemaining = {
+                                splitPaymentAmountInput = formatCashEntry(remainingAmount)
+                            },
+                            onAddPayment = { method ->
+                                val enteredAmount = parseCashTendered(splitPaymentAmountInput)
+                                if (enteredAmount != null &&
+                                    enteredAmount > 0.0 &&
+                                    enteredAmount <= remainingAmount + 0.005
+                                ) {
+                                    val appliedAmount = roundMoney(minOf(enteredAmount, remainingAmount))
+                                    splitPayments = splitPayments + CheckoutPayment(
+                                        method = method,
+                                        amount = appliedAmount,
+                                    )
+                                    splitPaymentAmountInput = ""
+                                }
+                            },
+                            onRemovePayment = { index ->
+                                splitPayments = splitPayments.filterIndexed { paymentIndex, _ ->
+                                    paymentIndex != index
+                                }
+                            },
+                            onComplete = {
+                                splitPaymentOpen = false
+                                splitPaymentAmountInput = ""
+                                payPanelVisible = false
+                                pendingCheckoutPayments = splitPayments
+                                splitPayments = emptyList()
+                                processingCheckoutMethod = "split"
+                                processingDialogMessage = "Processing Split Payment"
+                            },
+                            onBack = {
+                                splitPaymentOpen = false
+                                splitPaymentAmountInput = ""
+                                splitPayments = emptyList()
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                        )
                     } else if (payPanelVisible) {
+                        val registerTotal = computeSaleGrandTotal(
+                            cart = state.cart,
+                            customerLinked = state.customerLinked(),
+                            customerDiscount = state.customerDiscountActive(),
+                            salesFeeRate = salesFeeRate,
+                            taxRate = taxRate,
+                        )
                         PaymentMethodPicker(
                             selected = state.paymentMethod,
+                            amountDue = registerTotal,
+                            cardProcessing = processingCheckoutMethod == "card",
                             onBack = { payPanelVisible = false },
                             onOptionPicked = { method ->
                                 if (method == "cash") {
                                     viewModel.setPaymentMethod("cash")
+                                    splitPaymentOpen = false
+                                    splitPaymentAmountInput = ""
+                                    splitPayments = emptyList()
                                     cashTenderedInput = ""
                                     cashPaymentOpen = true
+                                } else if (method == "split") {
+                                    viewModel.setPaymentMethod("split")
+                                    splitPaymentAmountInput = ""
+                                    splitPayments = emptyList()
+                                    splitPaymentOpen = true
                                 } else {
+                                    viewModel.setPaymentMethod("card")
+                                    splitPaymentOpen = false
+                                    splitPaymentAmountInput = ""
+                                    splitPayments = emptyList()
+                                    pendingCheckoutPayments = null
                                     pendingPaymentMethod = method
                                     paymentDialogMessage = "Use Card Paid"
                                 }
@@ -564,6 +687,10 @@ fun PosScreen(viewModel: PosViewModel) {
                                 onClick = {
                                     customerFindOpen = false
                                     cashPaymentOpen = false
+                                    splitPaymentOpen = false
+                                    splitPaymentAmountInput = ""
+                                    splitPayments = emptyList()
+                                    pendingCheckoutPayments = null
                                     viewModel.setPaymentMethod("card")
                                     payPanelVisible = true
                                 },
@@ -587,17 +714,23 @@ fun PosScreen(viewModel: PosViewModel) {
         PaymentMessageDialog(
             message = message,
             onConfirm = {
-                pendingPaymentMethod?.let { method ->
-                    viewModel.setPaymentMethod(method)
-                    viewModel.checkout()
-                }
                 paymentDialogMessage = null
-                pendingPaymentMethod = null
+                pendingCheckoutPayments = null
+                processingCheckoutMethod = pendingPaymentMethod
+                processingDialogMessage = "Processing Card Payment"
             },
             onDismiss = {
                 paymentDialogMessage = null
                 pendingPaymentMethod = null
+                pendingCheckoutPayments = null
             },
+        )
+    }
+
+    processingDialogMessage?.let { message ->
+        ProcessingStatusDialog(
+            message = message,
+            progress = paymentProcessingProgress,
         )
     }
 
@@ -754,7 +887,7 @@ private fun CashPaymentPanel(
         )
         CashAmountRow(
             label = "Cash entered",
-            value = if (tenderedInput.isBlank()) "—" else "$${tenderedInput}",
+            value = if (tenderedInput.isBlank()) "—" else "\$$tenderedInput",
         )
         val changeLabel = when {
             change == null -> "Change"
@@ -791,7 +924,7 @@ private fun CashPaymentPanel(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(vertical = 4.dp),
             ) {
-                Text("Exact", style = MaterialTheme.typography.labelMedium)
+                Text(formatMoney(amountDue), style = MaterialTheme.typography.labelMedium)
             }
             quickBills.forEach { bill ->
                 OutlinedButton(
@@ -799,7 +932,7 @@ private fun CashPaymentPanel(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(vertical = 4.dp),
                 ) {
-                    Text("$$bill", style = MaterialTheme.typography.labelMedium)
+                    Text("\$$bill", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -1393,7 +1526,7 @@ private fun SaleTotalsPanel(
     }
 }
 
-private fun formatMoney(amount: Double): String = "$${"%.2f".format(amount)}"
+private fun formatMoney(amount: Double): String = "\$${"%.2f".format(amount)}"
 
 @Composable
 private fun TotalSaleStat(
@@ -1474,29 +1607,256 @@ private fun PaymentMessageDialog(
     }
 }
 
+@Composable
+private fun ProcessingStatusDialog(
+    message: String,
+    progress: Float,
+) {
+    Dialog(onDismissRequest = {}) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+private fun paymentMethodLabel(method: String): String = when (method) {
+    "card" -> "Card"
+    "cash" -> "Cash"
+    "split" -> "Split"
+    else -> method
+}
+
+@Composable
+private fun SplitPaymentPanel(
+    totalAmount: Double,
+    payments: List<CheckoutPayment>,
+    amountInput: String,
+    onAmountChange: (String) -> Unit,
+    onFillRemaining: () -> Unit,
+    onAddPayment: (String) -> Unit,
+    onRemovePayment: (Int) -> Unit,
+    onComplete: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val paidTotal = roundMoney(payments.sumOf { it.amount })
+    val remaining = roundMoney((totalAmount - paidTotal).coerceAtLeast(0.0))
+    val nextAmount = parseCashTendered(amountInput)
+    val canAdd = nextAmount != null && nextAmount > 0.0 && nextAmount <= remaining + 0.005
+    val canComplete = payments.isNotEmpty() && remaining <= 0.005
+
+    Column(
+        modifier = modifier.fillMaxSize(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onBack, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
+                Text("Back")
+            }
+            Text(
+                text = "Split Payment",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        CashAmountRow(
+            label = "Amount due",
+            value = formatMoney(totalAmount),
+            emphasize = true,
+        )
+        CashAmountRow(
+            label = "Collected",
+            value = formatMoney(paidTotal),
+        )
+        CashAmountRow(
+            label = "Remaining",
+            value = formatMoney(remaining),
+            emphasize = remaining > 0.005,
+            valueColor = if (remaining > 0.005) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.tertiary
+            },
+        )
+        Text(
+            text = "Enter exact applied amounts for each tender. Split cash does not track tendered or change.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            OutlinedButton(
+                onClick = onFillRemaining,
+                enabled = remaining > 0.005,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(vertical = 4.dp),
+            ) {
+                Text("Remaining", style = MaterialTheme.typography.labelMedium)
+            }
+            OutlinedButton(
+                onClick = { onAmountChange("") },
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(vertical = 4.dp),
+            ) {
+                Text("Clear", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        CashAmountRow(
+            label = "Next amount",
+            value = nextAmount?.let(::formatMoney) ?: "—",
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(top = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (payments.isEmpty()) {
+                Text(
+                    text = "Add card and/or cash entries until the remaining balance reaches \$0.00.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                payments.forEachIndexed { index, payment ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = "${index + 1}. ${paymentMethodLabel(payment.method)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = formatMoney(payment.amount),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            TextButton(
+                                onClick = { onRemovePayment(index) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) {
+                                Text("Remove")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        NumberPad(
+            onDigit = { d -> onAmountChange(appendCashDigit(amountInput, d)) },
+            onClear = { onAmountChange("") },
+            onBackspace = { onAmountChange(amountInput.dropLast(1)) },
+            onDecimal = { onAmountChange(appendCashDigit(amountInput, '.')) },
+            compact = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .heightIn(min = 136.dp)
+                .padding(top = 6.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            OutlinedButton(
+                onClick = { onAddPayment("card") },
+                enabled = canAdd,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(vertical = 6.dp),
+            ) {
+                Text("Add Card")
+            }
+            OutlinedButton(
+                onClick = { onAddPayment("cash") },
+                enabled = canAdd,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(vertical = 6.dp),
+            ) {
+                Text("Add Cash")
+            }
+        }
+        Button(
+            onClick = onComplete,
+            enabled = canComplete,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            contentPadding = PaddingValues(vertical = 6.dp),
+        ) {
+            Text("Complete Sale")
+        }
+    }
+}
+
 /**
- * Inline select box: tap the field to expand options inside the same bordered box.
- * Choosing an option updates the display and triggers [onOptionPicked] for the message dialog.
+ * Two direct action buttons so the cashier can pick card, cash, or split without opening a select box.
  */
 @Composable
 private fun PaymentMethodPicker(
     selected: String,
+    amountDue: Double,
+    cardProcessing: Boolean,
     onBack: () -> Unit,
     onOptionPicked: (method: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    var displaySelection by remember(selected) { mutableStateOf(selected) }
-    LaunchedEffect(selected) {
-        displaySelection = selected
-    }
     val options = listOf(
         "card" to "Card",
         "cash" to "Cash",
+        "split" to "Split",
     )
+    val title = when (selected) {
+        "card" -> "Card"
+        "split" -> "Split Payment"
+        else -> "Payment Type"
+    }
     Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.Center,
+        modifier = modifier.fillMaxSize(),
     ) {
         Row(
             modifier = Modifier
@@ -1512,70 +1872,77 @@ private fun PaymentMethodPicker(
                 Text("Back")
             }
             Text(
-                text = "Payment Type",
+                text = title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
         }
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            color = MaterialTheme.colorScheme.surface,
+        Spacer(modifier = Modifier.weight(1f))
+        if (selected == "card") {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                CashAmountRow(
+                    label = "Amount due",
+                    value = formatMoney(amountDue),
+                    emphasize = true,
+                )
+                CashAmountRow(
+                    label = "Card amount",
+                    value = formatMoney(amountDue),
+                )
+                CashAmountRow(
+                    label = "Status",
+                    value = if (cardProcessing) "Processing Card Payment" else "Ready to charge",
+                    valueColor = if (cardProcessing) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+        } else if (selected == "split") {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                CashAmountRow(
+                    label = "Amount due",
+                    value = formatMoney(amountDue),
+                    emphasize = true,
+                )
+                Text(
+                    text = "Split combines exact card and cash entries until the balance reaches zero.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { expanded = !expanded }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Pick",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = if (expanded) "▲" else "▼",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (expanded) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                    options.forEach { (value, label) ->
-                        val isSelected = value == displaySelection
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    displaySelection = value
-                                    expanded = false
-                                    onOptionPicked(value)
-                                }
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
-                            )
-                        }
-                        if (value != options.last().first) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 10.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                            )
-                        }
+            options.forEach { (value, label) ->
+                val isSelected = value == selected
+                if (isSelected) {
+                    Button(
+                        onClick = { onOptionPicked(value) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                    ) {
+                        Text(label)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { onOptionPicked(value) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                    ) {
+                        Text(label)
                     }
                 }
             }
