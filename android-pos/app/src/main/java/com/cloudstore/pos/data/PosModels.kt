@@ -66,17 +66,28 @@ data class CartReplaceRequest(
     @Json(name = "customerId") val customerId: Int? = null,
 )
 
+data class CheckoutPayment(
+    val method: String,
+    val amount: Double,
+    @Json(name = "tenderedAmount") val tenderedAmount: Double? = null,
+    @Json(name = "changeGiven") val changeGiven: Double? = null,
+)
+
 data class CheckoutRequest(
     @Json(name = "paymentMethod") val paymentMethod: String,
     @Json(name = "customerId") val customerId: Int? = null,
+    val payments: List<CheckoutPayment>? = null,
+    @Json(name = "checkoutTotal") val checkoutTotal: Double? = null,
 )
 
 data class CheckoutResponse(
     val ok: Boolean,
     @Json(name = "orderNumber") val orderNumber: String,
     val total: Double,
+    @Json(name = "paymentMethod") val paymentMethod: String? = null,
     @Json(name = "subtotalPreMember") val subtotalPreMember: Double? = null,
     @Json(name = "memberDiscountPreTax") val memberDiscountPreTax: Double? = null,
     @Json(name = "linked893") val linked893: Boolean? = null,
     @Json(name = "customerId") val customerId: Int? = null,
+    val payments: List<CheckoutPayment>? = null,
 )

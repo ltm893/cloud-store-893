@@ -78,7 +78,7 @@ The script handles everything end-to-end:
 > See **Creating an OCI Auth Token** below if you haven't done this yet.
 
 > **SQLcl not installed?** The deploy will complete but skip the seed.
-> Run `scripts/seed.sql` manually via OCI Database Actions:
+> Run `./scripts/reset-db.sh` after installing SQLcl, or run `scripts/seed.sql` manually via OCI Database Actions:
 > `OCI Console → Autonomous Database → adb-cloud-store → Database Actions → SQL`
 
 ---

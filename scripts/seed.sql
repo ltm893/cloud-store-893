@@ -1,5 +1,8 @@
 -- seed.sql — Database setup for cloud-store-893
 --
+-- Do not run this file directly with bash.
+-- Use ./scripts/reset-db.sh or run it in Database Actions / SQLcl as ADMIN.
+--
 -- Run this in Database Actions SQL Worksheet as ADMIN:
 --   OCI Console → Oracle Database → Autonomous Database
 --   → adb-cloud-store-893 → Database Actions → SQL
@@ -12,6 +15,8 @@
 -- Drop objects in reverse dependency order so re-runs start clean.
 
 BEGIN EXECUTE IMMEDIATE 'DROP VIEW cart_view';   EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE sale_payments'; EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE sale_items'; EXCEPTION WHEN OTHERS THEN NULL; END;
 /
@@ -88,7 +93,21 @@ CREATE TABLE sale_items (
 );
 
 
--- ── 6. CART_VIEW ──────────────────────────────────────────────────────────────
+-- ── 6. SALE_PAYMENTS table ────────────────────────────────────────────────────
+
+CREATE TABLE sale_payments (
+  id              NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  order_number    VARCHAR2(64)   NOT NULL REFERENCES sales(order_number),
+  sequence_number NUMBER         NOT NULL,
+  payment_method  VARCHAR2(50)   NOT NULL,
+  amount          NUMBER(10, 2)  NOT NULL,
+  tendered_amount NUMBER(10, 2),
+  change_given    NUMBER(10, 2),
+  created_at      TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL
+);
+
+
+-- ── 7. CART_VIEW ──────────────────────────────────────────────────────────────
 -- Joins cart_items + products: list price, optional sale_price, quantity
 
 CREATE OR REPLACE VIEW cart_view AS
@@ -103,7 +122,7 @@ CREATE OR REPLACE VIEW cart_view AS
   JOIN products p ON p.id = ci.product_id;
 
 
--- ── 7. Enable ORDS on the ADMIN schema ───────────────────────────────────────
+-- ── 8. Enable ORDS on the ADMIN schema ───────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_SCHEMA(
@@ -118,7 +137,7 @@ END;
 /
 
 
--- ── 8. Enable ORDS on PRODUCTS table ─────────────────────────────────────────
+-- ── 9. Enable ORDS on PRODUCTS table ─────────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -134,7 +153,7 @@ END;
 /
 
 
--- ── 9. Enable ORDS on CUSTOMERS table ─────────────────────────────────────────
+-- ── 10. Enable ORDS on CUSTOMERS table ─────────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -150,7 +169,7 @@ END;
 /
 
 
--- ── 10. Enable ORDS on CART_ITEMS table ───────────────────────────────────────
+-- ── 11. Enable ORDS on CART_ITEMS table ───────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -166,7 +185,7 @@ END;
 /
 
 
--- ── 11. Enable ORDS on CART_VIEW ───────────────────────────────────────────────
+-- ── 12. Enable ORDS on CART_VIEW ───────────────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -182,7 +201,7 @@ END;
 /
 
 
--- ── 12. Enable ORDS on SALES table ────────────────────────────────────────────
+-- ── 13. Enable ORDS on SALES table ────────────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -197,7 +216,7 @@ BEGIN
 END;
 /
 
--- ── 13. Enable ORDS on SALE_ITEMS table ───────────────────────────────────────
+-- ── 14. Enable ORDS on SALE_ITEMS table ───────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -213,7 +232,23 @@ END;
 /
 
 
--- ── 14. Sample products ───────────────────────────────────────────────────────
+-- ── 15. Enable ORDS on SALE_PAYMENTS table ────────────────────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'SALE_PAYMENTS',
+    p_object_type   => 'TABLE',
+    p_object_alias  => 'sale_payments',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
+-- ── 16. Sample products ───────────────────────────────────────────────────────
 
 INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000001', 'OCI Foundations Study Guide',  29.99, NULL);
 INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000002', 'Terraform on OCI T-Shirt',     24.99, NULL);
@@ -221,7 +256,7 @@ INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000003', 
 INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000004', 'Autonomous Database Mug',       9.99, NULL);
 INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000005', 'Always Free Tier Sticker Pack', 4.99, NULL);
 
--- ── 15. Sample customers ──────────────────────────────────────────────────────
+-- ── 17. Sample customers ──────────────────────────────────────────────────────
 
 INSERT INTO customers (name, email, phone, address_line1, city, state, postal_code, card_fake, member_code)
 VALUES (
@@ -262,6 +297,8 @@ SELECT 'cart_items', COUNT(*) FROM cart_items
 UNION ALL
 SELECT 'sales', COUNT(*) FROM sales
 UNION ALL
-SELECT 'sale_items', COUNT(*) FROM sale_items;
+SELECT 'sale_items', COUNT(*) FROM sale_items
+UNION ALL
+SELECT 'sale_payments', COUNT(*) FROM sale_payments;
 
 exit

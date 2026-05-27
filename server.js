@@ -84,6 +84,79 @@ function roundMoney(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
+function normalizePaymentMethod(method) {
+  const normalized = String(method || 'card').trim().toLowerCase();
+  return normalized || 'card';
+}
+
+function normalizeCheckoutTotal(rawTotal) {
+  if (rawTotal == null) return null;
+  const checkoutTotal = roundMoney(rawTotal);
+  if (!Number.isFinite(checkoutTotal) || checkoutTotal <= 0) {
+    return { error: 'checkoutTotal must be greater than zero' };
+  }
+  return { checkoutTotal };
+}
+
+function normalizeCheckoutPayments(rawPayments, totalAmount) {
+  if (rawPayments == null) return null;
+  if (!Array.isArray(rawPayments) || rawPayments.length === 0) {
+    return { error: 'payments must be a non-empty array' };
+  }
+
+  const payments = [];
+  for (const rawPayment of rawPayments) {
+    const method = normalizePaymentMethod(rawPayment?.method);
+    const amount = roundMoney(rawPayment?.amount);
+    const tenderedAmount =
+      rawPayment?.tenderedAmount == null ? amount : roundMoney(rawPayment.tenderedAmount);
+    const changeGiven =
+      rawPayment?.changeGiven == null ? 0 : roundMoney(rawPayment.changeGiven);
+    if (!['card', 'cash'].includes(method)) {
+      return { error: `Unsupported payment method: ${method}` };
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { error: 'Each split payment amount must be greater than zero' };
+    }
+    if (!Number.isFinite(tenderedAmount) || tenderedAmount <= 0 || tenderedAmount + 0.009 < amount) {
+      return { error: 'tenderedAmount must be at least the applied payment amount' };
+    }
+    if (!Number.isFinite(changeGiven) || changeGiven < 0) {
+      return { error: 'changeGiven cannot be negative' };
+    }
+    const expectedChange = roundMoney(tenderedAmount - amount);
+    if (Math.abs(expectedChange - changeGiven) > 0.009) {
+      return { error: 'changeGiven must equal tenderedAmount minus amount' };
+    }
+    if (method === 'card' && changeGiven > 0.009) {
+      return { error: 'Card payments cannot include change' };
+    }
+    payments.push({
+      method,
+      amount,
+      tenderedAmount,
+      changeGiven: changeGiven > 0.009 ? changeGiven : null,
+    });
+  }
+
+  const totalPaid = roundMoney(payments.reduce((sum, payment) => sum + payment.amount, 0));
+  const normalizedTotal = totalAmount == null ? totalPaid : roundMoney(totalAmount);
+  if (Math.abs(totalPaid - normalizedTotal) > 0.009) {
+    return { error: `Split payments must equal total ${normalizedTotal.toFixed(2)}` };
+  }
+  return { payments };
+}
+
+function serializePaymentMethod(paymentMethod, payments) {
+  if (!payments || payments.length === 0) {
+    return normalizePaymentMethod(paymentMethod);
+  }
+  if (payments.length === 1) {
+    return payments[0].method;
+  }
+  return 'split';
+}
+
 function isOnSale(row) {
   const list = Number(row.price);
   const saleRaw = row.sale_price;
@@ -366,8 +439,13 @@ app.delete('/api/cart/:id', async (req, res) => {
 
 app.post('/api/checkout', async (req, res) => {
   try {
-    const paymentMethod = req.body?.paymentMethod || 'card';
+    const paymentMethod = normalizePaymentMethod(req.body?.paymentMethod);
     const customerIdRaw = req.body?.customerId;
+    const checkoutTotalResult = normalizeCheckoutTotal(req.body?.checkoutTotal);
+    if (checkoutTotalResult?.error) {
+      return res.status(400).json({ error: checkoutTotalResult.error });
+    }
+    const checkoutTotal = checkoutTotalResult?.checkoutTotal ?? null;
     const cartRows = await ordsGet('cart_view/');
     const rows = Array.isArray(cartRows) ? cartRows : [];
 
@@ -390,12 +468,25 @@ app.post('/api/checkout', async (req, res) => {
 
     const linked893 = is893Member(customerRow);
     const summary = summarizeCart(rows, linked893);
+    const recordedTotal = checkoutTotal ?? summary.subtotalPayable;
+    const paymentResult = normalizeCheckoutPayments(req.body?.payments, recordedTotal);
+    if (paymentResult?.error) {
+      return res.status(400).json({ error: paymentResult.error });
+    }
+    const payments = paymentResult?.payments || null;
+    const persistedPayments = payments || [{
+      method: paymentMethod,
+      amount: recordedTotal,
+      tenderedAmount: recordedTotal,
+      changeGiven: null,
+    }];
+    const recordedPaymentMethod = serializePaymentMethod(paymentMethod, payments);
     const orderNumber = `POS-${Date.now()}`;
 
     await ordsPost('sales/', {
       order_number: orderNumber,
-      total: summary.subtotalPayable,
-      payment_method: paymentMethod,
+      total: recordedTotal,
+      payment_method: recordedPaymentMethod,
       customer_id: customerId,
       subtotal_pre_member: summary.subtotalPreMember,
       member_discount_pre_tax: summary.memberDiscountPreTax,
@@ -415,6 +506,18 @@ app.post('/api/checkout', async (req, res) => {
       });
     }
 
+    for (const [index, payment] of persistedPayments.entries()) {
+      await ordsPost('sale_payments/', {
+        order_number: orderNumber,
+        sequence_number: index + 1,
+        payment_method: payment.method,
+        amount: payment.amount,
+        tendered_amount: payment.tenderedAmount,
+        change_given: payment.changeGiven,
+        created_at: ordsTimestamp(),
+      });
+    }
+
     const cartItems = await ordsGet('cart_items/');
     for (const item of cartItems) {
       await ordsDelete(`cart_items/${item.id}`);
@@ -423,12 +526,13 @@ app.post('/api/checkout', async (req, res) => {
     return res.json({
       ok: true,
       orderNumber,
-      paymentMethod,
-      total: summary.subtotalPayable,
+      paymentMethod: recordedPaymentMethod,
+      total: recordedTotal,
       subtotalPreMember: summary.subtotalPreMember,
       memberDiscountPreTax: summary.memberDiscountPreTax,
       linked893,
       customerId,
+      payments: persistedPayments,
       itemCount: summary.items.reduce((sum, item) => sum + Number(item.quantity), 0),
     });
   } catch (err) {

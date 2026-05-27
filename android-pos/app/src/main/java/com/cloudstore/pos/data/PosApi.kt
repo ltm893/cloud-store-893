@@ -106,8 +106,19 @@ class PosRepository(baseUrl: String) {
             ),
         )
 
-    suspend fun checkout(paymentMethod: String, customerId: Int?) =
-        api.checkout(CheckoutRequest(paymentMethod = paymentMethod, customerId = customerId))
+    suspend fun checkout(
+        paymentMethod: String,
+        customerId: Int?,
+        payments: List<CheckoutPayment>? = null,
+        checkoutTotal: Double? = null,
+    ) = api.checkout(
+        CheckoutRequest(
+            paymentMethod = paymentMethod,
+            customerId = customerId,
+            payments = payments,
+            checkoutTotal = checkoutTotal,
+        ),
+    )
 
     suspend fun recentSales() = api.getRecentSales()
 

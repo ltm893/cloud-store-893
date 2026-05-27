@@ -7,6 +7,8 @@ import kotlin.math.round
 
 fun roundMoney(amount: Double): Double = round(amount * 100.0) / 100.0
 
+fun formatMoney(amount: Double): String = "\$${"%.2f".format(amount)}"
+
 /** Cash: round down to nearest $0.05 (no pennies). e.g. $19.06 → $19.05, $19.08 → $19.05 */
 fun roundToNickel(amount: Double): Double = roundMoney(floor(amount * 20.0) / 20.0)
 

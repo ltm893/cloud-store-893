@@ -1,6 +1,6 @@
 # Cloud Store 893 — session handoff
 
-Last updated: 2026-05-24
+Last updated: 2026-05-26
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
 
@@ -82,7 +82,7 @@ npm run dev:up
 |-------|---------|
 | `GET /api/products` | Product list (POS) |
 | `GET/POST /api/cart`, `POST /api/cart/barcode`, `DELETE /api/cart/:id` | Cart |
-| `POST /api/checkout` | Sale (requires `created_at` on ORDS `sales/` insert) |
+| `POST /api/checkout` | Sale, including split-tender payloads (requires `created_at` on ORDS inserts) |
 | `GET /api/sales/recent` | Recent sales |
 | `POST /api/cashier/unlock` | Cashier login (`{ pin }`) → session cookie |
 | `GET /api/cashier/session`, `POST /api/cashier/logout` | Session check / sign-out |
@@ -92,7 +92,7 @@ npm run dev:up
 | `GET /api/admin/meta`, `GET/POST/PUT/DELETE /api/admin/:table` | Admin CRUD |
 | `POST /api/admin/login`, `GET /api/admin/session` | Admin session cookie |
 
-**Tables:** `products`, `customers`, `cart_items`, `sales`, `sale_items`, view `cart_view` — see `scripts/seed.sql`.
+**Tables:** `products`, `customers`, `cart_items`, `sales`, `sale_items`, `sale_payments`, view `cart_view` — see `scripts/seed.sql`.
 
 ---
 
@@ -104,6 +104,24 @@ npm run dev:up
 - **Cash pay:** Payment type **Cash** → numpad for tendered / change; **no pennies** (nearest $0.05) in UI only — see [Cash rounding (TODO)](#cash-rounding-todo) for server/books.
 - **`API_BASE_URL`:** Gradle configure time — see build log; override with `LAN_IP=…`.
 - **Theme:** Lister palette in `ui/theme/` — see [AGENTS.md](AGENTS.md).
+
+### Payment flow notes (2026-05-26)
+
+- Payment type UI in `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosScreen.kt` now uses direct **Card** and **Cash** buttons instead of the older select/dropdown control.
+- **Card** selection shows a summary block in the payment panel; after the manual confirmation dialog, the tablet shows a 5-second progress modal with `Processing Card Payment`.
+- **Cash** panel quick button now shows the actual exact amount due instead of `Exact`; after `Complete Sale`, the tablet shows a 5-second progress modal with `Printing Receipt`.
+- Compose cleanup in this area: deprecated `Divider` usage was replaced with `HorizontalDivider`, and `LinearProgressIndicator` uses the lambda-based overload.
+
+### Android build note
+
+- On macOS, use **JDK 17** for Android builds. JDK 26 caused Gradle / Android `jlink` failures during `:app:compileDebugJavaWithJavac`.
+- Example:
+
+```bash
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+export PATH="$JAVA_HOME/bin:$PATH"
+./android-pos/gradlew -p android-pos :app:installDebug
+```
 
 ### Offline queue caveat
 
@@ -148,6 +166,19 @@ npm run dev:up
 - Android `build/` artifacts can dirty `git status` — keep `.gitignore` tight.
 - Optional: discard-queue button, cart snapshot in offline queue, receipt printing.
 
+### DB reset blocker (2026-05-26)
+
+- Added `scripts/reset-db.sh` to run the destructive schema reset via SQLcl + ADB wallet instead of trying to execute `scripts/seed.sql` in bash.
+- Last attempt failed waiting for ORDS: `ORDS not ready after 60 seconds`.
+- We stopped here and should revisit later.
+- Next time, start by checking ADB / ORDS health, then rerun:
+
+```bash
+scripts/reset-db.sh
+```
+
+- If ORDS is still slow to come up, inspect `terraform output -raw ords_base_url`, ADB status in OCI, and whether the ORDS endpoint is reachable before debugging the split-tender flow further.
+
 ### Cash rounding (TODO)
 
 **Done (tablet UI):** Cash due, **Exact**, and change round **down** to **$0.05** (`roundToNickel` / `computeCashAmountDue` in `android-pos/.../CartTotals.kt`). Sale bar still shows the full register total; cash panel shows **Register total** vs **Cash due (no pennies)** when they differ.
@@ -191,6 +222,55 @@ POS sends (conceptually): amount, currency, sale reference (`orderNumber`), opti
 - [ ] **Replace “Use Card Paid”** — drive real amount to terminal; block Complete until approved/declined; handle voids/refunds policy.
 - [ ] **Receipts / admin** — show auth code and masked card on sale history.
 - [ ] **HTTPS** — required for many cloud terminal SDKs (see Next Steps in README).
+
+### Split tender (in progress)
+
+**Approved v1 behavior:**
+
+- Allow multiple tenders in a single sale.
+- Tender order does **not** matter.
+- If an entered amount is less than the amount still due, allow another payment entry using either **cash** or **card**.
+- After any partial payment, show:
+  - amount due
+  - amount received
+  - balance remaining
+- Persist a **real payment breakdown**, not just one summary `paymentMethod`.
+- Mixed tender math should use the full register total. Example: total `$5.29`, cash `$2.00`, remaining card balance `$3.29`.
+- Accepted tenders should stay locked once added unless there is an explicit remove/edit step.
+
+**Implementation status in repo:**
+
+- Android UI/state changes are in progress in:
+  - `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosScreen.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosViewModel.kt`
+- Shared checkout payload / offline queue changes are in:
+  - `android-pos/app/src/main/java/com/cloudstore/pos/data/PosApi.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/data/PosModels.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/data/OfflineQueueStore.kt`
+- Backend checkout changes are in `server.js`.
+- Schema/admin support for `sale_payments` is in:
+  - `scripts/seed.sql`
+  - `lib/admin-tables.js`
+- End-to-end verification is still blocked because the DB reset has not completed yet.
+
+**Likely files for split-tender work:**
+
+- `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosScreen.kt`
+- `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosViewModel.kt`
+- `android-pos/app/src/main/java/com/cloudstore/pos/data/PosApi.kt`
+- `android-pos/app/src/main/java/com/cloudstore/pos/data/PosModels.kt`
+- `android-pos/app/src/main/java/com/cloudstore/pos/data/OfflineQueueStore.kt`
+- `server.js`
+- `scripts/reset-db.sh`
+- `scripts/seed.sql`
+- likely `lib/admin-tables.js` if payment rows need admin visibility
+
+**Next resume steps:**
+
+1. Get ORDS healthy enough for `scripts/reset-db.sh` to complete.
+2. Rebuild/reset the DB so `sale_payments` exists in the live environment.
+3. Re-test single card, single cash, and split tender.
+4. Rebuild/reinstall the Android app and verify the tablet flow end to end.
 
 ---
 

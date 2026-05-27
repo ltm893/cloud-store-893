@@ -15,9 +15,11 @@ set -u
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:3000}"
 BASE_URL="${BASE_URL%/}"
+CASHIER_PIN="${CASHIER_PIN:-8930}"
 
 BODY=$(mktemp)
-trap 'rm -f "$BODY"' EXIT
+COOKIE=$(mktemp)
+trap 'rm -f "$BODY" "$COOKIE"' EXIT
 
 pass=0
 fail=0
@@ -30,6 +32,7 @@ curl_json() {
   local method="$1"
   shift
   HTTP_CODE=$(curl -sS -o "$BODY" -w '%{http_code}' -X "$method" \
+    -b "$COOKIE" -c "$COOKIE" \
     -H 'Accept: application/json' \
     -H 'Content-Type: application/json' \
     "$@")
@@ -99,6 +102,10 @@ echo ""
 curl_json GET "$BASE_URL/api/products"
 expect_code 200 "GET /api/products"
 PRODUCT_ID=$(py -c "import json;d=open('$BODY').read();a=json.loads(d) if d.strip() else [];print(a[0]['id'] if isinstance(a,list)and a else '')" 2>/dev/null || true)
+
+# ── POST /api/cashier/unlock (session cookie for protected APIs) ─────────
+curl_json POST "$BASE_URL/api/cashier/unlock" -d "{\"pin\":\"$CASHIER_PIN\"}"
+expect_code 200 "POST /api/cashier/unlock"
 
 # ── GET /api/customers ────────────────────────────────────────────────────
 curl_json GET "$BASE_URL/api/customers"
