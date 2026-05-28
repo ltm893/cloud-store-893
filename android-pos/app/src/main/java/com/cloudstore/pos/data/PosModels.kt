@@ -18,6 +18,8 @@ data class StoreCustomer(
     val phone: String? = null,
     @Json(name = "memberCode") val memberCode: String? = null,
     @Json(name = "is893") val is893: Boolean = false,
+    @Json(name = "hasCardOnFile") val hasCardOnFile: Boolean = false,
+    @Json(name = "cardLast4") val cardLast4: String? = null,
 )
 
 data class CartItem(

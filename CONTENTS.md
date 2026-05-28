@@ -1,6 +1,6 @@
 # Cloud Store 893 — session handoff
 
-Last updated: 2026-05-26
+Last updated: 2026-05-28
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
 
@@ -12,7 +12,7 @@ Use this file to resume work in a new session. Canonical setup details live in [
 |------|--------|
 | **Web POS** (`/`) | Product grid, cart, checkout |
 | **Admin** (`/admin/`) | CRUD on DB tables; PIN login (`ADMIN_PIN`) |
-| **Tablet POS** | Numpad login; sale flow; cash tender/change on pad; Card = manual “paid” (no terminal API) |
+| **Tablet POS** | Numpad login; unified Pay panel; split tender cash/card; auto-finalize at zero balance |
 | **Local dev** | `npm run dev:up` + `.env` |
 | **OCI** | Container + ADB; app at `terraform output app_url` |
 | **Git** | Feature work on branch `dev` (pushed May 2026) |
@@ -99,26 +99,146 @@ npm run dev:up
 ## Tablet POS (`android-pos/`)
 
 - **Login:** Numpad + **Done** → server PIN check (not in APK).
-- **Menu (☰):** Status panel, Admin (browser), Lock.
+- **Menu (☰):** Show/hide status, find customer / keypad, unlink (when linked), sync/discard queue (when queued), Admin (browser), Lock.
 - **Add item:** Numpad digit(s) + **Add**, or **Scan** (camera), or full barcode string.
-- **Cash pay:** Payment type **Cash** → numpad for tendered / change; **no pennies** (nearest $0.05) in UI only — see [Cash rounding (TODO)](#cash-rounding-todo) for server/books.
+- **Cash pay:** Split tender on **Pay** → amount numpad + **Cash** / **Card** / **CardOnFile** (when linked customer has card); auto-finalize at $0 balance.
 - **`API_BASE_URL`:** Gradle configure time — see build log; override with `LAN_IP=…`.
 - **Theme:** Lister palette in `ui/theme/` — see [AGENTS.md](AGENTS.md).
 
-### Payment flow notes (2026-05-26)
+### Tablet POS UI layout (ASCII)
 
-- Payment type UI in `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosScreen.kt` now uses direct **Card** and **Cash** buttons instead of the older select/dropdown control.
-- **Card** selection shows a summary block in the payment panel; after the manual confirmation dialog, the tablet shows a 5-second progress modal with `Processing Card Payment`.
-- **Cash** panel quick button now shows the actual exact amount due instead of `Exact`; after `Complete Sale`, the tablet shows a 5-second progress modal with `Printing Receipt`.
-- Compose cleanup in this area: deprecated `Divider` usage was replaced with `HorizontalDivider`, and `LinearProgressIndicator` uses the lambda-based overload.
+Colors (see `ui/theme/Color.kt`): page/drawer **cream** `#FAF3DF`; top bar **burgundy** `#872434`; content cards **teal tint** `#A8D5D1` @ 25%; numpad panel **cream**; numpad keys **light teal**; primary actions **dark teal** buttons with white label.
+
+**Login** (full screen, cream page):
+
+```text
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         Cashier Sign In                                    │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  PIN: ••••                                                           │  │
+│  │  ┌────┬────┬────┐                                                    │  │
+│  │  │ 1  │ 2  │ 3  │   (numpad keys: light teal, black digits)          │  │
+│  │  ├────┼────┼────┤                                                    │  │
+│  │  │ 4  │ 5  │ 6  │                                                    │  │
+│  │  ├────┼────┼────┤                                                    │  │
+│  │  │ 7  │ 8  │ 9  │                                                    │  │
+│  │  ├────┼────┼────┤                                                    │  │
+│  │  │ C  │ 0  │ ⌫  │                                                    │  │
+│  │  └────┴────┴────┘                                                    │  │
+│  │  [ Done ]  (teal)                                                    │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│  status line (Invalid PIN / server error)                                  │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Sale screen — default** (after unlock; right column = item numpad):
+
+```text
+┌────────────────────────────────────────────────────────────────────────────┐
+│ ☰ │        Cloud Store 893 POS                              │ v1.x       │  ← burgundy bar, cream text
+├───┴──────────────────────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────┐ ┌────────────────────────────────┐ │
+│ │ Scan / Add Id  [________________]   │ │ (optional) Status card         │ │
+│ │ [ Scan ]  [ Add ]                   │ │  API status, offline queue     │ │
+│ │─────────────────────────────────────│ │  Sync queued / Discard         │ │
+│ │ Current Sale                        │ ├────────────────────────────────┤ │
+│ │ Linked: Name              [Unlink]  │ │ ┌────┬────┬────┐               │ │
+│ │ ┌─────────────────────────────────┐ │ │ │ 1  │ 2  │ 3  │  cream panel  │ │
+│ │ │ cart lines (scroll)             │ │ │ ├────┼────┼────┤  teal keys    │ │
+│ │ │  Name · qty · prices            │ │ │ │ 4  │ 5  │ 6  │               │ │
+│ │ └─────────────────────────────────┘ │ │ ├────┼────┼────┤               │ │
+│ │ Payments received (when checkout)   │ │ │ 7  │ 8  │ 9  │               │ │
+│ └─────────────────────────────────────┘ │ │ ├────┼────┼────┤               │ │
+│ │ teal-tint card                      │ │ │ C  │ 0  │ ⌫  │               │ │
+│ ┌─────────────────────────────────────┐ └────────────────────────────────┘ │
+│ │ Subtotal / tax / fees / TOTAL       │                                      │
+│ │                          [ Pay ]    │                                      │
+│ └─────────────────────────────────────┘                                      │
+└────────────────────────────────────────────────────────────────────────────┘
+     ↑ left ~flex                          ↑ right fixed width (PosNumpadWidth)
+```
+
+**Hamburger drawer** (slides over left; cream background):
+
+```text
+┌──────────────────────────┐
+│ Menu                     │  ← burgundy title
+│ ┌──────────────────────┐ │
+│ │ Show status          │ │  black text, burgundy outline, no fill
+│ ├──────────────────────┤ │
+│ │ Find customer        │ │
+│ ├──────────────────────┤ │
+│ │ Unlink customer      │ │  (only when customer linked)
+│ ├──────────────────────┤ │
+│ │ Sync queued (n)      │ │  (only when queue > 0)
+│ ├──────────────────────┤ │
+│ │ Discard queue (n)    │ │
+│ ├──────────────────────┤ │
+│ │ Admin                │ │
+│ ├──────────────────────┤ │
+│ │ Lock                 │ │
+│ └──────────────────────┘ │
+└──────────────────────────┘
+```
+
+**Right column — Find customer** (replaces numpad; menu → Find customer):
+
+```text
+┌────────────────────────────────┐
+│ Find customer        [Keypad]  │
+│ Linked: …            [Unlink]  │
+│ Id or Name [_______________] │
+│ ┌────────────────────────────┐ │
+│ │ Customer Name              │ │  tap row → link immediately
+│ │ email · phone              │ │  burgundy outline, transparent bg
+│ ├────────────────────────────┤ │
+│ │ …                          │ │
+│ └────────────────────────────┘ │
+└────────────────────────────────┘
+```
+
+**Right column — Payment** (after **Pay**; split tender):
+
+```text
+┌────────────────────────────────┐
+│ [Back]              Payment    │
+│ Sale total              $X.XX  │
+│ Balance due             $X.XX  │
+│ Amount entered            —    │
+│ Give change / Still need       │
+│                                │
+│ [$due] [$5] [$10] [$20]        │  burgundy-outline quick amounts
+│ ┌────┬────┬────┐               │
+│ │ 1  │ 2  │ 3  │  compact numpad (. 0 ⌫ — no C)
+│ ├────┼────┼────┤               │
+│ │ 4  │ 5  │ 6  │               │
+│ ├────┼────┼────┤               │
+│ │ 7  │ 8  │ 9  │               │
+│ ├────┼────┼────┤               │
+│ │ .  │ 0  │ ⌫  │               │
+│ └────┴────┴────┘               │
+│ [ Cash ] [ Card ] [CardOnFile] │  teal buttons; CardOnFile if linked + on file
+└────────────────────────────────┘
+```
+
+**Overlays:** camera **Scan** dialog; **CardOnFile** confirm (last 4); card charge **Processing** dialog (5s progress).
+
+### Payment flow notes (2026-05-28)
+
+- Payment flow is now unified under **Pay** in the right panel (no separate split tab).
+- Cash and card can be applied in multiple partial payments until balance reaches zero.
+- **Card** uses a 5-second progress dialog with `Sending $X.XX to Credit Terminal`; card payments are non-removable.
+- **Cash** supports entered/tendered amounts, live change display, and auto-finalize when remaining balance reaches zero.
+- The sale auto-completes once remaining balance is effectively zero; no extra **Finish sale** action is required.
+- Active tendering locks cart item edits/scanning; back is disabled after any committed card payment.
 
 ### Android build note
 
-- On macOS, use **JDK 17** for Android builds. JDK 26 caused Gradle / Android `jlink` failures during `:app:compileDebugJavaWithJavac`.
+- On macOS, use **JDK 21** for Android builds in this repo. JDK 26 still causes Gradle / Android toolchain failures.
 - Example:
 
 ```bash
-export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 export PATH="$JAVA_HOME/bin:$PATH"
 ./android-pos/gradlew -p android-pos :app:installDebug
 ```
@@ -223,7 +343,7 @@ POS sends (conceptually): amount, currency, sale reference (`orderNumber`), opti
 - [ ] **Receipts / admin** — show auth code and masked card on sale history.
 - [ ] **HTTPS** — required for many cloud terminal SDKs (see Next Steps in README).
 
-### Split tender (in progress)
+### Split tender (implemented)
 
 **Approved v1 behavior:**
 
@@ -240,18 +360,23 @@ POS sends (conceptually): amount, currency, sale reference (`orderNumber`), opti
 
 **Implementation status in repo:**
 
-- Android UI/state changes are in progress in:
+- Android UI/state changes are implemented in:
   - `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosScreen.kt`
   - `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosViewModel.kt`
-- Shared checkout payload / offline queue changes are in:
+  - `android-pos/app/src/main/java/com/cloudstore/pos/ui/CheckoutUiState.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/ui/CheckoutPaymentPanel.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/ui/CheckoutPaymentLogic.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/ui/CashInput.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosNumberPad.kt`
+- Shared checkout payload / offline queue changes are implemented in:
   - `android-pos/app/src/main/java/com/cloudstore/pos/data/PosApi.kt`
   - `android-pos/app/src/main/java/com/cloudstore/pos/data/PosModels.kt`
   - `android-pos/app/src/main/java/com/cloudstore/pos/data/OfflineQueueStore.kt`
-- Backend checkout changes are in `server.js`.
+- Backend checkout changes are implemented in `server.js`.
 - Schema/admin support for `sale_payments` is in:
   - `scripts/seed.sql`
   - `lib/admin-tables.js`
-- End-to-end verification is still blocked because the DB reset has not completed yet.
+- Kotlin compile check is passing after the checkout refactor (`:app:compileDebugKotlin`).
 
 **Likely files for split-tender work:**
 
@@ -267,10 +392,10 @@ POS sends (conceptually): amount, currency, sale reference (`orderNumber`), opti
 
 **Next resume steps:**
 
-1. Get ORDS healthy enough for `scripts/reset-db.sh` to complete.
-2. Rebuild/reset the DB so `sale_payments` exists in the live environment.
-3. Re-test single card, single cash, and split tender.
-4. Rebuild/reinstall the Android app and verify the tablet flow end to end.
+1. Run end-to-end tests against local/OCI with real DB state (`sale_payments` inserts + admin visibility).
+2. Decide whether to move remaining checkout orchestration entirely behind ViewModel intents.
+3. Add unit tests for payment logic helpers (`CheckoutPaymentLogic.kt`, cash input parsing).
+4. Keep card terminal integration as a separate follow-up (current card flow remains simulated/manual).
 
 ---
 

@@ -140,8 +140,26 @@ class PosViewModel(
         val paidTotal = roundMoney(current.payments.sumOf { it.amount })
         val remainingAmount = roundMoney((registerTotal - paidTotal).coerceAtLeast(0.0))
         val enteredAmount = parseCashTendered(current.amountInput) ?: return
-        val payment = buildCheckoutPaymentLine(method, enteredAmount, remainingAmount) ?: return
+        applyCheckoutPayment(method = method, enteredAmount = enteredAmount, remainingAmount = remainingAmount)
+    }
 
+    fun applyCardOnFilePayment() {
+        val current = _checkoutState.value
+        val registerTotal = registerTotal()
+        val paidTotal = roundMoney(current.payments.sumOf { it.amount })
+        val remainingAmount = roundMoney((registerTotal - paidTotal).coerceAtLeast(0.0))
+        val enteredAmount = parseCashTendered(current.amountInput) ?: return
+        applyCheckoutPayment(method = "card", enteredAmount = enteredAmount, remainingAmount = remainingAmount)
+    }
+
+    private fun applyCheckoutPayment(
+        method: String,
+        enteredAmount: Double,
+        remainingAmount: Double,
+    ) {
+        val current = _checkoutState.value
+        val registerTotal = registerTotal()
+        val payment = buildCheckoutPaymentLine(method, enteredAmount, remainingAmount) ?: return
         _checkoutState.update { it.copy(saleItemsLocked = true) }
         if (method == "card") {
             processCardPayment(payment)
@@ -190,7 +208,6 @@ class PosViewModel(
                             pendingCheckoutPayments = updatedPayments,
                             pendingCheckoutTotal = total,
                             processingCheckoutMethod = checkoutFinalizeMethod(updatedPayments),
-                            processingDialogMessage = finalizeProcessingMessage(updatedPayments),
                         )
                     }
                 } else {
@@ -230,6 +247,7 @@ class PosViewModel(
         finalizeJob?.cancel()
         val method = checkoutFinalizeMethod(payments)
         val message = finalizeProcessingMessage(payments)
+        val cardOnly = isCardOnlyCheckout(payments)
         if (!skipStateUpdate) {
             _checkoutState.update {
                 it.copy(
@@ -238,15 +256,23 @@ class PosViewModel(
                     pendingCheckoutPayments = payments,
                     pendingCheckoutTotal = registerTotal,
                     processingCheckoutMethod = method,
-                    processingDialogMessage = message,
+                    processingDialogMessage = if (cardOnly) null else message,
                 )
             }
         }
         finalizeJob = viewModelScope.launch {
-            _checkoutState.update { it.copy(paymentProcessingProgress = 0f) }
-            repeat(50) { index ->
-                delay(100)
-                _checkoutState.update { it.copy(paymentProcessingProgress = (index + 1) / 50f) }
+            if (cardOnly) {
+                _checkoutState.update {
+                    it.copy(processingDialogMessage = null, paymentProcessingProgress = 0f)
+                }
+            } else {
+                _checkoutState.update {
+                    it.copy(paymentProcessingProgress = 0f, processingDialogMessage = message)
+                }
+                repeat(50) { index ->
+                    delay(100)
+                    _checkoutState.update { it.copy(paymentProcessingProgress = (index + 1) / 50f) }
+                }
             }
             setPaymentMethod(method)
             checkout(payments = payments, checkoutTotal = registerTotal)
@@ -538,6 +564,7 @@ class PosViewModel(
                         receipt.memberDiscountPreTax?.takeIf { it > 0.001 }?.let { add("−${"%.2f".format(it)} pre-tax") }
                     }.joinToString(" · ").takeIf { it.isNotEmpty() }
                     val msg = listOfNotNull("Sale complete: ${receipt.orderNumber}", extra).joinToString(" — ")
+                    setSelectedCustomerId(null)
                     _state.value = _state.value.copy(status = msg)
                     refresh()
                 }

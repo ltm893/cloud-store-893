@@ -188,6 +188,18 @@ function customerDiscountApplies(customerRow) {
   return Number.isFinite(id) && id > 0;
 }
 
+function hasCardOnFile(customerRow) {
+  const value = customerRow?.card_fake;
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function cardLast4(customerRow) {
+  const raw = String(customerRow?.card_fake ?? '');
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 4) return null;
+  return digits.slice(-4);
+}
+
 /** @deprecated name kept for JSON field linked893 */
 function is893Member(customerRow) {
   return customerDiscountApplies(customerRow);
@@ -270,6 +282,8 @@ app.get('/api/customers', async (req, res) => {
       phone: c.phone,
       memberCode: c.member_code ?? null,
       is893: customerDiscountApplies(c),
+      hasCardOnFile: hasCardOnFile(c),
+      cardLast4: cardLast4(c),
     }));
     res.json(out);
   } catch (err) {

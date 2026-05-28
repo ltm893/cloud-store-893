@@ -18,6 +18,9 @@ fun cardTerminalMessage(amount: Double): String =
 fun checkoutChangeTotal(payments: List<CheckoutPayment>): Double =
     roundMoney(payments.sumOf { it.changeGiven ?: 0.0 })
 
+fun isCardOnlyCheckout(payments: List<CheckoutPayment>): Boolean =
+    payments.isNotEmpty() && payments.all { it.method == "card" }
+
 fun finalizeProcessingMessage(payments: List<CheckoutPayment>): String {
     val change = checkoutChangeTotal(payments)
     val method = checkoutFinalizeMethod(payments)

@@ -1,5 +1,6 @@
 package com.cloudstore.pos.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -7,12 +8,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -25,8 +28,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cloudstore.pos.data.CheckoutPayment
-
-internal val CheckoutPaymentNumpadHeight = 148.dp
+import com.cloudstore.pos.ui.theme.PosButtonDefaults
+import com.cloudstore.pos.ui.theme.PosCardDefaults
+import com.cloudstore.pos.ui.theme.PosPrimary
+import com.cloudstore.pos.ui.theme.PosText
 
 @Composable
 fun PaymentsReceivedSection(
@@ -50,7 +55,11 @@ fun PaymentsReceivedSection(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             payments.forEachIndexed { index, payment ->
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = PosCardDefaults.nestedColors(),
+                    elevation = PosCardDefaults.elevation(),
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -93,10 +102,12 @@ fun CheckoutPaymentPanel(
     balanceDue: Double,
     payments: List<CheckoutPayment>,
     backEnabled: Boolean,
+    showCardOnFileButton: Boolean,
     amountInput: String,
     onAmountChange: (String) -> Unit,
     onFillRemaining: () -> Unit,
     onApplyPayment: (String) -> Unit,
+    onPayCardOnFile: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -109,6 +120,7 @@ fun CheckoutPaymentPanel(
     Column(
         modifier = modifier.fillMaxSize(),
     ) {
+        Column(modifier = Modifier.padding(PosNumpadInnerPadding)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -178,6 +190,7 @@ fun CheckoutPaymentPanel(
                 },
             )
         }
+        }
         Spacer(modifier = Modifier.weight(1f))
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -185,7 +198,11 @@ fun CheckoutPaymentPanel(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp),
+                    .padding(
+                        start = PosNumpadInnerPadding,
+                        end = PosNumpadInnerPadding,
+                        top = 4.dp,
+                    ),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 OutlinedButton(
@@ -193,6 +210,10 @@ fun CheckoutPaymentPanel(
                     enabled = balanceDue > 0.005,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(vertical = 4.dp),
+                    border = BorderStroke(1.dp, PosPrimary),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = PosText,
+                    ),
                 ) {
                     Text(formatMoney(balanceDue), style = MaterialTheme.typography.labelMedium)
                 }
@@ -201,43 +222,69 @@ fun CheckoutPaymentPanel(
                         onClick = { onAmountChange(formatCashEntry(bill.toDouble())) },
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(vertical = 4.dp),
+                        border = BorderStroke(1.dp, PosPrimary),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = PosText,
+                        ),
                     ) {
                         Text("\$$bill", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
-            NumberPad(
-                onDigit = { d -> onAmountChange(appendCashDigit(amountInput, d)) },
-                onClear = { onAmountChange("") },
-                onBackspace = { onAmountChange(amountInput.dropLast(1)) },
-                onDecimal = { onAmountChange(appendCashDigit(amountInput, '.')) },
-                compact = true,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(CheckoutPaymentNumpadHeight)
-                    .padding(top = 6.dp),
-            )
+                    .height(PosNumpadCardHeight),
+            ) {
+                NumberPad(
+                    onDigit = { d -> onAmountChange(appendCashDigit(amountInput, d)) },
+                    onClear = { onAmountChange("") },
+                    onBackspace = { onAmountChange(amountInput.dropLast(1)) },
+                    onDecimal = { onAmountChange(appendCashDigit(amountInput, '.')) },
+                    showClear = false,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(PosNumpadInnerPadding),
+                )
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp),
+                    .padding(
+                        start = PosNumpadInnerPadding,
+                        end = PosNumpadInnerPadding,
+                        top = 4.dp,
+                    ),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Button(
                     onClick = { onApplyPayment("cash") },
                     enabled = canPayCash,
+                    colors = PosButtonDefaults.teal(),
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(vertical = 6.dp),
                 ) {
-                    Text("Pay cash", style = MaterialTheme.typography.labelMedium)
+                    Text("Cash", style = MaterialTheme.typography.labelMedium)
                 }
                 Button(
                     onClick = { onApplyPayment("card") },
                     enabled = canPayCard,
+                    colors = PosButtonDefaults.teal(),
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(vertical = 6.dp),
                 ) {
-                    Text("Pay card", style = MaterialTheme.typography.labelMedium)
+                    Text("Card", style = MaterialTheme.typography.labelMedium)
+                }
+                if (showCardOnFileButton) {
+                    Button(
+                        onClick = onPayCardOnFile,
+                        enabled = canPayCard,
+                        colors = PosButtonDefaults.teal(),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 6.dp),
+                    ) {
+                        Text("CardOnFile", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
         }

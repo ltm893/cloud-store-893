@@ -97,10 +97,26 @@ pre-tax line totals.
 
 ## Sale screen layout
 
-1. **Header** — ☰ menu, title
+Box diagrams (login, sale, drawer, customer find, payment) with color notes: [CONTENTS.md § Tablet POS UI layout (ASCII)](../CONTENTS.md#tablet-pos-ui-layout-ascii).
+
+1. **Header** — ☰ menu, title, version (burgundy bar)
 2. **Status card** (when menu → Show status) — API message, offline queue, **Sync queued**
-3. **Middle** — scan field, **Scan** / **Add**, cart list | number pad
-4. **Bottom** — totals, **Pay** → payment type; **Cash** opens the number pad for tendered amount and change, then **Complete Sale**
+3. **Middle** — scan field, **Scan** / **Add**, cart (+ payments list during checkout) | right slot: status (optional) + numpad **or** customer find **or** payment panel
+4. **Bottom** — totals, **Pay** → split tender on right (amount numpad, **Cash** / **Card** / **CardOnFile**); sale completes when balance is $0
+
+```text
+┌────────────────────────────────────────────────────────────────────────────┐
+│ ☰ │        Cloud Store 893 POS                              │ v1.x       │
+├───┴──────────────────────────────────────────────────────────────────────────┤
+│ ┌───────────────────────────────┐ ┌────────────────────────────────────┐ │
+│ │ Scan / Add Id, Scan, Add        │ │ Status (optional)                  │ │
+│ │ Current Sale · cart lines       │ │ Numpad | Find customer | Payment   │ │
+│ └───────────────────────────────┘ └────────────────────────────────────┘ │
+│ ┌───────────────────────────────┐                                          │
+│ │ Totals · [ Pay ]              │                                          │
+│ └───────────────────────────────┘                                          │
+└────────────────────────────────────────────────────────────────────────────┘
+```
 
 ### Cash — no pennies + change
 

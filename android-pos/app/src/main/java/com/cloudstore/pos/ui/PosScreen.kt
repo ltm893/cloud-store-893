@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,17 +28,20 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
@@ -49,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
@@ -63,11 +69,13 @@ import androidx.core.content.ContextCompat
 import com.cloudstore.pos.BuildConfig
 import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.StoreCustomer
+import com.cloudstore.pos.ui.theme.PosBackground
+import com.cloudstore.pos.ui.theme.PosButtonDefaults
+import com.cloudstore.pos.ui.theme.PosCardDefaults
+import com.cloudstore.pos.ui.theme.PosPrimary
+import com.cloudstore.pos.ui.theme.PosText
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
-
-private val PosNumpadWidth = 360.dp
-private val PosNumpadHeight = 296.dp
 
 @Composable
 fun PosScreen(viewModel: PosViewModel) {
@@ -94,6 +102,7 @@ fun PosScreen(viewModel: PosViewModel) {
     var statusPanelExpanded by remember { mutableStateOf(false) }
     var customerFindOpen by remember { mutableStateOf(false) }
     var adminOpen by remember { mutableStateOf(false) }
+    var showCardOnFileConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.isAuthenticated) {
         if (!state.isAuthenticated) {
@@ -132,91 +141,74 @@ fun PosScreen(viewModel: PosViewModel) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(drawerContainerColor = PosBackground) {
                 Text(
                     text = "Menu",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                    color = PosPrimary,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 )
-                NavigationDrawerItem(
-                    label = {
-                        Text(if (statusPanelExpanded) "Hide status" else "Show status")
-                    },
-                    selected = statusPanelExpanded,
-                    onClick = {
-                        statusPanelExpanded = !statusPanelExpanded
-                        scope.launch { drawerState.close() }
-                    },
-                )
-                NavigationDrawerItem(
-                    label = {
-                        Text(if (customerFindOpen) "Show keypad" else "Find customer")
-                    },
-                    selected = customerFindOpen,
-                    onClick = {
-                        customerFindOpen = !customerFindOpen
-                        scope.launch { drawerState.close() }
-                    },
-                )
-                if (state.selectedCustomerId != null) {
-                    NavigationDrawerItem(
-                        label = { Text("Unlink customer") },
-                        selected = false,
+                Column(
+                    modifier = Modifier.padding(bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    DrawerMenuButton(
+                        text = if (statusPanelExpanded) "Hide status" else "Show status",
                         onClick = {
-                            viewModel.setSelectedCustomerId(null)
-                            customerFindOpen = false
+                            statusPanelExpanded = !statusPanelExpanded
+                            scope.launch { drawerState.close() }
+                        },
+                    )
+                    DrawerMenuButton(
+                        text = if (customerFindOpen) "Show keypad" else "Find customer",
+                        onClick = {
+                            customerFindOpen = !customerFindOpen
+                            scope.launch { drawerState.close() }
+                        },
+                    )
+                    if (state.queuedCheckoutCount > 0) {
+                        DrawerMenuButton(
+                            text = if (state.queueSyncing) {
+                                "Syncing queue…"
+                            } else {
+                                "Sync queued (${state.queuedCheckoutCount})"
+                            },
+                            onClick = {
+                                viewModel.flushOfflineQueue()
+                                scope.launch { drawerState.close() }
+                            },
+                        )
+                        DrawerMenuButton(
+                            text = "Discard queue (${state.queuedCheckoutCount})",
+                            onClick = {
+                                viewModel.clearOfflineQueue()
+                                scope.launch { drawerState.close() }
+                            },
+                        )
+                    }
+                    DrawerMenuButton(
+                        text = "Admin",
+                        onClick = {
+                            adminOpen = true
+                            scope.launch { drawerState.close() }
+                        },
+                    )
+                    DrawerMenuButton(
+                        text = "Lock",
+                        onClick = {
+                            viewModel.lock()
                             scope.launch { drawerState.close() }
                         },
                     )
                 }
-                if (state.queuedCheckoutCount > 0) {
-                    NavigationDrawerItem(
-                        label = {
-                            Text(
-                                if (state.queueSyncing) "Syncing queue…"
-                                else "Sync queued (${state.queuedCheckoutCount})",
-                            )
-                        },
-                        selected = false,
-                        onClick = {
-                            viewModel.flushOfflineQueue()
-                            scope.launch { drawerState.close() }
-                        },
-                    )
-                    NavigationDrawerItem(
-                        label = { Text("Discard queue (${state.queuedCheckoutCount})") },
-                        selected = false,
-                        onClick = {
-                            viewModel.clearOfflineQueue()
-                            scope.launch { drawerState.close() }
-                        },
-                    )
-                }
-                NavigationDrawerItem(
-                    label = { Text("Admin") },
-                    selected = adminOpen,
-                    onClick = {
-                        adminOpen = true
-                        scope.launch { drawerState.close() }
-                    },
-                )
-                NavigationDrawerItem(
-                    label = { Text("Lock") },
-                    selected = false,
-                    onClick = {
-                        viewModel.lock()
-                        scope.launch { drawerState.close() }
-                    },
-                )
             }
         },
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .navigationBarsPadding(),
         ) {
             val salesFeeRate = BuildConfig.POS_SALES_FEE_RATE.toDoubleOrNull() ?: 0.0
             val taxRate = BuildConfig.POS_TAX_RATE.toDoubleOrNull() ?: 0.0
@@ -224,35 +216,46 @@ fun PosScreen(viewModel: PosViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 2.dp),
+                    .background(PosPrimary)
+                    .padding(horizontal = 14.dp, vertical = 12.5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(
                     onClick = { scope.launch { drawerState.open() } },
+                    colors = IconButtonDefaults.iconButtonColors(
+                        contentColor = PosBackground,
+                    ),
                 ) {
                     Text(
                         text = "\u2630",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
+                        color = PosBackground,
                     )
                 }
                 Text(
                     text = "Cloud Store 893 POS",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = PosBackground,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
                     text = "v${BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = PosBackground,
                     modifier = Modifier.width(48.dp),
                     textAlign = TextAlign.End,
                 )
             }
 
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            ) {
         // ── Scan & items | Number pad ─────────────────────────────────────────
         Row(
             modifier = Modifier
@@ -266,6 +269,8 @@ fun PosScreen(viewModel: PosViewModel) {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
+                colors = PosCardDefaults.contentColors(),
+                elevation = PosCardDefaults.elevation(),
             ) {
                 Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                     val barcodeFocus = remember { FocusRequester() }
@@ -274,10 +279,21 @@ fun PosScreen(viewModel: PosViewModel) {
                     OutlinedTextField(
                         value = state.barcodeInput,
                         onValueChange = viewModel::setBarcodeInput,
-                        label = { Text("Scan or add ID") },
+                        label = { Text("Scan / Add Id", color = PosPrimary) },
                         singleLine = true,
                         readOnly = checkout.saleItemsLocked,
                         enabled = !checkout.saleItemsLocked,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedLabelColor = PosPrimary,
+                            unfocusedLabelColor = PosPrimary,
+                            disabledLabelColor = PosPrimary.copy(alpha = 0.5f),
+                            focusedBorderColor = PosPrimary,
+                            unfocusedBorderColor = PosPrimary.copy(alpha = 0.6f),
+                            disabledBorderColor = PosPrimary.copy(alpha = 0.3f),
+                            cursorColor = PosPrimary,
+                            focusedTextColor = PosText,
+                            unfocusedTextColor = PosText,
+                        ),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Number,
                             imeAction = ImeAction.Done,
@@ -296,7 +312,10 @@ fun PosScreen(viewModel: PosViewModel) {
                             .focusRequester(barcodeFocus),
                     )
 
-                    val scanInputReady = state.barcodeInput.isNotBlank() && !checkout.saleItemsLocked
+                    val addInputReady =
+                        state.barcodeInput.isNotBlank() && !checkout.saleItemsLocked
+                    val scanEnabled =
+                        state.barcodeInput.isBlank() && !checkout.saleItemsLocked
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -311,7 +330,8 @@ fun PosScreen(viewModel: PosViewModel) {
                                     permissionLauncher.launch(Manifest.permission.CAMERA)
                                 }
                             },
-                            enabled = scanInputReady,
+                            enabled = scanEnabled,
+                            colors = PosButtonDefaults.teal(),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(42.dp),
@@ -321,7 +341,8 @@ fun PosScreen(viewModel: PosViewModel) {
                         }
                         Button(
                             onClick = viewModel::addByBarcode,
-                            enabled = scanInputReady,
+                            enabled = addInputReady,
+                            colors = PosButtonDefaults.teal(),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(42.dp),
@@ -403,7 +424,7 @@ fun PosScreen(viewModel: PosViewModel) {
                 statusPanelExpanded || state.queuedCheckoutCount > 0
             Column(
                 modifier = Modifier
-                    .width(PosNumpadWidth)
+                    .width(PosNumpadColumnWidth)
                     .fillMaxHeight(),
             ) {
                 if (showStatusSlot) {
@@ -411,6 +432,8 @@ fun PosScreen(viewModel: PosViewModel) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 6.dp),
+                        colors = PosCardDefaults.contentColors(),
+                        elevation = PosCardDefaults.elevation(),
                     ) {
                         Column(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -431,19 +454,21 @@ fun PosScreen(viewModel: PosViewModel) {
                         }
                     }
                 }
-                if (!checkout.open) {
+                if (!checkout.open && !customerFindOpen) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(
-                            if (checkout.open) {
+                            if (checkout.open || customerFindOpen) {
                                 Modifier.weight(1f)
                             } else {
-                                Modifier.height(PosNumpadHeight)
+                                Modifier.height(PosNumpadCardHeight)
                             },
                         ),
+                    colors = PosCardDefaults.numpadPanelColors(),
+                    elevation = PosCardDefaults.elevation(),
                 ) {
                     if (customerFindOpen) {
                         CustomerFindPanel(
@@ -460,7 +485,7 @@ fun PosScreen(viewModel: PosViewModel) {
                             onClose = { customerFindOpen = false },
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(12.dp),
+                                .padding(PosNumpadInnerPadding),
                         )
                     } else if (checkout.open) {
                         val registerTotal = computeSaleGrandTotal(
@@ -472,6 +497,7 @@ fun PosScreen(viewModel: PosViewModel) {
                         )
                         val paidTotal = roundMoney(checkout.payments.sumOf { it.amount })
                         val remainingAmount = roundMoney((registerTotal - paidTotal).coerceAtLeast(0.0))
+                        val linkedCustomer = state.selectedCustomer()
                         val allowPaymentBack =
                             !checkout.payments.any { it.method == "card" } &&
                                 checkout.processingCardPayment == null
@@ -480,6 +506,7 @@ fun PosScreen(viewModel: PosViewModel) {
                             balanceDue = remainingAmount,
                             payments = checkout.payments,
                             backEnabled = allowPaymentBack,
+                            showCardOnFileButton = linkedCustomer?.hasCardOnFile == true,
                             amountInput = checkout.amountInput,
                             onAmountChange = { amount ->
                                 viewModel.updateCheckout { it.copy(amountInput = amount) }
@@ -490,14 +517,17 @@ fun PosScreen(viewModel: PosViewModel) {
                                 }
                             },
                             onApplyPayment = viewModel::applyCheckoutPayment,
+                            onPayCardOnFile = {
+                                if (!linkedCustomer?.cardLast4.isNullOrBlank()) {
+                                    showCardOnFileConfirm = true
+                                }
+                            },
                             onBack = {
                                 if (allowPaymentBack) {
                                     viewModel.resetCheckout()
                                 }
                             },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(12.dp),
+                            modifier = Modifier.fillMaxSize(),
                         )
                     } else {
                         NumberPad(
@@ -510,7 +540,7 @@ fun PosScreen(viewModel: PosViewModel) {
                             },
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(12.dp),
+                                .padding(PosNumpadInnerPadding),
                         )
                     }
                 }
@@ -528,6 +558,8 @@ fun PosScreen(viewModel: PosViewModel) {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
+                colors = PosCardDefaults.contentColors(),
+                elevation = PosCardDefaults.elevation(),
             ) {
                 Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                     SaleTotalsPanel(
@@ -551,6 +583,7 @@ fun PosScreen(viewModel: PosViewModel) {
                                     viewModel.openCheckout()
                                 },
                                 enabled = state.cart.isNotEmpty(),
+                                colors = PosButtonDefaults.teal(),
                                 modifier = Modifier
                                     .fillMaxWidth(0.2f)
                                     .height(44.dp),
@@ -563,6 +596,7 @@ fun PosScreen(viewModel: PosViewModel) {
                 }
             }
         }
+            }
         }
     }
 
@@ -573,6 +607,42 @@ fun PosScreen(viewModel: PosViewModel) {
         )
     }
 
+    if (showCardOnFileConfirm) {
+        val linkedCustomer = state.selectedCustomer()
+        val last4 = linkedCustomer?.cardLast4
+        AlertDialog(
+            onDismissRequest = { showCardOnFileConfirm = false },
+            title = { Text("Confirm CardOnFile") },
+            text = {
+                Text(
+                    text = if (!last4.isNullOrBlank()) {
+                        "Charge card ending in $last4?"
+                    } else {
+                        "No card on file for this customer."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCardOnFileConfirm = false
+                        if (!last4.isNullOrBlank()) {
+                            viewModel.applyCardOnFilePayment()
+                        }
+                    },
+                    enabled = !last4.isNullOrBlank(),
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCardOnFileConfirm = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     if (scannerOpen && !checkout.saleItemsLocked) {
         BarcodeScannerDialog(
             onBarcodeDetected = { code ->
@@ -580,6 +650,31 @@ fun PosScreen(viewModel: PosViewModel) {
                 viewModel.addByBarcodeValue(code)
             },
             onDismiss = { scannerOpen = false },
+        )
+    }
+}
+
+@Composable
+private fun DrawerMenuButton(
+    text: String,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        border = BorderStroke(1.dp, PosPrimary),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color.Transparent,
+            contentColor = Color.Black,
+        ),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
@@ -663,7 +758,6 @@ private fun CustomerFindPanel(
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
-    var selectedId by remember { mutableStateOf<Int?>(null) }
 
     val matches = remember(query, customers) {
         val q = query.trim()
@@ -683,17 +777,10 @@ private fun CustomerFindPanel(
         }
     }
 
-    LaunchedEffect(matches) {
-        selectedId = when {
-            matches.size == 1 -> matches.first().id
-            selectedId != null && matches.none { it.id == selectedId } -> null
-            else -> selectedId
-        }
-    }
-
-    val selectedCustomer = selectedId?.let { id -> customers.find { it.id == id } }
-
-    Column(modifier = modifier) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Top,
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -710,13 +797,25 @@ private fun CustomerFindPanel(
             }
         }
 
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("Id or Name") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+            textStyle = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+        )
+
         linkedCustomerId?.let { id ->
             val linked = customers.find { it.id == id }
             Text(
                 text = "Linked: ${customerDisplayName(linked, id)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 6.dp),
             )
             TextButton(
                 onClick = onUnlink,
@@ -726,36 +825,15 @@ private fun CustomerFindPanel(
             }
         }
 
-        OutlinedTextField(
-            value = query,
-            onValueChange = {
-                query = it
-                selectedId = null
-            },
-            label = { Text("ID or name") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-            textStyle = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-        )
-
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(top = 6.dp),
+            contentAlignment = Alignment.TopStart,
         ) {
             when {
-                query.trim().isEmpty() -> {
-                    Text(
-                        text = "Enter a customer ID or name to search.\n" +
-                            "Link customers here; use Scan/Add for product IDs.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                query.trim().isEmpty() -> {}
                 matches.isEmpty() -> {
                     Text(
                         text = "No customers found.",
@@ -764,26 +842,28 @@ private fun CustomerFindPanel(
                     )
                 }
                 else -> {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         items(matches, key = { it.id }) { customer ->
-                            val picked = customer.id == selectedId
                             OutlinedButton(
-                                onClick = { selectedId = customer.id },
-                                modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                                colors = if (picked) {
-                                    androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    )
-                                } else {
-                                    androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
-                                },
+                                onClick = { onLink(customer.id) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                                border = BorderStroke(1.dp, PosPrimary),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color.Transparent,
+                                    contentColor = PosText,
+                                ),
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Text(
                                         text = customerDisplayName(customer, customer.id),
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (picked) FontWeight.SemiBold else FontWeight.Normal,
+                                        fontWeight = FontWeight.Medium,
                                     )
                                     val detail = listOfNotNull(
                                         customer.email?.takeIf { it.isNotBlank() },
@@ -802,22 +882,6 @@ private fun CustomerFindPanel(
                     }
                 }
             }
-        }
-
-        Button(
-            onClick = { selectedCustomer?.let { onLink(it.id) } },
-            enabled = selectedCustomer != null,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-        ) {
-            Text(
-                if (selectedCustomer != null) {
-                    "Link ${customerDisplayName(selectedCustomer, selectedCustomer.id)}"
-                } else {
-                    "Link to customer"
-                },
-            )
         }
     }
 }
@@ -906,14 +970,12 @@ private fun CashierLogin(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Card(
-            modifier = Modifier
-                .width(360.dp)
-                .fillMaxHeight(0.85f),
+            modifier = Modifier.width(PosNumpadColumnWidth),
+            colors = PosCardDefaults.numpadPanelColors(),
+            elevation = PosCardDefaults.elevation(),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
+                modifier = Modifier.padding(PosNumpadInnerPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 OutlinedTextField(
@@ -925,17 +987,24 @@ private fun CashierLogin(
                     textStyle = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                NumberPad(
-                    onDigit = { d -> onPinChange(pinInput + d) },
-                    onClear = { onPinChange("") },
-                    onBackspace = { onPinChange(pinInput.dropLast(1)) },
+                Box(
                     modifier = Modifier
-                        .weight(1f)
                         .fillMaxWidth()
-                        .padding(top = 12.dp),
-                )
+                        .height(PosNumpadCardHeight)
+                        .padding(top = PosNumpadInnerPadding),
+                ) {
+                    NumberPad(
+                        onDigit = { d -> onPinChange(pinInput + d) },
+                        onClear = { onPinChange("") },
+                        onBackspace = { onPinChange(pinInput.dropLast(1)) },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(PosNumpadInnerPadding),
+                    )
+                }
                 Button(
                     onClick = onUnlock,
+                    colors = PosButtonDefaults.teal(),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp)

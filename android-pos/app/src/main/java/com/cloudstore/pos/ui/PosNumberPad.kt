@@ -1,5 +1,6 @@
 package com.cloudstore.pos.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.cloudstore.pos.ui.theme.PosBackground
+import com.cloudstore.pos.ui.theme.PosButtonDefaults
 
 @Composable
 internal fun NumberPad(
@@ -23,12 +26,12 @@ internal fun NumberPad(
     onClear: () -> Unit,
     onBackspace: () -> Unit,
     onDecimal: (() -> Unit)? = null,
-    compact: Boolean = false,
+    showClear: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
-    val keyGap = if (compact) 6.dp else 8.dp
+    val keyGap = PosNumpadKeyGap
     Column(
-        modifier = modifier,
+        modifier = modifier.background(PosBackground),
         verticalArrangement = Arrangement.spacedBy(keyGap),
     ) {
         listOf("123", "456", "789").forEach { rowDigits ->
@@ -42,7 +45,6 @@ internal fun NumberPad(
                     PadKey(
                         text = digit.toString(),
                         onClick = { onDigit(digit) },
-                        compact = compact,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight(),
@@ -56,18 +58,18 @@ internal fun NumberPad(
                 .weight(1f),
             horizontalArrangement = Arrangement.spacedBy(keyGap),
         ) {
-            PadKey(
-                text = "C",
-                onClick = onClear,
-                compact = compact,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                emphasis = KeyEmphasis.Secondary,
-            )
+            if (showClear) {
+                PadKey(
+                    text = "C",
+                    onClick = onClear,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    emphasis = KeyEmphasis.Secondary,
+                )
+            }
             if (onDecimal != null) {
                 PadKey(
                     text = ".",
                     onClick = onDecimal,
-                    compact = compact,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     emphasis = KeyEmphasis.Secondary,
                 )
@@ -75,13 +77,11 @@ internal fun NumberPad(
             PadKey(
                 text = "0",
                 onClick = { onDigit('0') },
-                compact = compact,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
             )
             PadKey(
                 text = "\u232B",
                 onClick = onBackspace,
-                compact = compact,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 emphasis = KeyEmphasis.Secondary,
             )
@@ -97,17 +97,10 @@ private fun PadKey(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     emphasis: KeyEmphasis = KeyEmphasis.Primary,
-    compact: Boolean = false,
 ) {
     val colors = when (emphasis) {
-        KeyEmphasis.Primary -> androidx.compose.material3.ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        )
-        KeyEmphasis.Secondary -> androidx.compose.material3.ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        KeyEmphasis.Primary -> PosButtonDefaults.numpadKey()
+        KeyEmphasis.Secondary -> PosButtonDefaults.numpadKeySecondary()
     }
     Button(
         onClick = onClick,
@@ -118,11 +111,7 @@ private fun PadKey(
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Text(
                 text = text,
-                style = if (compact) {
-                    MaterialTheme.typography.titleLarge
-                } else {
-                    MaterialTheme.typography.headlineMedium
-                },
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
         }
