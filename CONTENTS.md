@@ -1,6 +1,6 @@
 # Cloud Store 893 — session handoff
 
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
 
@@ -256,6 +256,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 - **Phase 1 (in repo):** Cashier session cookies + optional ingress CIDR lockdown — see [docs/idp-setup.md](docs/idp-setup.md).
 - **Phase 2 (OCI Console):** Separate Identity Domain + OIDC clients for POS and admin.
+- **Phase 3 (planned):** IdP cashier login + **supervisor approval** before session — living doc: [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md) (ASCII flow, API checklist, journey log — **update as we implement**).
 - **Start over (Level 1):** [docs/idp-level1-reset.md](docs/idp-level1-reset.md) — delete/recreate integrated apps only.
 
 ---

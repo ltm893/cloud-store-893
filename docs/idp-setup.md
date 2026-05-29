@@ -151,6 +151,21 @@ Set `cashier_session_secure = true` when TLS terminates in front of the app.
 
 ---
 
+## Phase 3 (planned): Supervisor approval after IdP login — Model B
+
+After a cashier authenticates with Oracle IdP, a **supervisor** must approve before the register gets a `cashier_session` cookie. This is **not** a built-in Identity Domains feature — the Node app owns pending state and approval APIs; IdM provides **individual cashier identity** and **supervisor group** membership.
+
+**Living design doc (flow diagram, API checklist, journey log):** [cashier-supervisor-approval.md](cashier-supervisor-approval.md)
+
+Summary:
+
+- Cashier: `GET /oauth/login` → callback creates **pending** row (no session yet).
+- Register polls `GET /api/cashier/approval/status` until approved.
+- Supervisor: admin UI → `POST /api/admin/login-approvals/:token/approve` (must be in `store-supervisors`).
+- Enable with `CASHIER_SUPERVISOR_APPROVAL=true` and `IDP_ALLOW_PIN=false` (when implemented).
+
+---
+
 ## Verify Phase 1
 
 ```bash
