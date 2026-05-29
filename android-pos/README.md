@@ -5,7 +5,7 @@ Kotlin + Jetpack Compose. Theming: **Lister palette** (`ui/theme/`).
 
 ## Capabilities
 
-- **Cashier login** — on-screen numpad + **Done**; PIN checked via `POST /api/cashier/unlock` (server `CASHIER_PIN` in `.env` / OCI container env)
+- **Cashier login** — on-screen numpad + **Done** when PIN is allowed; **Sign in with Oracle** (WebView → `/oauth/login?client_kind=tablet`) when IdP / Model B is on; supervisor approval waiting screen with poll + cancel
 - **☰ Menu** — show/hide status (connection, offline queue), **Admin** (in-app WebView → `/admin/`), **Lock**
 - Barcode / product ID entry (`POST /api/cart`, `POST /api/cart/barcode`)
 - Camera scanning (CameraX + ML Kit)
@@ -15,7 +15,11 @@ Kotlin + Jetpack Compose. Theming: **Lister palette** (`ui/theme/`).
 
 | Endpoint | Use |
 |----------|-----|
-| `POST /api/cashier/unlock` | Login (`{ "pin": "…" }`) |
+| `POST /api/cashier/unlock` | Login (`{ "pin": "…" }`) — **403** when Model B supervisor approval is on |
+| `GET /api/cashier/session` | Startup probe; pending / IdP flags |
+| `GET /api/cashier/approval/status` | Poll while waiting for supervisor |
+| `POST /api/cashier/approval/cancel` | Cancel pending login |
+| `GET /oauth/login?client_kind=tablet` | WebView OIDC sign-in (Model B) |
 | `GET /api/products` | Loaded on unlock (not shown in UI) |
 | `GET /api/customers` | Customer picker |
 | `GET /api/cart` | Current sale |

@@ -2,6 +2,7 @@ package com.cloudstore.pos.data
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -51,25 +52,37 @@ interface PosApi {
     suspend fun getRecentSales(): List<Sale>
 
     @POST("api/cashier/unlock")
-    suspend fun unlockCashier(@Body body: Map<String, String>): UnlockResponse
+    suspend fun unlockCashier(@Body body: Map<String, String>): OkResponse
 
     @GET("api/cashier/session")
-    suspend fun cashierSession(): UnlockResponse
+    suspend fun cashierSession(): CashierSessionResponse
+
+    @GET("api/cashier/approval/status")
+    suspend fun approvalStatus(): ApprovalStatusResponse
+
+    @POST("api/cashier/approval/cancel")
+    suspend fun cancelApproval(): OkResponse
 
     @POST("api/cashier/logout")
-    suspend fun logoutCashier(): UnlockResponse
+    suspend fun logoutCashier(): OkResponse
 }
 
 class PosRepository(baseUrl: String) {
     private val api: PosApi
+    private val normalizedBaseUrl: String
+    val cookieJar = MemoryCookieJar()
 
     init {
+        normalizedBaseUrl = baseUrl.trim().let { url ->
+            if (url.endsWith("/")) url else "$url/"
+        }
+
         val logger = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
         }
 
         val okHttp = OkHttpClient.Builder()
-            .cookieJar(MemoryCookieJar())
+            .cookieJar(cookieJar)
             .addInterceptor(logger)
             .build()
 
@@ -78,7 +91,7 @@ class PosRepository(baseUrl: String) {
             .build()
 
         val retrofit = Retrofit.Builder()
-            .baseUrl(baseUrl)
+            .baseUrl(normalizedBaseUrl)
             .client(okHttp)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
@@ -122,6 +135,20 @@ class PosRepository(baseUrl: String) {
 
     suspend fun recentSales() = api.getRecentSales()
 
+    suspend fun cashierSession() = api.cashierSession()
+
+    suspend fun pollApprovalStatus() = api.approvalStatus()
+
+    suspend fun cancelApproval() = api.cancelApproval()
+
+    fun syncWebViewCookies() {
+        WebViewCookieSync.sync(normalizedBaseUrl, cookieJar)
+    }
+
+    fun clearCashierCookies() {
+        normalizedBaseUrl.toHttpUrlOrNull()?.host?.let { cookieJar.clearHost(it) }
+    }
+
     suspend fun unlockCashier(pin: String) {
         val res = api.unlockCashier(mapOf("pin" to pin))
         if (!res.ok) throw IllegalStateException("Unlock failed")
@@ -133,5 +160,6 @@ class PosRepository(baseUrl: String) {
 
     suspend fun logoutCashier() {
         runCatching { api.logoutCashier() }
+        clearCashierCookies()
     }
 }

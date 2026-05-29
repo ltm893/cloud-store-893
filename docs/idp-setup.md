@@ -162,7 +162,9 @@ Summary:
 - Cashier: `GET /oauth/login` → callback creates **pending** row (no session yet).
 - Register polls `GET /api/cashier/approval/status` until approved.
 - Supervisor: admin UI → `POST /api/admin/login-approvals/:token/approve` (must be in `store-supervisors`).
-- Enable with `CASHIER_SUPERVISOR_APPROVAL=true` and `IDP_ALLOW_PIN=false` (when implemented).
+- Enable with `CASHIER_SUPERVISOR_APPROVAL=true` (and typically `IDP_ALLOW_PIN=false` so cashiers must use IdP).
+- **Implemented on branch** `feature/cashier-supervisor-approval` — web POS, admin approvals panel, Android tablet WebView OIDC + poll.
+- **Still manual in OCI Console:** map IdM groups `store-cashiers` / `store-supervisors` into ID token claims (step 9 in living doc).
 
 ---
 

@@ -115,6 +115,8 @@ fi
 echo "-- Cashier: public without session --"
 expect_public_anon GET /api/products
 expect_public_anon GET /api/cashier/session
+curl_req GET "$BASE_URL/api/cashier/approval/status"
+[[ "$HTTP_CODE" == "401" ]] && log_ok "GET /api/cashier/approval/status (no pending) → 401" || log_fail "GET /api/cashier/approval/status → $HTTP_CODE"
 curl_req POST "$BASE_URL/api/cashier/logout"
 [[ "$HTTP_CODE" == "200" ]] && log_ok "public POST /api/cashier/logout → 200" || log_fail "public POST /api/cashier/logout → $HTTP_CODE"
 

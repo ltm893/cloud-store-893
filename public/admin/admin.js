@@ -96,6 +96,9 @@ async function loadMeta() {
     .join('');
   tableNavEl.querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => {
+      if (window.AdminApprovals?.isActive?.()) {
+        window.AdminApprovals.hide();
+      }
       activeTable = btn.dataset.table;
       document.body.classList.remove('nav-open');
       renderNav();
@@ -104,11 +107,17 @@ async function loadMeta() {
   });
 }
 
-function renderNav() {
+function setNavActive(tableName) {
   tableNavEl.querySelectorAll('button').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.table === activeTable);
+    btn.classList.toggle('active', tableName != null && btn.dataset.table === tableName);
   });
 }
+
+function renderNav() {
+  setNavActive(activeTable);
+}
+
+window.AdminTables = { setNavActive };
 
 function renderCreateForm(meta) {
   if (meta.readOnly || !meta.create.length) {
@@ -244,8 +253,19 @@ async function loadTable(name) {
     if (window.matchMedia('(min-width: 900px)').matches) {
       document.body.classList.add('nav-open');
     }
+    if (window.AdminApprovals) {
+      window.AdminApprovals.configure({
+        apiFetch,
+        setStatus,
+        adminSession: session,
+      });
+    }
     await loadMeta();
-    await loadTable(activeTable);
+    if (session.supervisorApprovalEnabled && session.isSupervisor) {
+      window.AdminApprovals.show();
+    } else {
+      await loadTable(activeTable);
+    }
   } catch (err) {
     if (err.message !== 'Session expired') setStatus(err.message, true);
   }

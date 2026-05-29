@@ -118,13 +118,45 @@ fun PosScreen(viewModel: PosViewModel) {
     }
 
     if (!state.isAuthenticated) {
-        CashierLogin(
-            pinInput = state.pinInput,
-            status = state.status,
-            onPinChange = viewModel::setPinInput,
-            onUnlock = viewModel::unlock,
-        )
-        return
+        when (val gate = state.authGate) {
+            CashierAuthGate.Checking -> {
+                CashierAuthLoading(status = state.status)
+            }
+            CashierAuthGate.OidcSignIn -> {
+                val loginUrl = state.idpLoginUrl
+                if (loginUrl.isNullOrBlank()) {
+                    LaunchedEffect(Unit) { viewModel.cancelOidcSignIn() }
+                } else {
+                    CashierOidcWebScreen(
+                        loginUrl = loginUrl,
+                        apiBaseUrl = BuildConfig.API_BASE_URL,
+                        onComplete = viewModel::onOidcWebViewComplete,
+                        onCancel = viewModel::cancelOidcSignIn,
+                    )
+                }
+            }
+            is CashierAuthGate.WaitingApproval -> {
+                ApprovalWaitingScreen(
+                    email = gate.email,
+                    secondsRemaining = gate.secondsRemaining,
+                    status = state.status,
+                    onCancel = viewModel::cancelApprovalWait,
+                )
+            }
+            is CashierAuthGate.PinSignIn -> {
+                CashierLogin(
+                    pinInput = state.pinInput,
+                    pinAllowed = gate.pinAllowed,
+                    idpLoginUrl = state.idpLoginUrl,
+                    status = state.status,
+                    onPinChange = viewModel::setPinInput,
+                    onUnlock = viewModel::unlock,
+                    onIdpSignIn = viewModel::openOidcSignIn,
+                )
+            }
+            CashierAuthGate.SignedIn -> Unit
+        }
+        if (!state.isAuthenticated) return
     }
 
     if (adminOpen) {
@@ -947,11 +979,103 @@ private fun CartLineRow(
 }
 
 @Composable
+private fun CashierAuthLoading(status: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = if (status.isNotBlank()) status else "Starting…",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
+private fun ApprovalWaitingScreen(
+    email: String?,
+    secondsRemaining: Int?,
+    status: String,
+    onCancel: () -> Unit,
+) {
+    val timerText = when {
+        secondsRemaining != null && secondsRemaining >= 0 -> {
+            val mins = secondsRemaining / 60
+            val secs = secondsRemaining % 60
+            "Expires in %d:%02d".format(mins, secs)
+        }
+        else -> null
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 28.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "Waiting for supervisor",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Your login request was sent. A supervisor must approve before you can use the register.",
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+        )
+        if (!email.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = email,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (timerText != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = timerText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (status.isNotBlank() && status != "Ready") {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        OutlinedButton(
+            onClick = onCancel,
+            modifier = Modifier
+                .width(PosNumpadColumnWidth)
+                .height(52.dp),
+        ) {
+            Text("Cancel request")
+        }
+    }
+}
+
+@Composable
 private fun CashierLogin(
     pinInput: String,
+    pinAllowed: Boolean,
+    idpLoginUrl: String?,
     status: String,
     onPinChange: (String) -> Unit,
     onUnlock: () -> Unit,
+    onIdpSignIn: () -> Unit,
 ) {
     val maskedPin = "•".repeat(pinInput.length)
 
@@ -978,40 +1102,62 @@ private fun CashierLogin(
                 modifier = Modifier.padding(PosNumpadInnerPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                OutlinedTextField(
-                    value = maskedPin,
-                    onValueChange = {},
-                    label = { Text("PIN") },
-                    singleLine = true,
-                    readOnly = true,
-                    textStyle = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(PosNumpadCardHeight)
-                        .padding(top = PosNumpadInnerPadding),
-                ) {
-                    NumberPad(
-                        onDigit = { d -> onPinChange(pinInput + d) },
-                        onClear = { onPinChange("") },
-                        onBackspace = { onPinChange(pinInput.dropLast(1)) },
+                if (pinAllowed) {
+                    OutlinedTextField(
+                        value = maskedPin,
+                        onValueChange = {},
+                        label = { Text("PIN") },
+                        singleLine = true,
+                        readOnly = true,
+                        textStyle = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(PosNumpadInnerPadding),
+                            .fillMaxWidth()
+                            .height(PosNumpadCardHeight)
+                            .padding(top = PosNumpadInnerPadding),
+                    ) {
+                        NumberPad(
+                            onDigit = { d -> onPinChange(pinInput + d) },
+                            onClear = { onPinChange("") },
+                            onBackspace = { onPinChange(pinInput.dropLast(1)) },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(PosNumpadInnerPadding),
+                        )
+                    }
+                    Button(
+                        onClick = onUnlock,
+                        colors = PosButtonDefaults.teal(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .height(52.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp),
+                    ) {
+                        Text("Done", style = MaterialTheme.typography.titleMedium)
+                    }
+                } else {
+                    Text(
+                        text = "Sign in with your store account to open the register.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 12.dp),
                     )
                 }
-                Button(
-                    onClick = onUnlock,
-                    colors = PosButtonDefaults.teal(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .height(52.dp),
-                    contentPadding = PaddingValues(vertical = 4.dp),
-                ) {
-                    Text("Done", style = MaterialTheme.typography.titleMedium)
+                if (!idpLoginUrl.isNullOrBlank()) {
+                    Button(
+                        onClick = onIdpSignIn,
+                        colors = PosButtonDefaults.teal(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = if (pinAllowed) 8.dp else 0.dp)
+                            .height(52.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp),
+                    ) {
+                        Text("Sign in with Oracle", style = MaterialTheme.typography.titleMedium)
+                    }
                 }
             }
         }
@@ -1020,7 +1166,8 @@ private fun CashierLogin(
                 text = status,
                 modifier = Modifier.padding(top = 12.dp),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (status.contains("Invalid") || status.contains("Cannot") || status.contains("error", ignoreCase = true)) {
+                textAlign = TextAlign.Center,
+                color = if (status.contains("Invalid") || status.contains("Cannot") || status.contains("error", ignoreCase = true) || status.contains("denied", ignoreCase = true)) {
                     MaterialTheme.colorScheme.error
                 } else {
                     MaterialTheme.colorScheme.onSurface

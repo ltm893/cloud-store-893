@@ -26,6 +26,8 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE cart_items'; EXCEPTION WHEN OTHERS THEN NULL
 /
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE products';   EXCEPTION WHEN OTHERS THEN NULL; END;
 /
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE login_approval_requests'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE customers';  EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
@@ -107,7 +109,30 @@ CREATE TABLE sale_payments (
 );
 
 
--- ── 7. CART_VIEW ──────────────────────────────────────────────────────────────
+-- ── 7. LOGIN_APPROVAL_REQUESTS (Model B: IdP cashier + supervisor approval) ───
+
+CREATE TABLE login_approval_requests (
+  id                NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  request_token     VARCHAR2(64)   NOT NULL UNIQUE,
+  status            VARCHAR2(20)   NOT NULL,
+  cashier_sub       VARCHAR2(256)  NOT NULL,
+  cashier_email     VARCHAR2(256),
+  cashier_name      VARCHAR2(200),
+  register_id       VARCHAR2(64),
+  client_kind       VARCHAR2(20),
+  requested_at      TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL,
+  expires_at        TIMESTAMP      NOT NULL,
+  resolved_at       TIMESTAMP,
+  resolved_by_sub   VARCHAR2(256),
+  resolved_by_email VARCHAR2(256),
+  deny_reason       VARCHAR2(500)
+);
+
+CREATE INDEX login_approval_requests_status_idx
+  ON login_approval_requests (status, expires_at);
+
+
+-- ── 8. CART_VIEW ──────────────────────────────────────────────────────────────
 -- Joins cart_items + products: list price, optional sale_price, quantity
 
 CREATE OR REPLACE VIEW cart_view AS
@@ -122,7 +147,7 @@ CREATE OR REPLACE VIEW cart_view AS
   JOIN products p ON p.id = ci.product_id;
 
 
--- ── 8. Enable ORDS on the ADMIN schema ───────────────────────────────────────
+-- ── 9. Enable ORDS on the ADMIN schema ───────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_SCHEMA(
@@ -137,7 +162,7 @@ END;
 /
 
 
--- ── 9. Enable ORDS on PRODUCTS table ─────────────────────────────────────────
+-- ── 10. Enable ORDS on PRODUCTS table ────────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -153,7 +178,7 @@ END;
 /
 
 
--- ── 10. Enable ORDS on CUSTOMERS table ─────────────────────────────────────────
+-- ── 11. Enable ORDS on CUSTOMERS table ───────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -169,7 +194,7 @@ END;
 /
 
 
--- ── 11. Enable ORDS on CART_ITEMS table ───────────────────────────────────────
+-- ── 12. Enable ORDS on CART_ITEMS table ──────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -185,7 +210,7 @@ END;
 /
 
 
--- ── 12. Enable ORDS on CART_VIEW ───────────────────────────────────────────────
+-- ── 13. Enable ORDS on CART_VIEW ───────────────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -201,7 +226,7 @@ END;
 /
 
 
--- ── 13. Enable ORDS on SALES table ────────────────────────────────────────────
+-- ── 14. Enable ORDS on SALES table ───────────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -216,7 +241,7 @@ BEGIN
 END;
 /
 
--- ── 14. Enable ORDS on SALE_ITEMS table ───────────────────────────────────────
+-- ── 15. Enable ORDS on SALE_ITEMS table ──────────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -232,7 +257,7 @@ END;
 /
 
 
--- ── 15. Enable ORDS on SALE_PAYMENTS table ────────────────────────────────────
+-- ── 16. Enable ORDS on SALE_PAYMENTS table ───────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -248,7 +273,23 @@ END;
 /
 
 
--- ── 16. Sample products ───────────────────────────────────────────────────────
+-- ── 17. Enable ORDS on LOGIN_APPROVAL_REQUESTS table ─────────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'LOGIN_APPROVAL_REQUESTS',
+    p_object_type   => 'TABLE',
+    p_object_alias  => 'login_approval_requests',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
+-- ── 18. Sample products ──────────────────────────────────────────────────────
 
 INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000001', 'OCI Foundations Study Guide',  29.99, NULL);
 INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000002', 'Terraform on OCI T-Shirt',     24.99, NULL);
@@ -256,7 +297,7 @@ INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000003', 
 INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000004', 'Autonomous Database Mug',       9.99, NULL);
 INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000005', 'Always Free Tier Sticker Pack', 4.99, NULL);
 
--- ── 17. Sample customers ──────────────────────────────────────────────────────
+-- ── 19. Sample customers ───────────────────────────────────────────────────────
 
 INSERT INTO customers (name, email, phone, address_line1, city, state, postal_code, card_fake, member_code)
 VALUES (
@@ -299,6 +340,8 @@ SELECT 'sales', COUNT(*) FROM sales
 UNION ALL
 SELECT 'sale_items', COUNT(*) FROM sale_items
 UNION ALL
-SELECT 'sale_payments', COUNT(*) FROM sale_payments;
+SELECT 'sale_payments', COUNT(*) FROM sale_payments
+UNION ALL
+SELECT 'login_approval_requests', COUNT(*) FROM login_approval_requests;
 
 exit

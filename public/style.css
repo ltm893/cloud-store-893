@@ -77,6 +77,22 @@ body {
   font-size: 0.9rem;
 }
 
+.approval-card .btn-secondary {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.approval-poll-status {
+  font-style: italic;
+}
+
 h1, h2 {
   margin: 0 0 12px;
 }
