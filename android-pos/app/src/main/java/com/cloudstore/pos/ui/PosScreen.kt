@@ -114,6 +114,14 @@ fun PosScreen(viewModel: PosViewModel) {
     LaunchedEffect(checkout.saleItemsLocked) {
         if (checkout.saleItemsLocked) {
             scannerOpen = false
+            viewModel.cancelQuantityEdit()
+        }
+    }
+
+    LaunchedEffect(state.quantityEditCartItemId, state.cart) {
+        val editingId = state.quantityEditCartItemId ?: return@LaunchedEffect
+        if (state.cart.none { it.id == editingId }) {
+            viewModel.cancelQuantityEdit()
         }
     }
 
@@ -195,6 +203,9 @@ fun PosScreen(viewModel: PosViewModel) {
                     DrawerMenuButton(
                         text = if (customerFindOpen) "Show keypad" else "Find customer",
                         onClick = {
+                            if (!customerFindOpen) {
+                                viewModel.cancelQuantityEdit()
+                            }
                             customerFindOpen = !customerFindOpen
                             scope.launch { drawerState.close() }
                         },
@@ -423,6 +434,12 @@ fun PosScreen(viewModel: PosViewModel) {
                         items(state.cart) { item ->
                             CartLineRow(
                                 item = item,
+                                quantityEditActive = state.quantityEditCartItemId == item.id,
+                                editEnabled = !checkout.saleItemsLocked,
+                                onEditQuantity = {
+                                    customerFindOpen = false
+                                    viewModel.startQuantityEdit(item.id)
+                                },
                                 removeEnabled = !checkout.saleItemsLocked,
                                 onRemove = { viewModel.removeCartItem(item.id) },
                             )
@@ -488,6 +505,16 @@ fun PosScreen(viewModel: PosViewModel) {
                 }
                 if (!checkout.open && !customerFindOpen) {
                     Spacer(modifier = Modifier.weight(1f))
+                }
+                val quantityEditing = state.quantityEditCartItemId != null && !checkout.open
+                if (quantityEditing) {
+                    val editingItem = state.cart.find { it.id == state.quantityEditCartItemId }
+                    CartQuantityEditHeader(
+                        itemName = editingItem?.name ?: "",
+                        quantityInput = state.quantityEditInput,
+                        onCancel = viewModel::cancelQuantityEdit,
+                        onApply = viewModel::applyQuantityEdit,
+                    )
                 }
                 Card(
                     modifier = Modifier
@@ -563,12 +590,20 @@ fun PosScreen(viewModel: PosViewModel) {
                         )
                     } else {
                         NumberPad(
-                            onDigit = { d ->
-                                viewModel.setBarcodeInput(state.barcodeInput + d)
+                            onDigit = if (quantityEditing) {
+                                viewModel::appendQuantityEditDigit
+                            } else {
+                                { d -> viewModel.setBarcodeInput(state.barcodeInput + d) }
                             },
-                            onClear = { viewModel.setBarcodeInput("") },
-                            onBackspace = {
-                                viewModel.setBarcodeInput(state.barcodeInput.dropLast(1))
+                            onClear = if (quantityEditing) {
+                                { viewModel.setQuantityEditInput("") }
+                            } else {
+                                { viewModel.setBarcodeInput("") }
+                            },
+                            onBackspace = if (quantityEditing) {
+                                viewModel::backspaceQuantityEditInput
+                            } else {
+                                { viewModel.setBarcodeInput(state.barcodeInput.dropLast(1)) }
                             },
                             modifier = Modifier
                                 .fillMaxSize()
@@ -921,6 +956,9 @@ private fun CustomerFindPanel(
 @Composable
 private fun CartLineRow(
     item: CartItem,
+    quantityEditActive: Boolean = false,
+    editEnabled: Boolean = true,
+    onEditQuantity: () -> Unit = {},
     removeEnabled: Boolean = true,
     onRemove: () -> Unit,
 ) {
@@ -931,10 +969,24 @@ private fun CartLineRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "${item.name} ×${item.quantity}",
+                text = item.name,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
+            TextButton(
+                onClick = onEditQuantity,
+                enabled = editEnabled,
+            ) {
+                Text(
+                    text = if (quantityEditActive) "Quantity" else "Quantity · ${item.quantity}",
+                    fontWeight = if (quantityEditActive) FontWeight.Bold else FontWeight.Normal,
+                    color = if (quantityEditActive) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                    },
+                )
+            }
             TextButton(
                 onClick = onRemove,
                 enabled = removeEnabled,
