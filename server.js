@@ -430,6 +430,38 @@ app.post('/api/cart/replace', async (req, res) => {
   }
 });
 
+app.put('/api/cart/:id', async (req, res) => {
+  try {
+    const cartItemId = req.params.id;
+    const quantity = Number(req.body?.quantity);
+    if (!Number.isFinite(quantity)) {
+      return res.status(400).json({ error: 'quantity must be a number' });
+    }
+
+    if (quantity <= 0) {
+      await ordsDelete(`cart_items/${cartItemId}`);
+    } else {
+      const existing = await ordsTryGet(`cart_items/${cartItemId}`);
+      if (!existing || Number(existing.id) !== Number(cartItemId)) {
+        return res.status(404).json({ error: 'Cart item not found' });
+      }
+      await ordsPut(`cart_items/${cartItemId}`, {
+        product_id: existing.product_id,
+        quantity,
+      });
+    }
+
+    const { linked893, error } = await resolveLinked893FromRequest(req);
+    if (error) return res.status(400).json({ error });
+    const cart = await ordsGet('cart_view/');
+    const rows = Array.isArray(cart) ? cart : [];
+    res.json(summarizeCart(rows, linked893));
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/cart/:id', async (req, res) => {
   try {
     await ordsDelete(`cart_items/${req.params.id}`);

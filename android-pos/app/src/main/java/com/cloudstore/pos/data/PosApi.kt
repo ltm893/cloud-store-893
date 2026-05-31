@@ -10,6 +10,7 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -32,6 +33,13 @@ interface PosApi {
     @POST("api/cart/barcode")
     suspend fun addByBarcode(
         @Body body: Map<String, String>,
+        @Query("customerId") customerId: Int? = null,
+    ): CartResponse
+
+    @PUT("api/cart/{id}")
+    suspend fun updateCartQuantity(
+        @Path("id") cartItemId: Int,
+        @Body body: Map<String, Int>,
         @Query("customerId") customerId: Int? = null,
     ): CartResponse
 
@@ -97,6 +105,9 @@ class PosRepository(baseUrl: String) {
 
     suspend fun removeCartItem(cartItemId: Int, customerId: Int?) =
         api.removeFromCart(cartItemId, customerId)
+
+    suspend fun updateCartItemQuantity(cartItemId: Int, quantity: Int, customerId: Int?) =
+        api.updateCartQuantity(cartItemId, mapOf("quantity" to quantity), customerId)
 
     suspend fun replaceCart(lines: List<QueuedCartLine>, customerId: Int?) =
         api.replaceCart(

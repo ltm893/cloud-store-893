@@ -42,6 +42,8 @@ data class PosUiState(
     val recentSales: List<Sale> = emptyList(),
     val paymentMethod: String = "card",
     val barcodeInput: String = "",
+    val quantityEditCartItemId: Int? = null,
+    val quantityEditInput: String = "",
     val status: String = "Ready",
     val isAuthenticated: Boolean = false,
     val pinInput: String = "",
@@ -120,6 +122,7 @@ class PosViewModel(
     }
 
     fun openCheckout() {
+        cancelQuantityEdit()
         _checkoutState.value = CheckoutUiState(open = true)
     }
 
@@ -525,11 +528,76 @@ class PosViewModel(
     }
 
     fun removeCartItem(cartItemId: Int) {
+        if (_state.value.quantityEditCartItemId == cartItemId) {
+            cancelQuantityEdit()
+        }
         viewModelScope.launch {
             val cid = _state.value.selectedCustomerId
             runCatching { repository.removeCartItem(cartItemId, cid) }
                 .onSuccess { applyCartResponse(it, _state.value.customerDiscountActive()) }
                 .onFailure { _state.value = _state.value.copy(status = "Remove failed: ${it.message}") }
+        }
+    }
+
+    fun startQuantityEdit(cartItemId: Int) {
+        if (_checkoutState.value.saleItemsLocked) return
+        _state.value = _state.value.copy(
+            quantityEditCartItemId = cartItemId,
+            quantityEditInput = "",
+            barcodeInput = "",
+        )
+    }
+
+    fun cancelQuantityEdit() {
+        _state.value = _state.value.copy(
+            quantityEditCartItemId = null,
+            quantityEditInput = "",
+        )
+    }
+
+    fun setQuantityEditInput(value: String) {
+        _state.value = _state.value.copy(quantityEditInput = value.filter { it.isDigit() }.take(4))
+    }
+
+    fun appendQuantityEditDigit(digit: Char) {
+        val current = _state.value.quantityEditInput
+        if (current.length >= 4) return
+        val next = if (current == "0") digit.toString() else current + digit
+        _state.value = _state.value.copy(quantityEditInput = next)
+    }
+
+    fun backspaceQuantityEditInput() {
+        _state.value = _state.value.copy(
+            quantityEditInput = _state.value.quantityEditInput.dropLast(1),
+        )
+    }
+
+    fun applyQuantityEdit() {
+        val itemId = _state.value.quantityEditCartItemId ?: return
+        val qty = _state.value.quantityEditInput.toIntOrNull()
+        if (qty == null) {
+            _state.value = _state.value.copy(status = "Enter a quantity")
+            return
+        }
+        cancelQuantityEdit()
+        viewModelScope.launch {
+            val cid = _state.value.selectedCustomerId
+            val result = if (qty <= 0) {
+                runCatching { repository.removeCartItem(itemId, cid) }
+            } else {
+                runCatching { repository.updateCartItemQuantity(itemId, qty, cid) }
+            }
+            result
+                .onSuccess { applyCartResponse(it, _state.value.customerDiscountActive()) }
+                .onFailure { err ->
+                    _state.value = _state.value.copy(
+                        status = if (qty <= 0) {
+                            "Remove failed: ${err.message}"
+                        } else {
+                            "Quantity update failed: ${err.message}"
+                        },
+                    )
+                }
         }
     }
 
