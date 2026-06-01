@@ -2,9 +2,17 @@ const fetchOpts = { credentials: 'include' };
 
 const productsEl = document.getElementById('products');
 const pinGateEl = document.getElementById('pinGate');
+const pinSignInBlockEl = document.getElementById('pinSignInBlock');
+const signInIdpHintEl = document.getElementById('signInIdpHint');
 const pinInputEl = document.getElementById('pinInput');
 const pinSubmitBtn = document.getElementById('pinSubmitBtn');
 const pinErrorEl = document.getElementById('pinError');
+const approvalGateEl = document.getElementById('approvalGate');
+const approvalCashierEl = document.getElementById('approvalCashier');
+const approvalTimerEl = document.getElementById('approvalTimer');
+const approvalPollStatusEl = document.getElementById('approvalPollStatus');
+const approvalCancelBtn = document.getElementById('approvalCancelBtn');
+const approvalErrorEl = document.getElementById('approvalError');
 const cartEl = document.getElementById('cart');
 const totalEl = document.getElementById('total');
 const statusEl = document.getElementById('status');
@@ -16,8 +24,11 @@ const menuBtn = document.getElementById('menuBtn');
 const appMenuEl = document.getElementById('appMenu');
 const toggleStatusBtn = document.getElementById('toggleStatusBtn');
 
+const APPROVAL_POLL_MS = 2500;
+
 let selectedCustomerId = null;
 let statusVisible = false;
+let approvalPollTimer = null;
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -39,12 +50,17 @@ function customerQs() {
   return selectedCustomerId != null ? `?customerId=${encodeURIComponent(selectedCustomerId)}` : '';
 }
 
-function showPinGate(message) {
-  pinGateEl.hidden = false;
-  if (message) {
-    pinErrorEl.hidden = false;
-    pinErrorEl.textContent = message;
+function stopApprovalPoll() {
+  if (approvalPollTimer) {
+    clearInterval(approvalPollTimer);
+    approvalPollTimer = null;
   }
+}
+
+function hideApprovalGate() {
+  approvalGateEl.hidden = true;
+  approvalErrorEl.hidden = true;
+  approvalErrorEl.textContent = '';
 }
 
 function hidePinGate() {
@@ -53,18 +69,194 @@ function hidePinGate() {
   pinErrorEl.textContent = '';
 }
 
+function hideAllAuthOverlays() {
+  hidePinGate();
+  hideApprovalGate();
+  stopApprovalPoll();
+}
+
+function formatApprovalTimer(secondsRemaining, expiresAt) {
+  if (Number.isFinite(secondsRemaining) && secondsRemaining >= 0) {
+    const mins = Math.floor(secondsRemaining / 60);
+    const secs = secondsRemaining % 60;
+    return `Request expires in ${mins}:${String(secs).padStart(2, '0')}`;
+  }
+  if (expiresAt) {
+    return `Expires ${new Date(expiresAt).toLocaleTimeString()}`;
+  }
+  return '';
+}
+
+function showApprovalGate(approval) {
+  hidePinGate();
+  approvalGateEl.hidden = false;
+  approvalErrorEl.hidden = true;
+  approvalErrorEl.textContent = '';
+  approvalPollStatusEl.textContent = 'Checking approval status…';
+
+  if (approval?.cashierEmail) {
+    approvalCashierEl.textContent = `Cashier: ${approval.cashierEmail}`;
+    approvalCashierEl.hidden = false;
+  } else {
+    approvalCashierEl.hidden = true;
+    approvalCashierEl.textContent = '';
+  }
+
+  approvalTimerEl.textContent = formatApprovalTimer(
+    approval?.secondsRemaining,
+    approval?.expiresAt,
+  );
+}
+
+function showApprovalError(message) {
+  approvalErrorEl.hidden = false;
+  approvalErrorEl.textContent = message;
+}
+
+function configureIdpLink(data) {
+  const idpLink = document.getElementById('idpLoginLink');
+  if (idpLink && data.idpEnabled) {
+    idpLink.hidden = false;
+    if (data.idpLoginUrl) idpLink.href = data.idpLoginUrl;
+  } else if (idpLink) {
+    idpLink.hidden = true;
+  }
+}
+
+function showPinGate(message, { pinAllowed = true } = {}) {
+  hideApprovalGate();
+  stopApprovalPoll();
+  pinGateEl.hidden = false;
+
+  const pinOk = pinAllowed !== false;
+  pinSignInBlockEl.hidden = !pinOk;
+  signInIdpHintEl.hidden = pinOk;
+
+  if (message) {
+    pinErrorEl.hidden = false;
+    pinErrorEl.textContent = message;
+  } else {
+    pinErrorEl.hidden = true;
+    pinErrorEl.textContent = '';
+  }
+}
+
+async function pollApprovalStatus() {
+  try {
+    const res = await fetch('/api/cashier/approval/status', fetchOpts);
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.status === 'approved' && data.ok) {
+      stopApprovalPoll();
+      hideAllAuthOverlays();
+      setStatus('Supervisor approved — loading POS…');
+      await initPos();
+      return;
+    }
+
+    if (res.ok && data.status === 'pending') {
+      approvalPollStatusEl.textContent = 'Still waiting for supervisor approval…';
+      approvalTimerEl.textContent = formatApprovalTimer(
+        data.secondsRemaining,
+        data.expiresAt,
+      );
+      return;
+    }
+
+    stopApprovalPoll();
+
+    if (data.status === 'denied') {
+      hideApprovalGate();
+      showPinGate(data.reason || 'Supervisor denied login', {
+        pinAllowed: false,
+      });
+      return;
+    }
+
+    if (data.status === 'cancelled' || data.status === 'expired') {
+      hideApprovalGate();
+      const msg =
+        data.status === 'expired'
+          ? 'Login request expired. Sign in again.'
+          : 'Login request cancelled.';
+      showPinGate(msg, { pinAllowed: false });
+      return;
+    }
+
+    if (res.status === 401) {
+      hideApprovalGate();
+      showPinGate('No pending login request. Sign in again.', { pinAllowed: false });
+      return;
+    }
+
+    showApprovalError(data.error || 'Unable to check approval status');
+  } catch (error) {
+    console.error(error);
+    showApprovalError('Network error while waiting for approval');
+  }
+}
+
+function startApprovalPoll() {
+  stopApprovalPoll();
+  pollApprovalStatus();
+  approvalPollTimer = setInterval(pollApprovalStatus, APPROVAL_POLL_MS);
+}
+
+async function cancelApprovalWait() {
+  approvalCancelBtn.disabled = true;
+  try {
+    const res = await fetch('/api/cashier/approval/cancel', {
+      ...fetchOpts,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json().catch(() => ({}));
+    stopApprovalPoll();
+    hideApprovalGate();
+    if (!res.ok) {
+      showPinGate(data.error || 'Could not cancel request', { pinAllowed: false });
+      return;
+    }
+    showPinGate('Login request cancelled.', { pinAllowed: false });
+  } catch (error) {
+    console.error(error);
+    showApprovalError('Could not cancel request');
+  } finally {
+    approvalCancelBtn.disabled = false;
+  }
+}
+
+approvalCancelBtn.addEventListener('click', cancelApprovalWait);
+
 async function ensureCashierSession() {
   const res = await fetch('/api/cashier/session', fetchOpts);
   const data = await res.json();
+  configureIdpLink(data);
+
   if (data.ok) {
-    hidePinGate();
+    hideAllAuthOverlays();
     return true;
   }
+
+  if (data.pending) {
+    showApprovalGate(data.approval);
+    startApprovalPoll();
+    return false;
+  }
+
+  if (data.supervisorApprovalRequired && data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
+    showPinGate('', { pinAllowed: false });
+    return false;
+  }
+
   if (data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
     window.location.href = data.idpLoginUrl;
     return false;
   }
-  showPinGate(data.idpEnabled ? 'Enter PIN or use IdP sign-in below' : '');
+
+  showPinGate(data.idpEnabled ? 'Enter PIN or use IdP sign-in below' : '', {
+    pinAllowed: data.pinAllowed,
+  });
   return false;
 }
 
@@ -77,7 +269,7 @@ async function unlockCashier(pin) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    showPinGate(data.error || 'Invalid PIN');
+    showPinGate(data.error || 'Invalid PIN', { pinAllowed: true });
     return false;
   }
   hidePinGate();
@@ -87,7 +279,7 @@ async function unlockCashier(pin) {
 pinSubmitBtn.addEventListener('click', async () => {
   const pin = pinInputEl.value.trim();
   if (!pin) {
-    showPinGate('Enter PIN');
+    showPinGate('Enter PIN', { pinAllowed: true });
     return;
   }
   pinSubmitBtn.disabled = true;
@@ -143,7 +335,7 @@ async function loadCart() {
   const res = await fetch(`/api/cart${customerQs()}`, fetchOpts);
   const payload = await res.json();
   if (res.status === 401) {
-    showPinGate('Cashier sign-in required');
+    await ensureCashierSession();
     return;
   }
   if (!res.ok) {
@@ -155,7 +347,7 @@ async function loadCart() {
   const subPublic = Number(payload.subtotalPreMember || 0);
   const subPay = Number(payload.subtotalPayable || 0);
   const disc = Number(payload.memberDiscountPreTax || 0);
-  const linked = !!payload.linked893; // true when any customer is linked at checkout
+  const linked = !!payload.linked893;
 
   cartEl.innerHTML = items.length
     ? items
@@ -225,7 +417,7 @@ async function addToCart(productId) {
     body: JSON.stringify({ productId }),
   });
   if (res.status === 401) {
-    showPinGate('Cashier sign-in required — sign in again (server may have restarted)');
+    await ensureCashierSession();
     return;
   }
   if (!res.ok) {
@@ -306,7 +498,7 @@ async function initPos() {
     setStatus('Ready');
   } catch (error) {
     if (error && error.message && String(error).includes('401')) {
-      showPinGate('Cashier sign-in required');
+      await ensureCashierSession();
       return;
     }
     setStatus('Failed to load POS');
@@ -315,23 +507,40 @@ async function initPos() {
 }
 
 async function init() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('approval') === 'pending') {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+
   const res = await fetch('/api/cashier/session', fetchOpts);
   const data = await res.json();
-  const idpLink = document.getElementById('idpLoginLink');
-  if (idpLink && data.idpEnabled) {
-    idpLink.hidden = false;
-    if (data.idpLoginUrl) idpLink.href = data.idpLoginUrl;
-  }
+  configureIdpLink(data);
+
   if (data.ok) {
-    hidePinGate();
+    hideAllAuthOverlays();
     await initPos();
     return;
   }
+
+  if (data.pending) {
+    showApprovalGate(data.approval);
+    startApprovalPoll();
+    return;
+  }
+
+  if (data.supervisorApprovalRequired && data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
+    showPinGate('', { pinAllowed: false });
+    return;
+  }
+
   if (data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
     window.location.href = data.idpLoginUrl;
     return;
   }
-  showPinGate(data.idpEnabled ? 'Enter PIN or use IdP sign-in below' : '');
+
+  showPinGate(data.idpEnabled ? 'Enter PIN or use IdP sign-in below' : '', {
+    pinAllowed: data.pinAllowed,
+  });
 }
 
 init();

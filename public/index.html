@@ -20,11 +20,26 @@
   <div id="pinGate" class="pin-gate" hidden>
     <div class="pin-card">
       <h2>Cashier sign-in</h2>
-      <p class="pin-hint">Enter store PIN</p>
-      <input id="pinInput" type="password" inputmode="numeric" autocomplete="off" maxlength="8" />
-      <button type="button" id="pinSubmitBtn">Sign in</button>
+      <div id="pinSignInBlock">
+        <p class="pin-hint">Enter store PIN</p>
+        <input id="pinInput" type="password" inputmode="numeric" autocomplete="off" maxlength="8" />
+        <button type="button" id="pinSubmitBtn">Sign in</button>
+      </div>
+      <p id="signInIdpHint" class="pin-hint" hidden>Sign in with your store account to open the register.</p>
       <p class="pin-hint"><a id="idpLoginLink" href="/oauth/login" hidden>Sign in with store account (Oracle)</a></p>
       <p id="pinError" class="pin-error" hidden></p>
+    </div>
+  </div>
+
+  <div id="approvalGate" class="pin-gate" hidden>
+    <div class="pin-card approval-card">
+      <h2>Waiting for supervisor</h2>
+      <p id="approvalLead" class="pin-hint">Your login request was sent. A supervisor must approve before you can use the register.</p>
+      <p id="approvalCashier" class="pin-hint"></p>
+      <p id="approvalTimer" class="pin-hint"></p>
+      <p id="approvalPollStatus" class="pin-hint approval-poll-status">Checking approval status…</p>
+      <button type="button" id="approvalCancelBtn" class="btn-secondary">Cancel request</button>
+      <p id="approvalError" class="pin-error" hidden></p>
     </div>
   </div>
 

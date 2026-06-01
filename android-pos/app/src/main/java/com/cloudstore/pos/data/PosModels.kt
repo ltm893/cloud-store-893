@@ -54,8 +54,39 @@ data class Sale(
     @Json(name = "subtotalPreMember") val subtotalPreMember: Double = 0.0,
 )
 
-data class UnlockResponse(
+data class OkResponse(
     val ok: Boolean = false,
+)
+
+/** @deprecated Use [CashierSessionResponse] for session probe. */
+typealias UnlockResponse = OkResponse
+
+data class PendingApprovalInfo(
+    @Json(name = "requestToken") val requestToken: String? = null,
+    val status: String? = null,
+    @Json(name = "expiresAt") val expiresAt: String? = null,
+    @Json(name = "cashierEmail") val cashierEmail: String? = null,
+    @Json(name = "secondsRemaining") val secondsRemaining: Int? = null,
+)
+
+data class CashierSessionResponse(
+    val ok: Boolean = false,
+    val pending: Boolean = false,
+    @Json(name = "supervisorApprovalRequired") val supervisorApprovalRequired: Boolean = false,
+    @Json(name = "idpEnabled") val idpEnabled: Boolean = false,
+    @Json(name = "idpLoginUrl") val idpLoginUrl: String? = null,
+    @Json(name = "pinAllowed") val pinAllowed: Boolean = true,
+    val approval: PendingApprovalInfo? = null,
+    val error: String? = null,
+)
+
+data class ApprovalStatusResponse(
+    val status: String,
+    val ok: Boolean = false,
+    val reason: String? = null,
+    @Json(name = "secondsRemaining") val secondsRemaining: Int? = null,
+    @Json(name = "expiresAt") val expiresAt: String? = null,
+    val error: String? = null,
 )
 
 data class CartLineQuantity(

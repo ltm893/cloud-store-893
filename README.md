@@ -31,13 +31,15 @@ Two **separate** app sessions — cashier (POS) and admin — each with its own 
 | Web POS `/`, tablet | `cashier_session` | PIN → `POST /api/cashier/unlock` | OIDC (`/oauth/login`) |
 | Admin `/admin/` | `admin_session` | PIN on `/admin/login.html` | OIDC (`/oauth/admin/login`) |
 
+**Model B (supervisor approval)** — on branch `feature/cashier-supervisor-approval`: when `CASHIER_SUPERVISOR_APPROVAL=true`, cashier OIDC creates a **pending** login; a supervisor approves in admin before `cashier_session` is issued. Web POS, admin panel, and Android tablet support this flow. See [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md).
+
 - **Protected:** cart, checkout, customers, sales APIs; all `/api/admin/*`.
 - **Public:** `GET /api/products` (catalog only).
 - **Local dev:** PINs and IdP settings in **`.env`** (see `.env.example`).
 - **OCI container:** PINs from **`terraform.tfvars`** (`cashier_pin`, `admin_pin`); IdP vars are **not** copied from `.env` automatically — add them via Terraform or the container console, then re-apply/restart.
 - **IdP:** Optional Oracle Identity Domain confidential clients; redirect URIs must match `APP_PUBLIC_URL` / callback paths on the host you deploy. Details: [docs/idp-setup.md](docs/idp-setup.md), app reset: [docs/idp-level1-reset.md](docs/idp-level1-reset.md).
 
-With IdP configured, `IDP_ALLOW_PIN=true` (default) keeps PIN login available alongside Oracle sign-in.
+With IdP configured, `IDP_ALLOW_PIN=true` (default) keeps PIN login available alongside Oracle sign-in. With Model B enabled, PIN unlock is blocked (`403`) and IdP sign-in is required.
 
 ---
 
@@ -201,7 +203,14 @@ Available npm scripts:
 | `npm run dev:up` | preflight + `node --watch server.js` (recommended) |
 | `npm run sync-env` | rewrites `.env`'s `ORDS_BASE_URL` from `terraform output` |
 | `npm run lan-url` | prints `http://<your-mac-lan-ip>:3000/` |
-| `npm run test:auth` | curl checks that POS/admin APIs require sessions |
+| `npm run test:auth` | curl checks that POS/admin APIs require sessions (manual; server must be running) |
+| `npm run test:api` | curl smoke tests for POS/admin APIs (manual; destructive phase — see script) |
+| `npm run test:login-approval` | ORDS smoke test for Model B login-approval store (manual; live ADB) |
+| `npm run test:supervisor-routes` | HTTP smoke test for supervisor approval routes (manual; server + env — see [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md#testing-manual-today)) |
+| `npm run test:cashier-approval-session` | Pending cookie + `/api/cashier/session` for Model B (manual; server needs `CASHIER_SUPERVISOR_APPROVAL=true`) |
+| `npm run test:cashier-approval-poll` | Poll → supervisor approve → session cookie E2E (manual; server + supervisor env) |
+
+`npm test` is not wired to these yet — they are opt-in. Planned CI / `npm test` aggregation: [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md#later--wire-into-normal-workflow-todo).
 
 Typical flow after a `terraform apply` that may have changed the ADB
 hostname:

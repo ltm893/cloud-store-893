@@ -12,16 +12,6 @@ if (!ORDS_BASE) {
 
 app.use(express.json());
 
-const { registerCashierAuth, requireCashierForPosApi } = require('./lib/cashier-auth');
-const { registerAdminAuth, requireAdminSession, protectAdminPages } = require('./lib/admin-auth');
-registerCashierAuth(app);
-registerAdminAuth(app);
-app.use('/admin', protectAdminPages);
-app.use('/api/admin', requireAdminSession);
-app.use(requireCashierForPosApi);
-
-app.use(express.static('public'));
-
 // ── ORDS helpers ──────────────────────────────────────────────────────────
 
 async function ordsGet(path) {
@@ -77,6 +67,24 @@ async function ordsDelete(path) {
   const res = await fetch(`${ORDS_BASE}/${path}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`ORDS DELETE ${path} → ${res.status}`);
 }
+
+const { createLoginApprovalStore } = require('./lib/login-approval');
+const loginApprovalStore = createLoginApprovalStore({
+  ordsGet,
+  ordsPost,
+  ordsPut,
+  ordsTimestamp,
+});
+
+const { registerCashierAuth, requireCashierForPosApi } = require('./lib/cashier-auth');
+const { registerAdminAuth, requireAdminSession, protectAdminPages } = require('./lib/admin-auth');
+registerCashierAuth(app, { loginApprovalStore });
+registerAdminAuth(app);
+app.use('/admin', protectAdminPages);
+app.use('/api/admin', requireAdminSession);
+app.use(requireCashierForPosApi);
+
+app.use(express.static('public'));
 
 // ── Pricing (pre-tax): public shelf/sale totals vs linked customer (10% off pre-tax) ─
 
@@ -588,6 +596,9 @@ app.post('/api/checkout', async (req, res) => {
 });
 
 const { registerAdminRoutes } = require('./lib/admin-routes');
+const { registerSupervisorRoutes } = require('./lib/supervisor-routes');
+
+registerSupervisorRoutes(app, { loginApprovalStore });
 registerAdminRoutes(app, { ordsGet, ordsPost, ordsPut, ordsDelete, ordsTimestamp });
 
 app.get('/api/sales/recent', async (req, res) => {

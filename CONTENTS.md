@@ -1,6 +1,6 @@
 # Cloud Store 893 — session handoff
 
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
 
@@ -98,7 +98,7 @@ npm run dev:up
 
 ## Tablet POS (`android-pos/`)
 
-- **Login:** Numpad + **Done** → server PIN check (not in APK).
+- **Login:** Numpad + **Done** when PIN is allowed; **Sign in with Oracle** (WebView) when IdP / Model B is on; **Waiting for supervisor** screen polls until approved. Server PIN check (not in APK).
 - **Menu (☰):** Show/hide status, find customer / keypad, unlink (when linked), sync/discard queue (when queued), Admin (browser), Lock.
 - **Add item:** Numpad digit(s) + **Add**, or **Scan** (camera), or full barcode string.
 - **Cash pay:** Split tender on **Pay** → amount numpad + **Cash** / **Card** / **CardOnFile** (when linked customer has card); auto-finalize at $0 balance.
@@ -256,6 +256,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 - **Phase 1 (in repo):** Cashier session cookies + optional ingress CIDR lockdown — see [docs/idp-setup.md](docs/idp-setup.md).
 - **Phase 2 (OCI Console):** Separate Identity Domain + OIDC clients for POS and admin.
+- **Phase 3 (feature branch `feature/cashier-supervisor-approval`):** IdP cashier login + **supervisor approval** before session — **steps 1–8 implemented** (server, web POS, admin panel, Android tablet). Living doc: [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md). **Remaining:** OCI IdM group claims in console (step 9), CI/`npm test` wiring (step 10).
 - **Start over (Level 1):** [docs/idp-level1-reset.md](docs/idp-level1-reset.md) — delete/recreate integrated apps only.
 
 ---
@@ -277,12 +278,28 @@ export PATH="$JAVA_HOME/bin:$PATH"
 4. Tablet: PIN **Done** → add product **1** → **Pay** → **Complete Sale**
 5. `☰` → Admin opens in browser
 
+**Model B (supervisor approval, feature branch):** optional manual checks — not part of `dev:up`. See [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md#testing-manual-today) and [End-to-end (web + admin + tablet)](docs/cashier-supervisor-approval.md#end-to-end-manual-web--admin--tablet). CI / `npm test` wiring is [TODO later](docs/cashier-supervisor-approval.md#later--wire-into-normal-workflow-todo).
+
+Quick Model B smoke (two terminals):
+
+```bash
+# Terminal 1 — server (flags must be on the Node process)
+CASHIER_SUPERVISOR_APPROVAL=true CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true npm run dev:up
+
+# Terminal 2 — automated HTTP checks
+CASHIER_SUPERVISOR_APPROVAL=true npm run test:cashier-approval-session
+CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true npm run test:supervisor-routes
+CASHIER_SUPERVISOR_APPROVAL=true CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true npm run test:cashier-approval-poll
+```
+
+Then manually: cashier signs in (web `/` or tablet **Sign in with Oracle**) → admin **Login approvals** → **Approve** → register loads.
+
 ---
 
 ## Known issues / follow-ups
 
 - Admin + cashier use **shared PIN in env** — not production-grade on a public IP; add HTTPS and stronger auth later.
-- Web POS has no cashier gate (intentional).
+- Web POS has cashier gate + Model B waiting screen when supervisor approval is enabled.
 - Android `build/` artifacts can dirty `git status` — keep `.gitignore` tight.
 - Optional: discard-queue button, cart snapshot in offline queue, receipt printing.
 
@@ -402,7 +419,7 @@ POS sends (conceptually): amount, currency, sale reference (`orderNumber`), opti
 ## Branch & repo
 
 ```bash
-git branch --show-current   # expect dev
+git branch --show-current   # feature/cashier-supervisor-approval (Model B) or dev
 git log -1 --oneline
 ```
 

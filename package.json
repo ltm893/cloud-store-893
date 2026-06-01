@@ -10,7 +10,11 @@
     "lan-url": "echo \"http://$(ipconfig getifaddr en0 || ipconfig getifaddr en1):${PORT:-3000}/\"",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:api": "./scripts/test-api-curl.sh",
-    "test:auth": "./scripts/test-auth-protection.sh"
+    "test:auth": "./scripts/test-auth-protection.sh",
+    "test:login-approval": "node scripts/test-login-approval-lib.js",
+    "test:supervisor-routes": "./scripts/test-supervisor-routes.sh",
+    "test:cashier-approval-session": "./scripts/test-cashier-approval-session.sh",
+    "test:cashier-approval-poll": "./scripts/test-cashier-approval-poll.sh"
   },
   "keywords": [],
   "author": "",

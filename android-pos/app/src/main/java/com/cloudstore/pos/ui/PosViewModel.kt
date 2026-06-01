@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.CartResponse
+import com.cloudstore.pos.data.CashierSessionResponse
 import com.cloudstore.pos.data.CheckoutPayment
 import com.cloudstore.pos.data.OfflineQueueStore
 import com.cloudstore.pos.data.PendingCheckout
@@ -27,6 +28,21 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
+private const val APPROVAL_POLL_MS = 2500L
+
+sealed class CashierAuthGate {
+    data object Checking : CashierAuthGate()
+    data object SignedIn : CashierAuthGate()
+    data object OidcSignIn : CashierAuthGate()
+    data class PinSignIn(
+        val pinAllowed: Boolean = true,
+    ) : CashierAuthGate()
+    data class WaitingApproval(
+        val email: String? = null,
+        val secondsRemaining: Int? = null,
+    ) : CashierAuthGate()
+}
+
 data class PosUiState(
     val loading: Boolean = false,
     val products: List<Product> = emptyList(),
@@ -46,6 +62,9 @@ data class PosUiState(
     val quantityEditInput: String = "",
     val status: String = "Ready",
     val isAuthenticated: Boolean = false,
+    val authGate: CashierAuthGate = CashierAuthGate.Checking,
+    val idpLoginUrl: String? = null,
+    val pinAllowed: Boolean = true,
     val pinInput: String = "",
     val queuedCheckoutCount: Int = 0,
     val queueSyncing: Boolean = false,
@@ -82,9 +101,12 @@ class PosViewModel(
     private var cartRefreshGeneration = 0
     private var cardProcessingJob: Job? = null
     private var finalizeJob: Job? = null
+    private var approvalPollJob: Job? = null
+    private var oidcCompleting = false
 
     init {
         _state.update { it.copy(queuedCheckoutCount = queueStore.all().size) }
+        probeCashierSession()
         viewModelScope.launch {
             state.map { it.isAuthenticated }
                 .distinctUntilChanged()
@@ -381,6 +403,233 @@ class PosViewModel(
         }
     }
 
+    fun openOidcSignIn() {
+        _state.update { it.copy(authGate = CashierAuthGate.OidcSignIn) }
+    }
+
+    fun cancelOidcSignIn() {
+        _state.update {
+            it.copy(
+                authGate = CashierAuthGate.PinSignIn(pinAllowed = it.pinAllowed),
+                status = "Ready",
+            )
+        }
+    }
+
+    fun onOidcWebViewComplete() {
+        if (oidcCompleting) return
+        oidcCompleting = true
+        viewModelScope.launch {
+            try {
+                _state.update { it.copy(status = "Completing sign-in…") }
+                repository.syncWebViewCookies()
+                runCatching { repository.cashierSession() }
+                    .onSuccess { applySessionProbe(it) }
+                    .onFailure { err ->
+                        _state.update {
+                            it.copy(
+                                authGate = CashierAuthGate.PinSignIn(pinAllowed = it.pinAllowed),
+                                status = connectivityMessage(err),
+                            )
+                        }
+                    }
+            } finally {
+                oidcCompleting = false
+            }
+        }
+    }
+
+    fun cancelApprovalWait() {
+        viewModelScope.launch {
+            stopApprovalPoll()
+            _state.update { it.copy(status = "Cancelling…") }
+            runCatching { repository.cancelApproval() }
+            repository.clearCashierCookies()
+            showSignInGate(
+                pinAllowed = _state.value.pinAllowed,
+                idpLoginUrl = _state.value.idpLoginUrl,
+                status = "Login request cancelled",
+            )
+        }
+    }
+
+    private fun probeCashierSession() {
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    authGate = CashierAuthGate.Checking,
+                    isAuthenticated = false,
+                    status = "Checking session…",
+                )
+            }
+            runCatching { repository.cashierSession() }
+                .onSuccess { applySessionProbe(it) }
+                .onFailure { err ->
+                    showSignInGate(
+                        pinAllowed = true,
+                        idpLoginUrl = null,
+                        status = connectivityMessage(err),
+                    )
+                }
+        }
+    }
+
+    private fun applySessionProbe(session: CashierSessionResponse) {
+        val idpUrl = if (session.idpEnabled) resolveIdpLoginUrl(session.idpLoginUrl) else null
+        when {
+            session.ok -> {
+                stopApprovalPoll()
+                _state.update {
+                    it.copy(
+                        isAuthenticated = true,
+                        authGate = CashierAuthGate.SignedIn,
+                        idpLoginUrl = idpUrl,
+                        pinAllowed = session.pinAllowed,
+                        pinInput = "",
+                        status = "Signed in",
+                    )
+                }
+                refresh()
+                flushOfflineQueue()
+            }
+            session.pending -> {
+                _state.update {
+                    it.copy(
+                        isAuthenticated = false,
+                        authGate = CashierAuthGate.WaitingApproval(
+                            email = session.approval?.cashierEmail,
+                            secondsRemaining = session.approval?.secondsRemaining,
+                        ),
+                        idpLoginUrl = idpUrl,
+                        pinAllowed = session.pinAllowed,
+                        status = "Waiting for supervisor approval",
+                    )
+                }
+                startApprovalPoll()
+            }
+            else -> {
+                showSignInGate(
+                    pinAllowed = session.pinAllowed,
+                    idpLoginUrl = idpUrl,
+                    status = "Ready",
+                )
+            }
+        }
+    }
+
+    private fun showSignInGate(
+        pinAllowed: Boolean,
+        idpLoginUrl: String?,
+        status: String,
+    ) {
+        stopApprovalPoll()
+        _state.update {
+            it.copy(
+                isAuthenticated = false,
+                authGate = CashierAuthGate.PinSignIn(pinAllowed = pinAllowed),
+                idpLoginUrl = idpLoginUrl,
+                pinAllowed = pinAllowed,
+                pinInput = "",
+                status = status,
+            )
+        }
+    }
+
+    private fun resolveIdpLoginUrl(relative: String?): String? {
+        if (relative.isNullOrBlank()) return null
+        val base = BuildConfig.API_BASE_URL.trimEnd('/')
+        val url = if (relative.startsWith("http://") || relative.startsWith("https://")) {
+            relative
+        } else {
+            val path = if (relative.startsWith("/")) relative else "/$relative"
+            "$base$path"
+        }
+        if (url.contains("client_kind=")) return url
+        val sep = if (url.contains('?')) '&' else '?'
+        return "$url${sep}client_kind=tablet"
+    }
+
+    private fun startApprovalPoll() {
+        approvalPollJob?.cancel()
+        approvalPollJob = viewModelScope.launch {
+            pollApprovalOnce()
+            while (true) {
+                delay(APPROVAL_POLL_MS)
+                pollApprovalOnce()
+            }
+        }
+    }
+
+    private fun stopApprovalPoll() {
+        approvalPollJob?.cancel()
+        approvalPollJob = null
+    }
+
+    private suspend fun pollApprovalOnce() {
+        if (_state.value.authGate !is CashierAuthGate.WaitingApproval) return
+        runCatching { repository.pollApprovalStatus() }
+            .onSuccess { status ->
+                when (status.status) {
+                    "approved" -> {
+                        if (status.ok) {
+                            stopApprovalPoll()
+                            runCatching { repository.cashierSession() }
+                                .onSuccess { applySessionProbe(it) }
+                        }
+                    }
+                    "pending" -> {
+                        _state.update {
+                            val gate = it.authGate
+                            it.copy(
+                                authGate = if (gate is CashierAuthGate.WaitingApproval) {
+                                    gate.copy(secondsRemaining = status.secondsRemaining)
+                                } else {
+                                    gate
+                                },
+                                status = "Waiting for supervisor approval",
+                            )
+                        }
+                    }
+                    "denied", "expired", "cancelled" -> {
+                        stopApprovalPoll()
+                        repository.clearCashierCookies()
+                        val msg = when (status.status) {
+                            "denied" -> status.reason ?: "Supervisor denied login"
+                            "expired" -> "Login request expired — sign in again"
+                            else -> "Login request cancelled"
+                        }
+                        showSignInGate(
+                            pinAllowed = _state.value.pinAllowed,
+                            idpLoginUrl = _state.value.idpLoginUrl,
+                            status = msg,
+                        )
+                    }
+                    else -> {
+                        if (status.error != null) {
+                            _state.update { it.copy(status = status.error) }
+                        }
+                    }
+                }
+            }
+            .onFailure { err ->
+                if (err is HttpException && err.code() == 401) {
+                    stopApprovalPoll()
+                    showSignInGate(
+                        pinAllowed = _state.value.pinAllowed,
+                        idpLoginUrl = _state.value.idpLoginUrl,
+                        status = "No pending login request — sign in again",
+                    )
+                }
+            }
+    }
+
+    private fun connectivityMessage(err: Throwable): String =
+        when (err) {
+            is HttpException -> "Server error (${err.code()})"
+            is IOException -> "Cannot reach server — check Wi‑Fi and API URL (${BuildConfig.API_BASE_URL})"
+            else -> err.message ?: "Connection failed"
+        }
+
     fun unlock() {
         val entered = _state.value.pinInput
         if (entered.isBlank()) {
@@ -403,13 +652,14 @@ class PosViewModel(
                     val msg = when (err) {
                         is HttpException -> when (err.code()) {
                             401 -> "Invalid PIN"
+                            403 -> "Supervisor approval required — use Oracle sign-in"
                             404 -> "Server needs update (missing login API)"
                             else -> "Server error (${err.code()})"
                         }
                         else -> when {
                             err.message?.contains("did not persist", ignoreCase = true) == true ->
                                 err.message!!
-                            else -> "Cannot reach server — check Wi‑Fi and API URL (${BuildConfig.API_BASE_URL})"
+                            else -> connectivityMessage(err)
                         }
                     }
                     _state.value = _state.value.copy(
@@ -422,14 +672,19 @@ class PosViewModel(
 
     fun lock() {
         viewModelScope.launch {
+            stopApprovalPoll()
             runCatching { repository.logoutCashier() }
             _state.value = PosUiState(
                 isAuthenticated = false,
+                authGate = CashierAuthGate.PinSignIn(pinAllowed = _state.value.pinAllowed),
+                idpLoginUrl = _state.value.idpLoginUrl,
+                pinAllowed = _state.value.pinAllowed,
                 pinInput = "",
                 barcodeInput = "",
                 queuedCheckoutCount = queueStore.all().size,
                 status = "Signed out",
             )
+            probeCashierSession()
         }
     }
 
@@ -747,6 +1002,11 @@ class PosViewModel(
             queuedCheckoutCount = 0,
             status = "Offline queue cleared",
         )
+    }
+
+    override fun onCleared() {
+        stopApprovalPoll()
+        super.onCleared()
     }
 
 }

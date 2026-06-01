@@ -109,6 +109,98 @@ body.nav-open .side-nav {
   font-weight: 600;
 }
 
+.approvals-nav {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.approvals-panel h2 {
+  margin: 0 0 4px;
+  color: var(--accent-2);
+}
+
+.approvals-forbidden {
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: #fef3f2;
+  border: 1px solid #f5c2c0;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.approvals-forbidden code {
+  font-size: 0.85em;
+}
+
+.approvals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.approval-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.approval-card-main {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.approval-card-main strong {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.approval-meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.approval-actions button {
+  font-size: 0.85rem;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.approval-actions button.approve-btn {
+  background: var(--accent-2);
+  color: #fff;
+  border-color: var(--accent-2);
+}
+
+.approval-actions button.deny-btn {
+  color: var(--danger);
+  border-color: #f5c2c0;
+}
+
+.approvals-empty {
+  margin-top: 8px;
+}
+
 .admin-main {
   padding: 16px;
   margin-left: 0;

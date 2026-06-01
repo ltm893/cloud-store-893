@@ -24,6 +24,14 @@ class MemoryCookieJar : CookieJar {
         }
     }
 
+    fun clearHost(host: String) {
+        store.remove(host)
+    }
+
+    fun clearAll() {
+        store.clear()
+    }
+
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
         val hostKey = url.host
         val bucket = store[hostKey] ?: return emptyList()
