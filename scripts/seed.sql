@@ -33,11 +33,13 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE customers';  EXCEPTION WHEN OTHERS THEN NULL
 -- ── 1. PRODUCTS table ─────────────────────────────────────────────────────────
 
 CREATE TABLE products (
-  id         NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  barcode    VARCHAR2(32)   NOT NULL UNIQUE,
-  name       VARCHAR2(200)  NOT NULL,
-  price      NUMBER(10, 2)  NOT NULL,
-  sale_price NUMBER(10, 2)
+  id           NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  barcode      VARCHAR2(32)   NOT NULL UNIQUE,
+  name         VARCHAR2(200)  NOT NULL,
+  product_type VARCHAR2(50)   NOT NULL,
+  manufacturer VARCHAR2(200)  NOT NULL,
+  price        NUMBER(10, 2)  NOT NULL,
+  sale_price   NUMBER(10, 2)
 );
 
 
@@ -248,13 +250,47 @@ END;
 /
 
 
--- ── 16. Sample products ───────────────────────────────────────────────────────
+-- ── 16. Sample products — Java Rocks (coffee store) ───────────────────────────
 
-INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000001', 'OCI Foundations Study Guide',  29.99, NULL);
-INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000002', 'Terraform on OCI T-Shirt',     24.99, NULL);
-INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000003', 'Cloud Architecture Poster',    14.99, 12.99);
-INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000004', 'Autonomous Database Mug',       9.99, NULL);
-INSERT INTO products (barcode, name, price, sale_price) VALUES ('100000000005', 'Always Free Tier Sticker Pack', 4.99, NULL);
+-- Made coffee (bar)
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000001', 'Java Rocks House Drip 12oz', 'made coffee', 'Java Rocks Bar', 3.75, NULL);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000002', 'Java Rocks Latte 16oz', 'made coffee', 'Java Rocks Bar', 5.50, NULL);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000003', 'Java Rocks Cappuccino 12oz', 'made coffee', 'Java Rocks Bar', 5.25, NULL);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000004', 'Java Rocks Cold Brew 16oz', 'made coffee', 'Java Rocks Bar', 4.95, 4.25);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000005', 'Java Rocks Double Espresso', 'made coffee', 'Java Rocks Bar', 3.50, NULL);
+
+-- Coffee beans (retail bags)
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000101', 'Java Rocks Colombia Supremo 12oz', 'coffee beans', 'Java Rocks Roastery', 16.99, NULL);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000102', 'Java Rocks Ethiopia Yirgacheffe 12oz', 'coffee beans', 'Java Rocks Roastery', 18.99, NULL);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000103', 'Java Rocks Espresso Roast 1lb', 'coffee beans', 'Java Rocks Roastery', 17.49, 15.99);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000104', 'Java Rocks Decaf Swiss Water 12oz', 'coffee beans', 'Swiss Water Process Co.', 15.99, NULL);
+
+-- Branded go cups
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000201', 'Java Rocks 16oz Travel Tumbler', 'go cups', 'Pacific Drinkware Co.', 12.99, NULL);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000202', 'Java Rocks 20oz Go Cup', 'go cups', 'Pacific Drinkware Co.', 14.99, NULL);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000203', 'Java Rocks 24oz Cold Cup', 'go cups', 'Evergreen Reusables', 11.99, 9.99);
+
+-- Clothes
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000301', 'Java Rocks Logo Tee — Navy', 'clothes', 'Bella+Canvas', 24.99, NULL);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000302', 'Java Rocks Logo Tee — Black', 'clothes', 'Bella+Canvas', 24.99, NULL);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000303', 'Java Rocks Hoodie — Charcoal', 'clothes', 'Independent Trading Co.', 49.99, NULL);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
+VALUES ('872000000304', 'Java Rocks Barista Apron', 'clothes', 'Chef Works', 29.99, NULL);
 
 -- ── 17. Sample customers ──────────────────────────────────────────────────────
 
@@ -262,13 +298,13 @@ INSERT INTO customers (name, email, phone, address_line1, city, state, postal_co
 VALUES (
   'Alex Rivera',
   'alex.rivera@example.com',
-  '555-010-8930',
-  '893 Cloud Way',
-  'Ashburn',
-  'VA',
-  '20147',
+  '555-010-8720',
+  '42 Roaster Row',
+  'Portland',
+  'OR',
+  '97209',
   '4532015112830366',
-  '893'
+  'JR-893'
 );
 
 INSERT INTO customers (name, email, phone, address_line1, city, state, postal_code, card_fake, member_code)
@@ -277,9 +313,9 @@ VALUES (
   'jordan@example.com',
   '555-010-0001',
   '100 Public Rd',
-  'Ashburn',
-  'VA',
-  '20147',
+  'Portland',
+  'OR',
+  '97201',
   '4111111111111111',
   NULL
 );
