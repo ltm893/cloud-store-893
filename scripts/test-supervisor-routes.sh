@@ -94,6 +94,18 @@ echo "-- Admin login --"
 curl_req POST "$BASE_URL/api/admin/login" -c "$ADMIN_JAR" -d "{\"pin\":\"$ADMIN_PIN\"}"
 [[ "$HTTP_CODE" == "200" ]] && log_ok "POST /api/admin/login → 200" || log_fail "POST /api/admin/login → $HTTP_CODE"
 
+curl_req GET -b "$ADMIN_JAR" "$BASE_URL/api/admin/session"
+if [[ "$HTTP_CODE" == "200" ]]; then
+  SERVER_SUPERVISOR=$(python3 -c "import json; print(json.load(open('$BODY')).get('isSupervisor', False))" 2>/dev/null || echo "False")
+  if [[ "$PIN_SUPERVISOR" == "true" || "$PIN_SUPERVISOR" == "1" || "$PIN_SUPERVISOR" == "yes" ]]; then
+    if [[ "$SERVER_SUPERVISOR" == "True" ]]; then
+      log_ok "server reports isSupervisor (PIN fallback on server process)"
+    else
+      log_fail "server isSupervisor=false — restart dev:up with CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true on the Node process"
+    fi
+  fi
+fi
+
 echo ""
 echo "-- Supervisor routes with admin session --"
 curl_req GET -b "$ADMIN_JAR" -c "$ADMIN_JAR" "$BASE_URL/api/admin/login-approvals?status=pending"
@@ -119,8 +131,9 @@ esac
 
 if [[ "$HTTP_CODE" == "403" ]]; then
   echo ""
-  echo "  Tip: set CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true for local PIN-based supervisor tests,"
-  echo "  or sign in via admin IdP with group store-supervisors."
+  echo "  Tip: CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR must be set when starting the server, e.g."
+  echo "    CASHIER_SUPERVISOR_APPROVAL=true CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true npm run dev:up"
+  echo "  Or sign in via admin IdP with group store-supervisors."
   echo ""
   echo "== done: $pass passed, $fail failed =="
   [[ "$fail" -eq 0 ]]

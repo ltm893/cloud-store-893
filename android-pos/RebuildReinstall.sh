@@ -68,13 +68,24 @@ if ! command -v "$ADB" >/dev/null 2>&1; then
   exit 1
 fi
 
-DEVICES="$("$ADB" devices | awk 'NR>1 && $2=="device" { print $1 }')"
-if [[ -z "$DEVICES" ]]; then
+# adb uses TAB between serial and state; wireless serials can contain spaces.
+ADB_SERIAL="${ADB_SERIAL:-}"
+DEVICE_COUNT=0
+while IFS= read -r serial; do
+  [[ -z "$serial" ]] && continue
+  DEVICE_COUNT=$((DEVICE_COUNT + 1))
+  [[ -z "$ADB_SERIAL" ]] && ADB_SERIAL="$serial"
+done < <("$ADB" devices | awk -F'\t' 'NR>1 && $2=="device" { print $1 }')
+
+if [[ "$DEVICE_COUNT" -eq 0 ]]; then
   echo "error: no adb device/emulator (run: adb devices)" >&2
   exit 1
 fi
+if [[ "$DEVICE_COUNT" -gt 1 ]]; then
+  echo "==> Multiple devices; using ADB_SERIAL=$ADB_SERIAL (set ADB_SERIAL to override)"
+fi
 
-echo "==> $ADB install -r $APK"
-"$ADB" install -r "$APK"
+echo "==> $ADB -s \"$ADB_SERIAL\" install -r $APK"
+"$ADB" -s "$ADB_SERIAL" install -r "$APK"
 
 echo "==> Done. Cloud Store POS debug APK installed."

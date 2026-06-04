@@ -51,7 +51,10 @@ else
 import sys, json
 items = json.load(sys.stdin)
 for r in items:
-    print(f\"  {r.get('type','?'):<45} {r.get('state','?'):<20} {r.get('name','?')}\")
+    r_type = r.get('type') or '?'
+    r_state = r.get('state') or '?'
+    r_name = r.get('name') or '?'
+    print(f\"  {r_type:<45} {r_state:<20} {r_name}\")
 print()
 print(f'Total: {len(items)} resource(s)')
 "

@@ -245,6 +245,27 @@ Copy `.env.example` → `.env`. Never commit `.env`.
 
 After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && terraform apply` (no image rebuild required).
 
+### OCI env parity checklist
+
+Local `.env` changes do **not** apply to the OCI container until you copy them there and restart. Use this after `terraform apply` (public IP may change) or when OAuth shows `invalid_redirect_uri` / `idpEnabled: false`.
+
+1. **Current app URL** — `cd terraform && terraform output app_url` (e.g. `http://150.136.208.81:3000`).
+2. **Set on the container** (Console → Container instance → container → Environment variables), matching `.env`:
+   - `APP_PUBLIC_URL` = that URL (no trailing slash)
+   - `IDP_POS_ISSUER`, `IDP_POS_CLIENT_ID`, `IDP_POS_CLIENT_SECRET`
+   - `IDP_ADMIN_ISSUER`, `IDP_ADMIN_CLIENT_ID`, `IDP_ADMIN_CLIENT_SECRET`
+   - Optional Model B: `CASHIER_SUPERVISOR_APPROVAL`, `CASHIER_APPROVAL_TTL_SEC`, group names, etc.
+   - **Do not** set `IDP_POS_REDIRECT_URI` / `IDP_ADMIN_REDIRECT_URI` unless you need an override — omit them so redirects are built from `APP_PUBLIC_URL` (see [docs/idp-setup.md](docs/idp-setup.md#51-oauth-flow-at-code-level)).
+3. **Oracle Identity** — on `cloud-store-pos` and `cloud-store-admin`, add redirect URLs for the **current** host (`/oauth/callback`, `/oauth/admin/callback`). Update Application URL if it still shows an old IP.
+4. **Restart container** — `./scripts/restart-container-instance.sh` (waits for restart to succeed).
+5. **Verify on OCI host** (not Mac localhost):
+   ```bash
+   APP=$(cd terraform && terraform output -raw app_url)
+   curl -s "$APP/api/cashier/session"    # expect "idpEnabled": true when IdP is wired
+   curl -sI "$APP/oauth/login" | grep -i '^location:'   # expect 302 to Oracle with redirect_uri matching APP
+   ```
+6. **Tablet** — rebuild only if `API_BASE_URL` changed: `RELEASE_API_BASE_URL=<app_url> ./RebuildReinstall.sh` in `android-pos/`.
+
 ### Admin UI
 
 - **URL:** `/admin/` (e.g. `http://localhost:3000/admin/` or `terraform output app_url` + `/admin/`)

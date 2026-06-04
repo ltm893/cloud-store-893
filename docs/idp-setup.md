@@ -140,6 +140,65 @@ IDP_ALLOW_PIN=true
 
 Without IdP env vars, **PIN-only** behavior is unchanged. With IdP configured, web POS shows an Oracle sign-in link; APIs also accept `Authorization: Bearer <access_token>`.
 
+### 5.1 OAuth flow at code level
+
+This section maps the runtime flow to exact server code, so redirect/host bugs are easier to debug.
+
+#### Config resolution (where redirect URI comes from)
+
+- `server.js` loads `.env` via `dotenv`.
+- `lib/oidc-core.js`:
+  - `appPublicUrl()` reads `APP_PUBLIC_URL` (fallback `http://127.0.0.1:${PORT}`).
+  - `loadClientConfig(role, defaultRedirectUri)` builds OIDC config.
+  - Redirect URI precedence:
+    1. `IDP_<ROLE>_REDIRECT_URI` (explicit override)
+    2. Default from `APP_PUBLIC_URL`:
+       - POS: `${APP_PUBLIC_URL}/oauth/callback`
+       - ADMIN: `${APP_PUBLIC_URL}/oauth/admin/callback`
+
+If `IDP_POS_REDIRECT_URI` or `IDP_ADMIN_REDIRECT_URI` is set, it **overrides** `APP_PUBLIC_URL`.
+
+#### Route wiring
+
+- `lib/oidc-pos.js`:
+  - `getPosConfig()` -> `loadClientConfig('POS', ...)`
+  - `registerPosOidc(...)` registers:
+    - `GET /oauth/login` (start auth)
+    - callback path from `cfg.redirectUri` (usually `/oauth/callback`)
+- `lib/oidc-admin.js` does the same for:
+  - `GET /oauth/admin/login`
+  - callback path (usually `/oauth/admin/callback`)
+- `lib/oidc-core.js`:
+  - `registerOidcBrowserFlow(...)` creates login + callback handlers.
+  - `buildAuthorizeUrl(...)` sends `redirect_uri=<cfg.redirectUri>` to Oracle.
+  - `exchangeCode(...)` repeats the same `redirect_uri` in token exchange.
+
+#### Callback completion
+
+- POS callback success (`lib/oidc-pos.js`):
+  - Model A: issues `cashier_session`.
+  - Model B (`CASHIER_SUPERVISOR_APPROVAL=true`): creates pending row + sets `cashier_pending`.
+- Admin callback success (`lib/oidc-admin.js`):
+  - issues `admin_session`.
+
+#### Runtime verification commands
+
+```bash
+# 1) Is IdP enabled on this host?
+curl -s "http://<host>:3000/api/cashier/session"
+# expect: "idpEnabled": true
+
+# 2) Does /oauth/login exist and redirect to Oracle?
+curl -sI "http://<host>:3000/oauth/login" | grep -i '^location:'
+# expect: 302 Location: https://idcs-...&redirect_uri=http%3A%2F%2F<host>%3A3000%2Foauth%2Fcallback
+```
+
+Interpretation:
+
+- `404 /oauth/login` + `"idpEnabled": false` -> IdP env vars are missing on that running server/container.
+- `invalid_redirect_uri` with old host -> explicit `IDP_*_REDIRECT_URI` or stale `APP_PUBLIC_URL` on the running server.
+- Updating tablet APK alone does **not** change OAuth redirect URI; server env controls it.
+
 ### 6. HTTPS
 
 OIDC redirects require HTTPS in production. Options:
