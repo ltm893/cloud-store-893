@@ -139,9 +139,23 @@ if [[ "$RESERVED_STATE" == "ASSIGNED" && "$RESERVED_ASSIGNED_PRIVATE" == "$PRIVA
   echo ""
 fi
 
+detach_ephemeral_public_ips() {
+  local ephemeral_ids id
+  ephemeral_ids="$(oci network public-ip list \
+    --private-ip-id "$PRIVATE_IP_ID" \
+    --query 'data[?lifetime==`EPHEMERAL`].id' \
+    --raw-output 2>/dev/null || true)"
+  for id in $ephemeral_ids; do
+    [[ -z "$id" || "$id" == "null" ]] && continue
+    echo "==> Removing ephemeral public IP on new VNIC ($id)..."
+    oci network public-ip delete --public-ip-id "$id" --force --wait-for-state TERMINATED
+  done
+}
+
 if [[ "$NEEDS_REATTACH" == "true" ]]; then
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "[dry-run] would run:"
+    echo "  # delete any EPHEMERAL public IP on private IP $PRIVATE_IP_ID (if present)"
     echo "  oci network public-ip update \\"
     echo "    --public-ip-id \"$RESERVED_OCID\" \\"
     echo "    --private-ip-id \"$PRIVATE_IP_ID\" \\"
@@ -161,6 +175,7 @@ if [[ "$NEEDS_REATTACH" == "true" ]]; then
     fi
 
     echo "==> Reattaching reserved public IP..."
+    detach_ephemeral_public_ips
     oci network public-ip update \
       --public-ip-id "$RESERVED_OCID" \
       --private-ip-id "$PRIVATE_IP_ID" \

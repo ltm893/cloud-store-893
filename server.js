@@ -16,61 +16,17 @@ app.get('/api/build-info', (req, res) => {
   res.json({ buildId: process.env.BUILD_ID || 'unknown' });
 });
 
-// ── ORDS helpers ──────────────────────────────────────────────────────────
+// ── ORDS client ───────────────────────────────────────────────────────────
 
-async function ordsGet(path) {
-  const res = await fetch(`${ORDS_BASE}/${path}`);
-  if (!res.ok) throw new Error(`ORDS GET ${path} → ${res.status}`);
-  const data = await res.json();
-  return Array.isArray(data.items) ? data.items : data;
-}
-
-async function ordsTryGet(path) {
-  const res = await fetch(`${ORDS_BASE}/${path}`);
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (Array.isArray(data.items)) return data.items;
-  return data;
-}
-
-/** ORDS accepts ISO-8601 with Z; rejects milliseconds (e.g. .000Z). */
-function ordsTimestamp(date = new Date()) {
-  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
-}
-
-async function ordsPost(path, body) {
-  const res = await fetch(`${ORDS_BASE}/${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let detail = '';
-    try {
-      const errBody = await res.json();
-      detail = errBody.message || errBody.error || JSON.stringify(errBody);
-    } catch {
-      detail = await res.text().catch(() => '');
-    }
-    throw new Error(`ORDS POST ${path} → ${res.status}${detail ? `: ${detail}` : ''}`);
-  }
-  return res.json();
-}
-
-async function ordsPut(path, body) {
-  const res = await fetch(`${ORDS_BASE}/${path}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`ORDS PUT ${path} → ${res.status}`);
-  return res.json();
-}
-
-async function ordsDelete(path) {
-  const res = await fetch(`${ORDS_BASE}/${path}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`ORDS DELETE ${path} → ${res.status}`);
-}
+const { createOrdsClient } = require('./lib/ords-client');
+const {
+  ordsGet,
+  ordsTryGet,
+  ordsPost,
+  ordsPut,
+  ordsDelete,
+  ordsTimestamp,
+} = createOrdsClient(ORDS_BASE);
 
 const { createLoginApprovalStore } = require('./lib/login-approval');
 const loginApprovalStore = createLoginApprovalStore({
@@ -306,27 +262,6 @@ app.get('/api/customers', async (req, res) => {
 
 // ── Cart ──────────────────────────────────────────────────────────────────
 
-app.get('/api/cart', async (req, res) => {
-  try {
-    const raw = req.query.customerId;
-    let linked893 = false;
-    if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
-      const row = await ordsTryGet(`customers/${raw}`);
-      if (!row || Number(row.id) !== Number(raw)) {
-        return res.status(400).json({ error: 'Invalid customerId' });
-      }
-      linked893 = is893Member(row);
-    }
-
-    const cart = await ordsGet('cart_view/');
-    const rows = Array.isArray(cart) ? cart : [];
-    res.json(summarizeCart(rows, linked893));
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 async function resolveLinked893FromRequest(req) {
   const raw = req.query.customerId ?? req.body?.customerId;
   if (raw === undefined || raw === null || String(raw).trim() === '') {
@@ -339,28 +274,50 @@ async function resolveLinked893FromRequest(req) {
   return { linked893: is893Member(row), error: null };
 }
 
+async function fetchCartSummary(linked893) {
+  const cart = await ordsGet('cart_view/');
+  const rows = Array.isArray(cart) ? cart : [];
+  return summarizeCart(rows, linked893);
+}
+
+async function respondWithCart(req, res) {
+  const { linked893, error } = await resolveLinked893FromRequest(req);
+  if (error) {
+    res.status(400).json({ error });
+    return;
+  }
+  res.json(await fetchCartSummary(linked893));
+}
+
+async function upsertCartLine(productId) {
+  const filter = encodeURIComponent(JSON.stringify({ product_id: { $eq: productId } }));
+  const existing = await ordsGet(`cart_items/?q=${filter}`);
+
+  if (existing.length > 0) {
+    const item = existing[0];
+    await ordsPut(`cart_items/${item.id}`, {
+      product_id: item.product_id,
+      quantity: item.quantity + 1,
+    });
+  } else {
+    await ordsPost('cart_items/', { product_id: productId, quantity: 1 });
+  }
+}
+
+app.get('/api/cart', async (req, res) => {
+  try {
+    await respondWithCart(req, res);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/cart', async (req, res) => {
   try {
     const { productId } = req.body;
-
-    const filter = encodeURIComponent(JSON.stringify({ product_id: { $eq: productId } }));
-    const existing = await ordsGet(`cart_items/?q=${filter}`);
-
-    if (existing.length > 0) {
-      const item = existing[0];
-      await ordsPut(`cart_items/${item.id}`, {
-        product_id: item.product_id,
-        quantity: item.quantity + 1,
-      });
-    } else {
-      await ordsPost('cart_items/', { product_id: productId, quantity: 1 });
-    }
-
-    const { linked893, error } = await resolveLinked893FromRequest(req);
-    if (error) return res.status(400).json({ error });
-    const cart = await ordsGet('cart_view/');
-    const rows = Array.isArray(cart) ? cart : [];
-    res.json(summarizeCart(rows, linked893));
+    await upsertCartLine(productId);
+    await respondWithCart(req, res);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: err.message });
@@ -380,28 +337,11 @@ app.post('/api/cart/barcode', async (req, res) => {
       return res.status(404).json({ error: 'Product not found for barcode' });
     }
 
-    const productId = Number(products[0].id);
-    const existingFilter = encodeURIComponent(JSON.stringify({ product_id: { $eq: productId } }));
-    const existing = await ordsGet(`cart_items/?q=${existingFilter}`);
-
-    if (existing.length > 0) {
-      const item = existing[0];
-      await ordsPut(`cart_items/${item.id}`, {
-        product_id: item.product_id,
-        quantity: item.quantity + 1,
-      });
-    } else {
-      await ordsPost('cart_items/', { product_id: productId, quantity: 1 });
-    }
-
-    const { linked893, error } = await resolveLinked893FromRequest(req);
-    if (error) return res.status(400).json({ error });
-    const cart = await ordsGet('cart_view/');
-    const rows = Array.isArray(cart) ? cart : [];
-    return res.json(summarizeCart(rows, linked893));
+    await upsertCartLine(Number(products[0].id));
+    await respondWithCart(req, res);
   } catch (err) {
     console.error(err.message);
-    return res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -409,7 +349,6 @@ app.post('/api/cart/barcode', async (req, res) => {
 app.post('/api/cart/replace', async (req, res) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
-    const customerIdRaw = req.body?.customerId;
 
     const existing = await ordsGet('cart_items/');
     for (const row of existing) {
@@ -423,19 +362,7 @@ app.post('/api/cart/replace', async (req, res) => {
       await ordsPost('cart_items/', { product_id: productId, quantity });
     }
 
-    let linked893 = false;
-    if (customerIdRaw !== undefined && customerIdRaw !== null && String(customerIdRaw).trim() !== '') {
-      const customerId = Number(customerIdRaw);
-      const row = await ordsTryGet(`customers/${customerId}`);
-      if (!row || Number(row.id) !== customerId) {
-        return res.status(400).json({ error: 'Invalid customerId' });
-      }
-      linked893 = is893Member(row);
-    }
-
-    const cart = await ordsGet('cart_view/');
-    const rows = Array.isArray(cart) ? cart : [];
-    res.json(summarizeCart(rows, linked893));
+    await respondWithCart(req, res);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: err.message });
@@ -463,11 +390,7 @@ app.put('/api/cart/:id', async (req, res) => {
       });
     }
 
-    const { linked893, error } = await resolveLinked893FromRequest(req);
-    if (error) return res.status(400).json({ error });
-    const cart = await ordsGet('cart_view/');
-    const rows = Array.isArray(cart) ? cart : [];
-    res.json(summarizeCart(rows, linked893));
+    await respondWithCart(req, res);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: err.message });
@@ -477,18 +400,7 @@ app.put('/api/cart/:id', async (req, res) => {
 app.delete('/api/cart/:id', async (req, res) => {
   try {
     await ordsDelete(`cart_items/${req.params.id}`);
-    const raw = req.query.customerId;
-    let linked893 = false;
-    if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
-      const row = await ordsTryGet(`customers/${raw}`);
-      if (!row || Number(row.id) !== Number(raw)) {
-        return res.status(400).json({ error: 'Invalid customerId' });
-      }
-      linked893 = is893Member(row);
-    }
-    const cart = await ordsGet('cart_view/');
-    const rows = Array.isArray(cart) ? cart : [];
-    res.json(summarizeCart(rows, linked893));
+    await respondWithCart(req, res);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: err.message });

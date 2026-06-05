@@ -12,6 +12,7 @@
 
 require('dotenv').config({ quiet: true });
 
+const { createOrdsClient } = require('../lib/ords-client');
 const { createLoginApprovalStore } = require('../lib/login-approval');
 
 const ORDS_BASE = process.env.ORDS_BASE_URL;
@@ -21,42 +22,7 @@ if (!ORDS_BASE) {
   process.exit(1);
 }
 
-async function ordsGet(path) {
-  const res = await fetch(`${ORDS_BASE}/${path}`);
-  if (!res.ok) throw new Error(`ORDS GET ${path} → ${res.status}`);
-  const data = await res.json();
-  return Array.isArray(data.items) ? data.items : data;
-}
-
-async function ordsPost(path, body) {
-  const res = await fetch(`${ORDS_BASE}/${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`ORDS POST ${path} → ${res.status}${detail ? `: ${detail}` : ''}`);
-  }
-  return res.json();
-}
-
-async function ordsPut(path, body) {
-  const res = await fetch(`${ORDS_BASE}/${path}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`ORDS PUT ${path} → ${res.status}${detail ? `: ${detail}` : ''}`);
-  }
-  return res.json();
-}
-
-function ordsTimestamp(date = new Date()) {
-  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
-}
+const { ordsGet, ordsPost, ordsPut, ordsTimestamp } = createOrdsClient(ORDS_BASE);
 
 async function main() {
   const store = createLoginApprovalStore({ ordsGet, ordsPost, ordsPut, ordsTimestamp });
