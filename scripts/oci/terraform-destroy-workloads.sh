@@ -7,14 +7,14 @@
 # are included automatically without editing this script.
 #
 # Usage (from repo root):
-#   ./scripts/terraform-destroy-workloads.sh           # prompts: type yes
-#   ./scripts/terraform-destroy-workloads.sh --yes     # non-interactive
-#   ./scripts/terraform-destroy-workloads.sh --plan-only   # terraform plan -destroy only
+#   ./scripts/oci/terraform-destroy-workloads.sh           # prompts: type yes
+#   ./scripts/oci/terraform-destroy-workloads.sh --yes     # non-interactive
+#   ./scripts/oci/terraform-destroy-workloads.sh --plan-only   # terraform plan -destroy only
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TF_DIR="${SCRIPT_DIR}/../terraform"
+TF_DIR="${SCRIPT_DIR}/../../terraform"
 
 AUTO_YES=0
 PLAN_ONLY=0

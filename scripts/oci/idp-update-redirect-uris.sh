@@ -8,7 +8,7 @@
 #   (base domain URL only — do NOT append /admin/v1; the CLI adds it)
 #   export APP_PUBLIC_HOST="150.136.37.236"   # no scheme
 #   export APP_PORT="3000"
-#   ./scripts/idp-update-redirect-uris.sh
+#   ./scripts/oci/idp-update-redirect-uris.sh
 #
 # Find IDP_DOMAIN_ENDPOINT: OCI Console → Domains → cloud-store-apps →
 #   Domain → cloud-store-apps → home-region-url (no :443), NOT .../admin/v1

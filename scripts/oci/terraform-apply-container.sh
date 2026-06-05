@@ -2,15 +2,15 @@
 # Run terraform apply in ./terraform with an IP-change warning when the container instance will change.
 #
 # Usage:
-#   ./scripts/terraform-apply-container.sh           # plan + prompt if IP risk
-#   ./scripts/terraform-apply-container.sh --yes     # apply without prompt
-#   ./scripts/terraform-apply-container.sh plan-only # plan + warn only, no apply
+#   ./scripts/oci/terraform-apply-container.sh           # plan + prompt if IP risk
+#   ./scripts/oci/terraform-apply-container.sh --yes     # apply without prompt
+#   ./scripts/oci/terraform-apply-container.sh plan-only # plan + warn only, no apply
 #
-# App code deploys should use: docker push + ./scripts/restart-container-instance.sh
+# App code deploys should use: docker push + ./scripts/oci/restart-container-instance.sh
 
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TF_DIR="$PROJECT_ROOT/terraform"
 MODE="apply"
 YES=""
@@ -23,7 +23,7 @@ for arg in "$@"; do
 done
 
 # shellcheck source=lib/oci-ip-warn.sh
-source "$PROJECT_ROOT/scripts/lib/oci-ip-warn.sh"
+source "$PROJECT_ROOT/scripts/oci/lib/oci-ip-warn.sh"
 
 if [[ ! -d "$TF_DIR" ]]; then
   echo "error: $TF_DIR not found" >&2
@@ -52,5 +52,5 @@ terraform apply
 
 echo ""
 echo "Post-apply:"
-echo "  ./scripts/oci-app-url.sh"
+echo "  ./scripts/oci/oci-app-url.sh"
 echo "  cloud-store-refresh-ocid   # if defined in your shell profile"

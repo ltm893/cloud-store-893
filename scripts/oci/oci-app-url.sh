@@ -2,12 +2,12 @@
 # Print the live public app URL for the OCI container instance (OCI CLI, not Terraform state).
 #
 # Usage:
-#   ./scripts/oci-app-url.sh
-#   APP=$(./scripts/oci-app-url.sh) && curl -s "$APP/api/admin/session"
+#   ./scripts/oci/oci-app-url.sh
+#   APP=$(./scripts/oci/oci-app-url.sh) && curl -s "$APP/api/admin/session"
 
 set -euo pipefail
 
-TF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../terraform" && pwd)"
+TF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../terraform" && pwd)"
 PORT="${APP_PORT:-3000}"
 
 INSTANCE_OCID="${CLOUD_STORE_OCID:-}"

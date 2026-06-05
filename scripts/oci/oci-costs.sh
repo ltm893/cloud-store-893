@@ -2,11 +2,11 @@
 # oci-costs.sh — Show OCI spend for a date range, grouped by service or compartment.
 #
 # Examples:
-#   ./scripts/oci-costs.sh                       # month-to-date, by service
-#   ./scripts/oci-costs.sh --prev-month          # previous full month
-#   ./scripts/oci-costs.sh --week --total        # last 7 days, single total
-#   ./scripts/oci-costs.sh --by-compartment      # month-to-date, by compartment
-#   ./scripts/oci-costs.sh --since 2026-01-01 --until 2026-05-01
+#   ./scripts/oci/oci-costs.sh                       # month-to-date, by service
+#   ./scripts/oci/oci-costs.sh --prev-month          # previous full month
+#   ./scripts/oci/oci-costs.sh --week --total        # last 7 days, single total
+#   ./scripts/oci/oci-costs.sh --by-compartment      # month-to-date, by compartment
+#   ./scripts/oci/oci-costs.sh --since 2026-01-01 --until 2026-05-01
 
 set -e
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"

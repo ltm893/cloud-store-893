@@ -4,7 +4,9 @@ This directory is the **single IaC definition** for the cloud half of the projec
 
 Local app and tablet flows read values such as `ORDS_BASE_URL` from `.env`, while Terraform remains the source of truth for **where** the cloud resources live. Scripts like `npm run sync-env` rewrite `.env` from `terraform output`.
 
-For a full **Terraform + Docker + DB seed** flow from the repo root, see [`../scripts/deploy.sh`](../scripts/deploy.sh) and the root [`../README.md`](../README.md).
+For a full **Terraform + Docker + DB seed** flow from the repo root, see [`../scripts/oci/deploy.sh`](../scripts/oci/deploy.sh) and the root [`../README.md`](../README.md).
+
+OCI helper scripts live under [`../scripts/oci/`](../scripts/oci/) (deploy, app-only deploy, env sync, container restart, live URL, costs, IdCS redirects, state recovery).
 
 ---
 
@@ -58,7 +60,7 @@ terraform plan   # preview what will be created
 terraform apply  # create all resources (~5–10 min for ADB provisioning)
 ```
 
-**Image ordering:** the **container** needs an **image** in OCIR. Typical options: a **two-phase** flow (same idea as [`../scripts/deploy.sh`](../scripts/deploy.sh) — registry + compartment first, build/push, then full apply), or apply once to create the repo, push the image, then apply again so the instance can pull.
+**Image ordering:** the **container** needs an **image** in OCIR. Typical options: a **two-phase** flow (same idea as [`../scripts/oci/deploy.sh`](../scripts/oci/deploy.sh) — registry + compartment first, build/push, then full apply), or apply once to create the repo, push the image, then apply again so the instance can pull.
 
 ```bash
 docker buildx build --platform linux/arm64 -t <ocir_image_path> .
@@ -69,15 +71,17 @@ Use `terraform output ocir_image_path` for `<ocir_image_path>` after the first a
 
 ---
 
-## Deploy (`scripts/deploy.sh`)
+## Deploy (`scripts/oci/deploy.sh`)
 
-[`../scripts/deploy.sh`](../scripts/deploy.sh) automates a **two-phase** apply:
+[`../scripts/oci/deploy.sh`](../scripts/oci/deploy.sh) automates a **two-phase** apply:
 
 1. **Phase 1 — targeted apply:** `oci_identity_compartment.main` + `oci_artifacts_container_repository.main` so the registry exists.
 2. **Docker** build/push for `linux/arm64` to the image path derived from `terraform.tfvars`.
 3. **Phase 2 — full apply:** entire stack including VCN, ADB, and container instance.
 
 That ordering avoids the container failing immediately on a missing image.
+
+**App code only (keeps IP):** [`../scripts/oci/deploy-app-oci.sh`](../scripts/oci/deploy-app-oci.sh) builds/pushes a tagged image and applies with `-var ocir_image_tag=…`, or use `docker push` + [`../scripts/oci/restart-container-instance.sh`](../scripts/oci/restart-container-instance.sh).
 
 ---
 
@@ -205,11 +209,11 @@ A plain **`terraform destroy`** plans to destroy **every** resource in state, **
 
 ```bash
 # from repo root — targets come from `terraform state list` (no hardcoded list)
-./scripts/terraform-destroy-workloads.sh
+./scripts/oci/terraform-destroy-workloads.sh
 # preview only:
-./scripts/terraform-destroy-workloads.sh --plan-only
+./scripts/oci/terraform-destroy-workloads.sh --plan-only
 # CI / non-interactive:
-./scripts/terraform-destroy-workloads.sh --yes
+./scripts/oci/terraform-destroy-workloads.sh --yes
 ```
 
 This removes **all state-tracked workloads** except **data sources** and **`oci_identity_compartment.main`** (including `module.*.oci_identity_compartment.main` if you modularize). New Terraform resources are picked up automatically when they appear in state. If you add another resource that **must never** be destroyed, extend the exclusion logic in that script.
@@ -222,15 +226,13 @@ Destroy order is handled by Terraform’s dependency graph.
 
 ## State recovery (workloads only)
 
-[`../scripts/terraform-recover-workload-state.sh`](../scripts/terraform-recover-workload-state.sh) removes **workload** resource addresses from Terraform **state** only (no OCI API deletes). The compartment address is **never** removed. Use when resources are orphaned or stuck in state after drift or console changes; then `terraform plan` / `terraform apply` to reconcile.
-
-The deprecated wrapper [`../scripts/terraform-recover-state-after-compartment-delete.sh`](../scripts/terraform-recover-state-after-compartment-delete.sh) delegates to the script above.
+[`../scripts/oci/terraform-recover-workload-state.sh`](../scripts/oci/terraform-recover-workload-state.sh) removes **workload** resource addresses from Terraform **state** only (no OCI API deletes). The compartment address is **never** removed. Use when resources are orphaned or stuck in state after drift or console changes; then `terraform plan` / `terraform apply` to reconcile.
 
 ---
 
 ## Troubleshooting: `404` / `NotAuthorizedOrNotFound` on `UpdateCompartment`
 
-If **`terraform apply`** or **`deploy.sh`** fails when **modifying** `oci_identity_compartment.main` with:
+If **`terraform apply`** or **`scripts/oci/deploy.sh`** fails when **modifying** `oci_identity_compartment.main` with:
 
 `Error: 404-NotAuthorizedOrNotFound ... UpdateCompartment`
 
@@ -239,7 +241,7 @@ then **that compartment OCID no longer exists in OCI** (deleted, or still deleti
 **Fix workloads in Terraform state only** (compartment entry is left unchanged), from the **repository root**:
 
 ```bash
-./scripts/terraform-recover-workload-state.sh
+./scripts/oci/terraform-recover-workload-state.sh
 cd terraform && terraform plan && terraform apply
 ```
 

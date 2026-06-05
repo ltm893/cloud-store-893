@@ -110,7 +110,7 @@ Add redirect URIs in OCI (in addition to `/` and `/admin/` if already set):
 export IDP_DOMAIN_ENDPOINT="https://idcs-XXXX.us-ashburn-idcs-1.identity.us-ashburn-1.oci.oraclecloud.com"
 export APP_PUBLIC_HOST="150.136.37.236"
 export APP_PORT="3000"
-./scripts/idp-update-redirect-uris.sh
+./scripts/oci/idp-update-redirect-uris.sh
 ```
 
 Copy `.env.example` IdP vars into `.env` (and container env on OCI when ready):

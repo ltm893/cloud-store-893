@@ -148,7 +148,7 @@ After apps exist, if redirects are missing:
 export IDP_DOMAIN_ENDPOINT="https://idcs-de480a55965c46e0a69fb7988416090f.us-ashburn-idcs-1.identity.us-ashburn-1.oci.oraclecloud.com"
 export APP_PUBLIC_HOST="150.136.37.236"
 export APP_PORT="3000"
-./scripts/idp-update-redirect-uris.sh
+./scripts/oci/idp-update-redirect-uris.sh
 ```
 
 ---

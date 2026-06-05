@@ -2,9 +2,9 @@
 
 # Container Instance manager for the Terraform project compartment.
 # Default compartment: cloud-store (matches terraform/variables.tf project_name).
-# Overrides: CLOUD_STORE_PROJECT_NAME=my-name ./scripts/container.sh status
+# Overrides: CLOUD_STORE_PROJECT_NAME=my-name ./scripts/oci/container.sh status
 #
-# Usage: ./scripts/container.sh [start|stop|status]
+# Usage: ./scripts/oci/container.sh [start|stop|status]
 
 PROJECT_NAME="${CLOUD_STORE_PROJECT_NAME:-cloud-store}"
 CONTAINER_DISPLAY_NAME="container-instance-${PROJECT_NAME}"

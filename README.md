@@ -65,8 +65,8 @@ Full Terraform documentation (file layout, dependency graph, outputs, workload t
 ### 2. Run the deploy script
 
 ```bash
-chmod +x scripts/deploy.sh   # first time only
-./scripts/deploy.sh
+chmod +x scripts/oci/deploy.sh   # first time only
+./scripts/oci/deploy.sh
 ```
 
 The script handles everything end-to-end:
@@ -160,7 +160,7 @@ The username format is: `<object_storage_namespace>/<your_email>`
 ## Tear down workloads (compartment kept)
 
 ```bash
-./scripts/terraform-destroy-workloads.sh
+./scripts/oci/terraform-destroy-workloads.sh
 ```
 
 Removes Terraform-managed **workloads** in the `cloud-store` compartment (default
@@ -251,18 +251,18 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 
 **Fix:** On OCI, set `APP_PUBLIC_URL_FROM_REQUEST=true` (default in `terraform/container.tf`). The app builds OAuth `redirect_uri` from the browser `Host` header, so container env does not need a correct `APP_PUBLIC_URL`. You still register the **live** IP in Oracle IdCS (see below).
 
-1. **Live app URL (OCI CLI)** — `./scripts/oci-app-url.sh` (preferred) or `terraform output app_url` after apply (may be stale until refresh).
+1. **Live app URL (OCI CLI)** — `./scripts/oci/oci-app-url.sh` (preferred) or `terraform output app_url` after apply (may be stale until refresh).
 2. **`.env` for sync** — `APP_PUBLIC_URL_FROM_REQUEST=true`; keep `APP_PUBLIC_URL` for local dev only (same host as step 1 is optional on OCI).
-3. **Push env via Terraform (once per env change)** — `./scripts/sync-container-env-to-terraform.sh` then `./scripts/terraform-apply-container.sh` (warns before replace/new IP). Expect a possible **new ephemeral IP**; reattach reserved IP, re-run `./scripts/oci-app-url.sh`, update IdCS — **do not** apply again just to “fix” the URL.
+3. **Push env via Terraform (once per env change)** — `./scripts/oci/sync-container-env-to-terraform.sh` then `./scripts/oci/terraform-apply-container.sh` (warns before replace/new IP). Expect a possible **new ephemeral IP**; reattach reserved IP, re-run `./scripts/oci/oci-app-url.sh`, update IdCS — **do not** apply again just to “fix” the URL.
 4. **Oracle Identity** — add redirect URLs for the **live** host from step 1: `/oauth/callback`, `/oauth/admin/callback` on both IdP apps. You can keep several old IPs registered while testing.
-5. **App code** — `docker build` / `push` + `./scripts/restart-container-instance.sh` (does not change IP). Required for Model B fields on `/api/admin/session`.
+5. **App code** — `docker build` / `push` + `./scripts/oci/restart-container-instance.sh` (does not change IP). Required for Model B fields on `/api/admin/session`.
 6. **Verify:**
    ```bash
-   APP=$(./scripts/oci-app-url.sh)
+   APP=$(./scripts/oci/oci-app-url.sh)
    curl -s "$APP/api/admin/session"
    curl -sI "$APP/oauth/login" | grep -i '^location:'   # redirect_uri must use same host as $APP
    ```
-7. **Tablet** — `RELEASE_API_BASE_URL=$(./scripts/oci-app-url.sh) ./RebuildReinstall.sh` when the host changes.
+7. **Tablet** — `RELEASE_API_BASE_URL=$(./scripts/oci/oci-app-url.sh) ./RebuildReinstall.sh` when the host changes.
 
 ### Admin UI
 
@@ -360,11 +360,11 @@ POS UI (high level):
 ## Manage the running container instance
 
 ```bash
-chmod +x scripts/container.sh   # first time only
+chmod +x scripts/oci/container.sh   # first time only
 
-./scripts/container.sh start
-./scripts/container.sh stop
-./scripts/container.sh status
+./scripts/oci/container.sh start
+./scripts/oci/container.sh stop
+./scripts/oci/container.sh status
 ```
 
 The script auto-discovers the container instance OCID from OCI, or reads
@@ -460,12 +460,12 @@ cloud-store-893/
 ## Cost monitoring
 
 ```bash
-./scripts/oci-costs.sh                  # month-to-date by service
-./scripts/oci-costs.sh --prev-month     # previous full month
-./scripts/oci-costs.sh --week --total   # last 7 days, single total
-./scripts/oci-costs.sh --by-compartment
-./scripts/oci-costs.sh --since 2026-01-01 --until 2026-05-01
-./scripts/oci-costs.sh --help
+./scripts/oci/oci-costs.sh                  # month-to-date by service
+./scripts/oci/oci-costs.sh --prev-month     # previous full month
+./scripts/oci/oci-costs.sh --week --total   # last 7 days, single total
+./scripts/oci/oci-costs.sh --by-compartment
+./scripts/oci/oci-costs.sh --since 2026-01-01 --until 2026-05-01
+./scripts/oci/oci-costs.sh --help
 ```
 
 Uses `oci usage-api` and prints a sorted table with a `TOTAL` row.

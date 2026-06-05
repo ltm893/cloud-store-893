@@ -4,7 +4,7 @@
 # compartment `cloud-store` (see var.project_name) is always kept in state and in OCI.
 #
 # Use when child resources are stuck or orphaned in state; then re-apply workloads:
-#   ./scripts/terraform-recover-workload-state.sh
+#   ./scripts/oci/terraform-recover-workload-state.sh
 #   cd terraform && terraform plan && terraform apply
 #
 # Does not delete anything in OCI (state-only). Does not touch the compartment resource.
@@ -12,7 +12,7 @@
 set -e
 
 SCRIPT_DIR="${0:a:h}"
-TF_DIR="${SCRIPT_DIR}/../terraform"
+TF_DIR="${SCRIPT_DIR}/../../terraform"
 
 if [[ ! -d "$TF_DIR" ]]; then
   echo "❌ Expected terraform/ at ${TF_DIR}"
@@ -55,4 +55,4 @@ done
 echo ""
 echo "✅ Workload addresses removed from state (compartment unchanged)."
 echo "Next: cd ${TF_DIR} && terraform plan && terraform apply"
-echo "      or from repo root: ./scripts/deploy.sh"
+echo "      or from repo root: ./scripts/oci/deploy.sh"

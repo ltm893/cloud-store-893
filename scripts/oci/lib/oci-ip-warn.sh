@@ -40,7 +40,7 @@ oci_ip_print_status() {
       --output table 2>/dev/null || true
   fi
 
-  echo "  tip: ./scripts/oci-app-url.sh  (live IP via OCI CLI)"
+  echo "  tip: ./scripts/oci/oci-app-url.sh  (live IP via OCI CLI)"
   echo ""
 }
 
@@ -101,12 +101,12 @@ oci_ip_terraform_plan_container_change() {
   echo "╚══════════════════════════════════════════════════════════════════════╝"
   echo ""
   echo "After apply:"
-  echo "  1. ./scripts/oci-app-url.sh          # live IP (may differ from terraform output)"
+  echo "  1. ./scripts/oci/oci-app-url.sh          # live IP (may differ from terraform output)"
   echo "  2. Reattach reserved IP if you use one (see README / prior attach steps)"
   echo "  3. Update IdCS redirect URIs + Route 53 if the hostname A record used an old IP"
   echo "  4. cloud-store-refresh-ocid"
   echo ""
-  echo "For app CODE only (no env change): docker push + ./scripts/restart-container-instance.sh"
+  echo "For app CODE only (no env change): docker push + ./scripts/oci/restart-container-instance.sh"
   echo "  (does not replace the instance — reserved IP stays attached)"
   echo ""
 

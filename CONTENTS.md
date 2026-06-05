@@ -14,7 +14,7 @@ Use this file to resume work in a new session. Canonical setup details live in [
 | **Admin** (`/admin/`) | CRUD on DB tables; PIN login (`ADMIN_PIN`) |
 | **Tablet POS** | Numpad login; unified Pay panel; split tender cash/card; auto-finalize at zero balance |
 | **Local dev** | `npm run dev:up` + `.env` |
-| **OCI** | Container + ADB; app at `terraform output app_url` |
+| **OCI** | Container + ADB; stable URL `http://oci.cloudstore893.com:3000` (reserved IP); live IP via `./scripts/oci/oci-app-url.sh` |
 | **Git** | Feature work on branch `dev` (pushed May 2026) |
 
 **PINs (defaults):** `CASHIER_PIN=8930`, `ADMIN_PIN=8930` (or admin defaults to cashier). Set in `.env` locally; on OCI via `terraform/container.tf` (`cashier_pin`, `admin_pin` variables).
@@ -39,39 +39,38 @@ npm run dev:up
 
 ## Start developing (OCI / tablet on cloud URL)
 
-1. **Push latest image** (required after server changes):
+**App code only** (preferred — does not replace container instance / IP):
+
+```bash
+./scripts/oci/deploy-app-oci.sh <tag>   # build, push, terraform apply with tag
+# or: docker push + ./scripts/oci/restart-container-instance.sh
+```
+
+**Env changes** (replaces container — may change ephemeral IP; reattach reserved IP after):
+
+```bash
+./scripts/oci/sync-container-env-to-terraform.sh
+./scripts/oci/terraform-apply-container.sh
+```
+
+1. **Live URL** — `./scripts/oci/oci-app-url.sh` (not `terraform output app_url` after IP drift).
+
+2. **Verify API:**
 
    ```bash
-   IMAGE=$(cd terraform && terraform output -raw ocir_image_path)
-   docker buildx build --platform linux/arm64 -t "$IMAGE" .
-   docker push "$IMAGE"
-   ```
-
-2. **Apply Terraform** (container only if `database.tf` has `ignore_changes`):
-
-   ```bash
-   cd terraform && terraform apply
-   ```
-
-3. **Note new `app_url`** — public IP may change when the container instance is recreated.
-
-4. **Verify API:**
-
-   ```bash
-   APP=$(cd terraform && terraform output -raw app_url)
+   APP=$(./scripts/oci/oci-app-url.sh)
    curl -s -o /dev/null -w "%{http_code}\n" \
      -X POST "$APP/api/cashier/unlock" \
      -H 'Content-Type: application/json' -d '{"pin":"8930"}'
    ```
 
-   Must be **200**. **404** = old image still running (push + apply again).
+   Must be **200**. **404** = stale image (push + restart or redeploy).
 
-5. **Rebuild tablet APK** with new host:
+3. **Rebuild tablet APK** when host changes:
 
    ```bash
    cd android-pos
-   LAN_IP=<host-from-app_url> ./gradlew :app:assembleDebug
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   LAN_IP=oci.cloudstore893.com ./RebuildReinstall.sh
    ```
 
 ---
@@ -266,7 +265,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 - **`database.tf`:** `lifecycle { ignore_changes = [cpu_core_count, …] }` — Always Free ADB rejects OCPU/storage updates; without this, `terraform apply` fails with 403.
 - **`container.tf`:** env `CASHIER_PIN`, `ADMIN_PIN`, `ORDS_BASE_URL`, `PORT`.
 - **Recreating container** changes `app_url` and `container_instance_ocid` outputs.
-- Workload destroy: `./scripts/terraform-destroy-workloads.sh` (keeps compartment).
+- Workload destroy: `./scripts/oci/terraform-destroy-workloads.sh` (keeps compartment).
 
 ---
 

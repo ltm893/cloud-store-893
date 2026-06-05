@@ -4,8 +4,8 @@
 # Restart the OCI container instance for this Terraform project.
 #
 # Usage:
-#   ./scripts/restart-container-instance.sh
-#   ./scripts/restart-container-instance.sh --no-wait
+#   ./scripts/oci/restart-container-instance.sh
+#   ./scripts/oci/restart-container-instance.sh --no-wait
 #
 # Requirements:
 # - oci CLI authenticated
@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TF_DIR="$PROJECT_ROOT/terraform"
 WAIT_FOR_ACTIVE=true
 
@@ -50,7 +50,7 @@ echo "  $OCI_ID"
 echo ""
 echo "Note: restart pulls the latest :latest image but does NOT replace the instance."
 echo "      Public IP should stay the same (including a reserved IP if attached)."
-echo "      Use ./scripts/terraform-apply-container.sh only for env changes — that can change IP."
+echo "      Use ./scripts/oci/terraform-apply-container.sh only for env changes — that can change IP."
 echo ""
 
 if command -v oci >/dev/null 2>&1 && [[ -n "${CLOUD_STORE_RESERVED_PUBLIC_IP_OCID:-}" ]]; then
@@ -60,7 +60,7 @@ if command -v oci >/dev/null 2>&1 && [[ -n "${CLOUD_STORE_RESERVED_PUBLIC_IP_OCI
     --raw-output 2>/dev/null || true)"
   if [[ "$reserved_state" == "AVAILABLE" ]]; then
     echo "WARNING: reserved public IP is AVAILABLE (not attached). App may only be reachable on the ephemeral IP."
-    echo "         Run ./scripts/oci-app-url.sh for the live URL."
+    echo "         Run ./scripts/oci/oci-app-url.sh for the live URL."
     echo ""
   fi
 fi

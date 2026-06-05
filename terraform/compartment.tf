@@ -12,7 +12,7 @@ resource "oci_identity_compartment" "main" {
   # remove oci_identity_compartment from state or call delete on it.
   #
   # If apply fails after OCI drift: fix state for *workloads* only with
-  # scripts/terraform-recover-workload-state.sh (never drops the compartment).
+  # scripts/oci/terraform-recover-workload-state.sh (never drops the compartment).
   lifecycle {
     prevent_destroy = true
   }

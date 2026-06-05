@@ -33,7 +33,7 @@ adb_admin_password = "YourStr0ng!Password"
 # allow_ssh_ingress     = false
 
 # ── IdP + Model B (optional — or use container_env.auto.tfvars) ─────────────
-# From repo root: ./scripts/sync-container-env-to-terraform.sh
+# From repo root: ./scripts/oci/sync-container-env-to-terraform.sh
 # generates terraform/container_env.auto.tfvars from .env, then terraform apply.
 #
 # app_public_url = "http://150.136.208.81:3000"

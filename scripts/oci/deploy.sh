@@ -2,15 +2,15 @@
 # deploy.sh — Full Terraform + Docker deploy (single compartment: cloud-store)
 #
 # Run this from the project root:
-#   chmod +x scripts/deploy.sh   (first time only)
-#   ./scripts/deploy.sh
+#   chmod +x scripts/oci/deploy.sh   (first time only)
+#   ./scripts/oci/deploy.sh
 
 set -e
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 SCRIPT_DIR="${0:a:h}"
-PROJECT_ROOT="${SCRIPT_DIR}/.."
+PROJECT_ROOT="${SCRIPT_DIR}/../.."
 TF_DIR="${PROJECT_ROOT}/terraform"
 TFVARS="${TF_DIR}/terraform.tfvars"
 
@@ -207,7 +207,7 @@ else
   info "Running seed.sql against ${DB_SERVICE}..."
   "${SQL_CMD}" -cloudconfig "${WALLET_ZIP}" \
     "admin/${ADB_PASSWORD}@${DB_SERVICE}" \
-    @"${SCRIPT_DIR}/seed.sql"
+    @"${PROJECT_ROOT}/scripts/seed.sql"
 
   rm -rf "${WALLET_DIR}"
   success "Database seeded!"
@@ -221,4 +221,4 @@ if [[ -n "$CONTAINER_OCID" ]]; then
   warn "Save to ~/.zshrc: export CLOUD_STORE_OCID=\"${CONTAINER_OCID}\""
 fi
 warn "Container instance may take 1–2 minutes to become ACTIVE."
-info "Check status: ./scripts/container.sh status"
+info "Check status: ./scripts/oci/container.sh status"

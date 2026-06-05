@@ -5,14 +5,14 @@
 # This script pushes a dated tag and runs terraform apply with ocir_image_tag set.
 #
 # Usage:
-#   ./scripts/deploy-app-oci.sh
-#   ./scripts/deploy-app-oci.sh 20260605b
+#   ./scripts/oci/deploy-app-oci.sh
+#   ./scripts/oci/deploy-app-oci.sh 20260605b
 #
 # After apply, reattach reserved public IP if oci.cloudstore893.com stops responding.
 
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TF_DIR="$PROJECT_ROOT/terraform"
 TAG="${1:-$(date +%Y%m%d%H%M%S)}"
 BUILD_ID="${TAG}"
@@ -42,7 +42,7 @@ docker push "$IMAGE_LATEST"
 
 echo ""
 # shellcheck source=lib/oci-ip-warn.sh
-source "$PROJECT_ROOT/scripts/lib/oci-ip-warn.sh"
+source "$PROJECT_ROOT/scripts/oci/lib/oci-ip-warn.sh"
 set +e
 oci_ip_terraform_plan_container_change "$TF_DIR"
 plan_signal=$?
