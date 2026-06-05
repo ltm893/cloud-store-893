@@ -102,9 +102,9 @@ oci_ip_terraform_plan_container_change() {
   echo ""
   echo "After apply:"
   echo "  1. ./scripts/oci/oci-app-url.sh          # live IP (may differ from terraform output)"
-  echo "  2. Reattach reserved IP if you use one (see README / prior attach steps)"
-  echo "  3. Update IdCS redirect URIs + Route 53 if the hostname A record used an old IP"
-  echo "  4. cloud-store-refresh-ocid"
+  echo "  2. ./scripts/oci/reattach-reserved-ip.sh   # or pass --recover-network to deploy/apply scripts"
+  echo "  3. Update IdCS redirect URIs if using raw IPs — ./scripts/oci/idp-update-redirect-uris.sh"
+  echo "  4. cloud-store-refresh-ocid  # or: export CLOUD_STORE_OCID=\$(cd terraform && terraform output -raw container_instance_ocid)"
   echo ""
   echo "For app CODE only (no env change): docker push + ./scripts/oci/restart-container-instance.sh"
   echo "  (does not replace the instance — reserved IP stays attached)"
@@ -127,5 +127,46 @@ oci_ip_confirm_apply_or_exit() {
   case "$ans" in
     y|Y|yes|YES) return 0 ;;
     *) echo "Aborted."; exit 1 ;;
+  esac
+}
+
+# After apply when the container instance was replaced: offer or run reserved-IP reattach.
+# Args: $1 = --recover-network (auto-run) or empty; $2 = scripts/oci directory.
+oci_ip_offer_recover_network() {
+  local auto_recover="${1:-}"
+  local oci_scripts_dir="${2:?oci_scripts_dir required}"
+  local reattach="$oci_scripts_dir/reattach-reserved-ip.sh"
+
+  if [[ -z "${CLOUD_STORE_RESERVED_PUBLIC_IP_OCID:-}" ]]; then
+    echo ""
+    echo "Post-apply: container instance changed — if hostname times out, reattach reserved IP:"
+    echo "  export CLOUD_STORE_RESERVED_PUBLIC_IP_OCID=...   # see docs/oci-network-recovery.md"
+    echo "  ./scripts/oci/reattach-reserved-ip.sh"
+    return 0
+  fi
+
+  if [[ ! -f "$reattach" ]]; then
+    echo ""
+    echo "Post-apply: run ./scripts/oci/reattach-reserved-ip.sh if oci.cloudstore893.com times out"
+    return 0
+  fi
+
+  echo ""
+  echo "Container instance was replaced — reserved public IP may need reattach."
+
+  if [[ "$auto_recover" == "--recover-network" || "${RECOVER_NETWORK:-}" == "1" ]]; then
+    "$reattach" --yes --refresh-ocid
+    return $?
+  fi
+
+  if [[ ! -t 0 ]]; then
+    echo "Run: ./scripts/oci/reattach-reserved-ip.sh  (or re-run with --recover-network)"
+    return 0
+  fi
+
+  read -r -p "Run ./scripts/oci/reattach-reserved-ip.sh now? [y/N] " ans
+  case "$ans" in
+    y|Y|yes|YES) "$reattach" --yes --refresh-ocid ;;
+    *) echo "Skipped. Run ./scripts/oci/reattach-reserved-ip.sh if the hostname times out." ;;
   esac
 }

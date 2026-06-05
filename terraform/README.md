@@ -192,7 +192,17 @@ docker push "$IMAGE"
 terraform apply
 ```
 
-Recreating the container instance may change **`app_url` public IP** — rebuild the tablet APK with the new host.
+Recreating the container instance may change **`app_url` public IP** — reattach the reserved IP and refresh `CLOUD_STORE_OCID` ([docs/oci-network-recovery.md](../docs/oci-network-recovery.md)). Tablet rebuild is usually unnecessary when using `oci.cloudstore893.com`.
+
+---
+
+## Network recovery after instance replace
+
+Terraform replace assigns a **new ephemeral IP**; the **reserved public IP does not reattach automatically**.
+
+- **Automated:** `./scripts/oci/reattach-reserved-ip.sh` — post-apply hook on `deploy-app-oci.sh` / `terraform-apply-container.sh` (`--recover-network`)
+- **Manual CLI reference:** [docs/oci-network-recovery.md](../docs/oci-network-recovery.md)
+- **Safe for code-only deploys:** `docker push` + `./scripts/oci/restart-container-instance.sh` (no instance replace)
 
 ---
 

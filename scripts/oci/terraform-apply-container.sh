@@ -2,9 +2,10 @@
 # Run terraform apply in ./terraform with an IP-change warning when the container instance will change.
 #
 # Usage:
-#   ./scripts/oci/terraform-apply-container.sh           # plan + prompt if IP risk
-#   ./scripts/oci/terraform-apply-container.sh --yes     # apply without prompt
-#   ./scripts/oci/terraform-apply-container.sh plan-only # plan + warn only, no apply
+#   ./scripts/oci/terraform-apply-container.sh                  # plan + prompt if IP risk
+#   ./scripts/oci/terraform-apply-container.sh --yes            # apply without prompt
+#   ./scripts/oci/terraform-apply-container.sh plan-only        # plan + warn only, no apply
+#   ./scripts/oci/terraform-apply-container.sh --recover-network  # offer/auto reattach after replace
 #
 # App code deploys should use: docker push + ./scripts/oci/restart-container-instance.sh
 
@@ -12,12 +13,15 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TF_DIR="$PROJECT_ROOT/terraform"
+OCI_SCRIPTS="$PROJECT_ROOT/scripts/oci"
 MODE="apply"
 YES=""
+RECOVER_NETWORK=""
 
 for arg in "$@"; do
   case "$arg" in
     --yes) YES="--yes" ;;
+    --recover-network) RECOVER_NETWORK="--recover-network" ;;
     plan-only) MODE="plan-only" ;;
   esac
 done
@@ -50,7 +54,10 @@ fi
 cd "$TF_DIR"
 terraform apply
 
-echo ""
-echo "Post-apply:"
-echo "  ./scripts/oci/oci-app-url.sh"
-echo "  cloud-store-refresh-ocid   # if defined in your shell profile"
+if [[ "$plan_signal" -eq 1 ]]; then
+  oci_ip_offer_recover_network "$RECOVER_NETWORK" "$OCI_SCRIPTS"
+else
+  echo ""
+  echo "Post-apply: instance unchanged — reserved IP should still be attached."
+  echo "  ./scripts/oci/oci-app-url.sh"
+fi

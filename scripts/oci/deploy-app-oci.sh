@@ -7,6 +7,7 @@
 # Usage:
 #   ./scripts/oci/deploy-app-oci.sh
 #   ./scripts/oci/deploy-app-oci.sh 20260605b
+#   ./scripts/oci/deploy-app-oci.sh --recover-network   # auto-run reattach after replace
 #
 # After apply, reattach reserved public IP if oci.cloudstore893.com stops responding.
 
@@ -14,7 +15,25 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TF_DIR="$PROJECT_ROOT/terraform"
-TAG="${1:-$(date +%Y%m%d%H%M%S)}"
+OCI_SCRIPTS="$PROJECT_ROOT/scripts/oci"
+
+# shellcheck source=lib/oci-ip-warn.sh
+source "$OCI_SCRIPTS/lib/oci-ip-warn.sh"
+TAG=""
+RECOVER_NETWORK=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --recover-network) RECOVER_NETWORK="--recover-network" ;;
+    *)
+      if [[ -z "$TAG" ]]; then
+        TAG="$arg"
+      fi
+      ;;
+  esac
+done
+
+TAG="${TAG:-$(date +%Y%m%d%H%M%S)}"
 BUILD_ID="${TAG}"
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -41,8 +60,6 @@ docker push "$IMAGE_TAGGED"
 docker push "$IMAGE_LATEST"
 
 echo ""
-# shellcheck source=lib/oci-ip-warn.sh
-source "$PROJECT_ROOT/scripts/oci/lib/oci-ip-warn.sh"
 set +e
 oci_ip_terraform_plan_container_change "$TF_DIR"
 plan_signal=$?
@@ -60,8 +77,13 @@ echo ""
 echo "==> Verify build on running app:"
 echo "    curl -s http://oci.cloudstore893.com:3000/api/build-info"
 echo ""
-echo "If hostname times out, reattach reserved IP (see README OCI checklist), then:"
-echo "    cloud-store-refresh-ocid"
+
+if [[ "$plan_signal" -eq 1 ]]; then
+  oci_ip_offer_recover_network "$RECOVER_NETWORK" "$OCI_SCRIPTS"
+else
+  echo "Reserved IP should still be attached (instance not replaced)."
+fi
+
 echo ""
 echo "Optional debug OAuth errors on screen:"
 echo "    add IDP_SIGNIN_DEBUG=true to .env, sync-container-env-to-terraform.sh, terraform apply"

@@ -46,12 +46,15 @@ npm run dev:up
 # or: docker push + ./scripts/oci/restart-container-instance.sh
 ```
 
-**Env changes** (replaces container — may change ephemeral IP; reattach reserved IP after):
+**Env changes** (replaces container — may detach reserved IP; see recovery doc):
 
 ```bash
 ./scripts/oci/sync-container-env-to-terraform.sh
 ./scripts/oci/terraform-apply-container.sh
+# then: ./scripts/oci/reattach-reserved-ip.sh (or --recover-network on apply scripts)
 ```
+
+**Network recovery after replace:** [docs/oci-network-recovery.md](docs/oci-network-recovery.md) — `./scripts/oci/reattach-reserved-ip.sh`, operator env vars (`CLOUD_STORE_OCID`, `CLOUD_STORE_RESERVED_PUBLIC_IP_OCID`).
 
 1. **Live URL** — `./scripts/oci/oci-app-url.sh` (not `terraform output app_url` after IP drift).
 
@@ -264,7 +267,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 - **`database.tf`:** `lifecycle { ignore_changes = [cpu_core_count, …] }` — Always Free ADB rejects OCPU/storage updates; without this, `terraform apply` fails with 403.
 - **`container.tf`:** env `CASHIER_PIN`, `ADMIN_PIN`, `ORDS_BASE_URL`, `PORT`.
-- **Recreating container** changes `app_url` and `container_instance_ocid` outputs.
+- **Recreating container** changes `app_url` and `container_instance_ocid` outputs; reserved IP must be **reattached** — `./scripts/oci/reattach-reserved-ip.sh` ([docs/oci-network-recovery.md](docs/oci-network-recovery.md)).
 - Workload destroy: `./scripts/oci/terraform-destroy-workloads.sh` (keeps compartment).
 
 ---

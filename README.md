@@ -249,12 +249,14 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 
 **Ephemeral IP trap:** Any `terraform apply` that changes container **environment variables** **replaces** the instance and Oracle assigns a **new** public IP. Setting `APP_PUBLIC_URL` in Terraform to “the current IP” and applying does **not** make that IP stick — after apply the live IP is usually different.
 
-**Fix:** On OCI, set `APP_PUBLIC_URL_FROM_REQUEST=true` (default in `terraform/container.tf`). The app builds OAuth `redirect_uri` from the browser `Host` header, so container env does not need a correct `APP_PUBLIC_URL`. You still register the **live** IP in Oracle IdCS (see below).
+**Fix:** On OCI, set `APP_PUBLIC_URL_FROM_REQUEST=true` (default in `terraform/container.tf`). The app builds OAuth `redirect_uri` from the browser `Host` header, so container env does not need a correct `APP_PUBLIC_URL`. Browse via **`http://oci.cloudstore893.com:3000`** (reserved IP + Route 53), not a raw ephemeral IP.
 
-1. **Live app URL (OCI CLI)** — `./scripts/oci/oci-app-url.sh` (preferred) or `terraform output app_url` after apply (may be stale until refresh).
+**After instance replace:** reserved IP does not reattach automatically. Run **`./scripts/oci/reattach-reserved-ip.sh`** (or pass `--recover-network` to deploy/apply scripts). See **[docs/oci-network-recovery.md](docs/oci-network-recovery.md)** for the full checklist.
+
+1. **Live app URL (OCI CLI)** — `./scripts/oci/oci-app-url.sh` (preferred) or `terraform output app_url` after apply (may be stale until refresh). Set `CLOUD_STORE_OCID` from terraform after every replace — see recovery doc.
 2. **`.env` for sync** — `APP_PUBLIC_URL_FROM_REQUEST=true`; keep `APP_PUBLIC_URL` for local dev only (same host as step 1 is optional on OCI).
-3. **Push env via Terraform (once per env change)** — `./scripts/oci/sync-container-env-to-terraform.sh` then `./scripts/oci/terraform-apply-container.sh` (warns before replace/new IP). Expect a possible **new ephemeral IP**; reattach reserved IP, re-run `./scripts/oci/oci-app-url.sh`, update IdCS — **do not** apply again just to “fix” the URL.
-4. **Oracle Identity** — add redirect URLs for the **live** host from step 1: `/oauth/callback`, `/oauth/admin/callback` on both IdP apps. You can keep several old IPs registered while testing.
+3. **Push env via Terraform (once per env change)** — `./scripts/oci/sync-container-env-to-terraform.sh` then `./scripts/oci/terraform-apply-container.sh` (warns before replace/new IP). Then run the **network recovery** steps in [docs/oci-network-recovery.md](docs/oci-network-recovery.md) — **do not** apply again just to “fix” the URL.
+4. **Oracle Identity** — prefer hostname redirect URIs on `oci.cloudstore893.com`; use `./scripts/oci/idp-update-redirect-uris.sh` when adding IPs or after hostname changes.
 5. **App code** — `docker build` / `push` + `./scripts/oci/restart-container-instance.sh` (does not change IP). Required for Model B fields on `/api/admin/session`.
 6. **Verify:**
    ```bash
@@ -262,7 +264,7 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
    curl -s "$APP/api/admin/session"
    curl -sI "$APP/oauth/login" | grep -i '^location:'   # redirect_uri must use same host as $APP
    ```
-7. **Tablet** — `RELEASE_API_BASE_URL=$(./scripts/oci/oci-app-url.sh) ./RebuildReinstall.sh` when the host changes.
+7. **Tablet** — `LAN_IP=oci.cloudstore893.com ./RebuildReinstall.sh` when the **hostname** changes (usually not needed after reserved-IP reattach).
 
 ### Admin UI
 
