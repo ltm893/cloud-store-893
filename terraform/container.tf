@@ -12,9 +12,41 @@ data "oci_core_vnic" "main" {
 
 # ── Locals ────────────────────────────────────────────────────────────────────
 locals {
-  ad_name    = data.oci_identity_availability_domains.all.availability_domains[0].name
-  image_path = "${var.ocir_region_key}.ocir.io/${var.object_storage_namespace}/${var.project_name}:${var.ocir_image_tag}"
+  ad_name       = data.oci_identity_availability_domains.all.availability_domains[0].name
+  image_path    = "${var.ocir_region_key}.ocir.io/${var.object_storage_namespace}/${var.project_name}:${var.ocir_image_tag}"
   ords_base_url = "${oci_database_autonomous_database.main.connection_urls[0].ords_url}admin"
+
+  optional_app_env = {
+    for k, v in {
+      APP_PUBLIC_URL                       = var.app_public_url
+      IDP_POS_ISSUER                       = var.idp_pos_issuer
+      IDP_POS_CLIENT_ID                    = var.idp_pos_client_id
+      IDP_POS_CLIENT_SECRET                = var.idp_pos_client_secret
+      IDP_ADMIN_ISSUER                     = var.idp_admin_issuer
+      IDP_ADMIN_CLIENT_ID                  = var.idp_admin_client_id
+      IDP_ADMIN_CLIENT_SECRET              = var.idp_admin_client_secret
+      IDP_SUPERVISOR_GROUP                 = var.idp_supervisor_group
+      IDP_POS_CASHIER_GROUP                = var.idp_pos_cashier_group
+      CASHIER_APPROVAL_TTL_SEC             = var.cashier_supervisor_approval ? tostring(var.cashier_approval_ttl_sec) : ""
+    } : k => v if v != null && v != ""
+  }
+
+  container_environment_variables = merge(
+    {
+      PORT                   = tostring(var.app_port)
+      ORDS_BASE_URL          = local.ords_base_url
+      CASHIER_PIN            = var.cashier_pin
+      ADMIN_PIN              = var.admin_pin != "" ? var.admin_pin : var.cashier_pin
+      CASHIER_SESSION_SECURE = var.cashier_session_secure ? "true" : "false"
+      IDP_ALLOW_PIN          = var.idp_allow_pin ? "true" : "false"
+      CASHIER_SUPERVISOR_APPROVAL = var.cashier_supervisor_approval ? "true" : "false"
+      CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR = var.cashier_supervisor_pin_is_supervisor ? "true" : "false"
+      APP_PUBLIC_URL_FROM_REQUEST = var.app_public_url_from_request ? "true" : "false"
+      IDP_SIGNIN_DEBUG            = var.idp_signin_debug ? "true" : "false"
+      IDP_SCOPES                  = var.idp_scopes
+    },
+    local.optional_app_env,
+  )
 }
 
 # ── Container Instance ────────────────────────────────────────────────────────
@@ -39,13 +71,7 @@ resource "oci_container_instances_container_instance" "main" {
     display_name = "${var.project_name}-container-1"
     image_url    = local.image_path
 
-    environment_variables = {
-      PORT                     = tostring(var.app_port)
-      ORDS_BASE_URL            = local.ords_base_url
-      CASHIER_PIN              = var.cashier_pin
-      ADMIN_PIN                = var.admin_pin != "" ? var.admin_pin : var.cashier_pin
-      CASHIER_SESSION_SECURE   = var.cashier_session_secure ? "true" : "false"
-    }
+    environment_variables = local.container_environment_variables
   }
 
   freeform_tags = { project = var.project_name }

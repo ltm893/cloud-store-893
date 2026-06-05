@@ -53,7 +53,7 @@ menuBtn.addEventListener('click', () => {
 
 logoutBtn.addEventListener('click', async () => {
   await fetch(`${API}/logout`, { method: 'POST', credentials: 'same-origin' });
-  window.location.href = '/admin/login.html';
+  window.location.href = '/admin/login.html?reauth=1';
 });
 
 editCancelBtn.addEventListener('click', () => editDialog.close());

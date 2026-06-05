@@ -47,14 +47,30 @@ fi
 
 echo "Restarting OCI container instance:"
 echo "  $OCI_ID"
+echo ""
+echo "Note: restart pulls the latest :latest image but does NOT replace the instance."
+echo "      Public IP should stay the same (including a reserved IP if attached)."
+echo "      Use ./scripts/terraform-apply-container.sh only for env changes — that can change IP."
+echo ""
 
+if command -v oci >/dev/null 2>&1 && [[ -n "${CLOUD_STORE_RESERVED_PUBLIC_IP_OCID:-}" ]]; then
+  reserved_state="$(oci network public-ip get \
+    --public-ip-id "$CLOUD_STORE_RESERVED_PUBLIC_IP_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output 2>/dev/null || true)"
+  if [[ "$reserved_state" == "AVAILABLE" ]]; then
+    echo "WARNING: reserved public IP is AVAILABLE (not attached). App may only be reachable on the ephemeral IP."
+    echo "         Run ./scripts/oci-app-url.sh for the live URL."
+    echo ""
+  fi
+fi
 if [[ "$WAIT_FOR_ACTIVE" == "true" ]]; then
   oci container-instances container-instance restart \
     --container-instance-id "$OCI_ID" \
     --wait-for-state SUCCEEDED
   LIFECYCLE_STATE="$(oci container-instances container-instance get \
     --container-instance-id "$OCI_ID" \
-    --query "data.lifecycle-state" \
+    --query 'data."lifecycle-state"' \
     --raw-output)"
   echo "Restart request succeeded. lifecycle-state=$LIFECYCLE_STATE"
 else

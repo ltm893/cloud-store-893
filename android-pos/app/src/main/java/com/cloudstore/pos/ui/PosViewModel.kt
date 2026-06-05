@@ -16,6 +16,7 @@ import com.cloudstore.pos.data.Sale
 import com.cloudstore.pos.data.StoreCustomer
 import com.cloudstore.pos.BuildConfig
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -326,14 +327,19 @@ class PosViewModel(
                 applyCartResponse(cartResp, _state.value.customerDiscountActive())
             }.onFailure { err ->
                 val authLost = err is HttpException && err.code() == 401
-                _state.value = _state.value.copy(
-                    loading = false,
-                    isAuthenticated = !authLost,
-                    status = when {
-                        authLost -> "Session expired — sign in again"
-                        else -> "Error: ${err.message ?: "Unable to connect"}"
-                    },
-                )
+                if (authLost) {
+                    repository.clearCashierCookies()
+                    showSignInGate(
+                        pinAllowed = _state.value.pinAllowed,
+                        idpLoginUrl = _state.value.idpLoginUrl,
+                        status = "Session expired — sign in again",
+                    )
+                } else {
+                    _state.value = _state.value.copy(
+                        loading = false,
+                        status = "Error: ${err.message ?: "Unable to connect"}",
+                    )
+                }
             }
         }
     }
@@ -416,19 +422,55 @@ class PosViewModel(
         }
     }
 
-    fun onOidcWebViewComplete() {
+    fun onOidcWebViewComplete(completionUrl: String) {
         if (oidcCompleting) return
         oidcCompleting = true
+        val pendingToken = parsePendingRequestToken(completionUrl)
+        if (!pendingToken.isNullOrBlank()) {
+            repository.rememberPendingRequestToken(pendingToken)
+        }
+        // Dismiss WebView immediately — show native waiting screen, not server web POS.
+        _state.update {
+            it.copy(
+                isAuthenticated = false,
+                authGate = CashierAuthGate.WaitingApproval(
+                    email = null,
+                    secondsRemaining = null,
+                ),
+                idpLoginUrl = resolveIdpLoginUrl("/oauth/login"),
+                status = "Completing sign-in…",
+            )
+        }
+        startApprovalPoll()
         viewModelScope.launch {
             try {
-                _state.update { it.copy(status = "Completing sign-in…") }
-                repository.syncWebViewCookies()
+                syncWebViewCookiesWithRetry()
+                if (!pendingToken.isNullOrBlank()) {
+                    repository.rememberPendingRequestToken(pendingToken)
+                }
                 runCatching { repository.cashierSession() }
-                    .onSuccess { applySessionProbe(it) }
+                    .onSuccess { session ->
+                        when {
+                            session.ok -> applySessionProbe(session)
+                            session.pending -> applySessionProbe(session)
+                            pendingToken.isNullOrBlank() && !repository.hasPendingRequestCookie() ->
+                                showSignInGate(
+                                    pinAllowed = session.pinAllowed,
+                                    idpLoginUrl = if (session.idpEnabled) {
+                                        resolveIdpLoginUrl(session.idpLoginUrl)
+                                    } else {
+                                        null
+                                    },
+                                    status = "Sign-in incomplete — tap Oracle sign-in again",
+                                )
+                        }
+                    }
                     .onFailure { err ->
-                        _state.update {
-                            it.copy(
-                                authGate = CashierAuthGate.PinSignIn(pinAllowed = it.pinAllowed),
+                        if (pendingToken.isNullOrBlank() && !repository.hasPendingRequestCookie()) {
+                            stopApprovalPoll()
+                            showSignInGate(
+                                pinAllowed = _state.value.pinAllowed,
+                                idpLoginUrl = _state.value.idpLoginUrl,
                                 status = connectivityMessage(err),
                             )
                         }
@@ -437,6 +479,29 @@ class PosViewModel(
                 oidcCompleting = false
             }
         }
+    }
+
+    private fun enterWaitingApprovalFromToken(pendingToken: String?) {
+        if (pendingToken.isNullOrBlank() && !repository.hasPendingRequestCookie()) {
+            showSignInGate(
+                pinAllowed = _state.value.pinAllowed,
+                idpLoginUrl = resolveIdpLoginUrl("/oauth/login"),
+                status = "Sign-in incomplete — tap Oracle sign-in again",
+            )
+            return
+        }
+        _state.update {
+            it.copy(
+                isAuthenticated = false,
+                authGate = CashierAuthGate.WaitingApproval(
+                    email = null,
+                    secondsRemaining = null,
+                ),
+                idpLoginUrl = resolveIdpLoginUrl("/oauth/login"),
+                status = "Waiting for supervisor approval",
+            )
+        }
+        startApprovalPoll()
     }
 
     fun cancelApprovalWait() {
@@ -565,66 +630,117 @@ class PosViewModel(
         approvalPollJob = null
     }
 
+    private suspend fun syncWebViewCookiesWithRetry() {
+        repository.syncWebViewCookies()
+        delay(150)
+        repository.syncWebViewCookies()
+    }
+
     private suspend fun pollApprovalOnce() {
         if (_state.value.authGate !is CashierAuthGate.WaitingApproval) return
-        runCatching { repository.pollApprovalStatus() }
-            .onSuccess { status ->
-                when (status.status) {
-                    "approved" -> {
-                        if (status.ok) {
-                            stopApprovalPoll()
-                            runCatching { repository.cashierSession() }
-                                .onSuccess { applySessionProbe(it) }
-                        }
-                    }
-                    "pending" -> {
-                        _state.update {
-                            val gate = it.authGate
-                            it.copy(
-                                authGate = if (gate is CashierAuthGate.WaitingApproval) {
-                                    gate.copy(secondsRemaining = status.secondsRemaining)
-                                } else {
-                                    gate
-                                },
-                                status = "Waiting for supervisor approval",
-                            )
-                        }
-                    }
-                    "denied", "expired", "cancelled" -> {
-                        stopApprovalPoll()
-                        repository.clearCashierCookies()
-                        val msg = when (status.status) {
-                            "denied" -> status.reason ?: "Supervisor denied login"
-                            "expired" -> "Login request expired — sign in again"
-                            else -> "Login request cancelled"
-                        }
-                        showSignInGate(
-                            pinAllowed = _state.value.pinAllowed,
-                            idpLoginUrl = _state.value.idpLoginUrl,
-                            status = msg,
-                        )
-                    }
-                    else -> {
-                        if (status.error != null) {
-                            _state.update { it.copy(status = status.error) }
-                        }
-                    }
+
+        val statusResult = runCatching { repository.pollApprovalStatus() }
+        if (statusResult.isFailure) {
+            handleApprovalPollFailure(statusResult.exceptionOrNull() ?: return)
+            return
+        }
+        val status = statusResult.getOrThrow()
+
+        when (status.status.lowercase()) {
+            "approved" -> {
+                if (status.ok) {
+                    completeApprovedLogin()
                 }
             }
-            .onFailure { err ->
-                if (err is HttpException && err.code() == 401) {
-                    stopApprovalPoll()
+            "pending" -> {
+                _state.update {
+                    val gate = it.authGate
+                    it.copy(
+                        authGate = if (gate is CashierAuthGate.WaitingApproval) {
+                            gate.copy(secondsRemaining = status.secondsRemaining)
+                        } else {
+                            gate
+                        },
+                        status = "Waiting for supervisor approval",
+                    )
+                }
+            }
+            "denied", "expired", "cancelled" -> {
+                stopApprovalPoll()
+                repository.clearCashierCookies()
+                val msg = when (status.status.lowercase()) {
+                    "denied" -> status.reason ?: "Supervisor denied login"
+                    "expired" -> "Login request expired — sign in again"
+                    else -> "Login request cancelled"
+                }
+                showSignInGate(
+                    pinAllowed = _state.value.pinAllowed,
+                    idpLoginUrl = _state.value.idpLoginUrl,
+                    status = msg,
+                )
+            }
+            else -> {
+                if (status.error != null) {
+                    _state.update { it.copy(status = status.error) }
+                }
+            }
+        }
+    }
+
+    private fun handleApprovalPollFailure(err: Throwable) {
+        if (err is CancellationException) return
+        when {
+            err is HttpException && err.code() == 401 -> {
+                stopApprovalPoll()
+                showSignInGate(
+                    pinAllowed = _state.value.pinAllowed,
+                    idpLoginUrl = _state.value.idpLoginUrl,
+                    status = "No pending login request — sign in again",
+                )
+            }
+            else -> {
+                _state.update {
+                    it.copy(status = "Waiting for supervisor approval — ${connectivityMessage(err)}")
+                }
+            }
+        }
+    }
+
+    /** Finish login on a fresh coroutine — do not cancel the poll job before this runs. */
+    private fun completeApprovedLogin() {
+        viewModelScope.launch {
+            applyApprovedSession()
+        }
+        stopApprovalPoll()
+    }
+
+    /** Poll response should have set cashier_session; confirm before loading POS. */
+    private suspend fun applyApprovedSession() {
+        runCatching { repository.cashierSession() }
+            .onSuccess { session ->
+                if (session.ok) {
+                    applySessionProbe(session)
+                } else {
                     showSignInGate(
                         pinAllowed = _state.value.pinAllowed,
                         idpLoginUrl = _state.value.idpLoginUrl,
-                        status = "No pending login request — sign in again",
+                        status = "Approved but session did not persist — sign in again",
                     )
                 }
+            }
+            .onFailure { err ->
+                if (err is CancellationException) return@onFailure
+                showSignInGate(
+                    pinAllowed = _state.value.pinAllowed,
+                    idpLoginUrl = _state.value.idpLoginUrl,
+                    status = connectivityMessage(err),
+                )
             }
     }
 
     private fun connectivityMessage(err: Throwable): String =
         when (err) {
+            is CancellationException -> "Connection failed"
             is HttpException -> "Server error (${err.code()})"
             is IOException -> "Cannot reach server — check Wi‑Fi and API URL (${BuildConfig.API_BASE_URL})"
             else -> err.message ?: "Connection failed"

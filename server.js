@@ -12,6 +12,10 @@ if (!ORDS_BASE) {
 
 app.use(express.json());
 
+app.get('/api/build-info', (req, res) => {
+  res.json({ buildId: process.env.BUILD_ID || 'unknown' });
+});
+
 // ── ORDS helpers ──────────────────────────────────────────────────────────
 
 async function ordsGet(path) {

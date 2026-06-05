@@ -2,6 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+ARG BUILD_ID=dev
+ENV BUILD_ID=${BUILD_ID}
+
 COPY package*.json ./
 
 RUN npm install

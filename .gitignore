@@ -21,6 +21,7 @@ wallet/
 
 # Terraform - secrets and generated state
 terraform/terraform.tfvars
+terraform/container_env.auto.tfvars
 terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate

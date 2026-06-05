@@ -1,6 +1,7 @@
 package com.cloudstore.pos.ui
 
 import android.annotation.SuppressLint
+import android.net.Uri
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -28,7 +29,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 fun CashierOidcWebScreen(
     loginUrl: String,
     apiBaseUrl: String,
-    onComplete: () -> Unit,
+    onComplete: (completionUrl: String) -> Unit,
     onCancel: () -> Unit,
 ) {
     val base = remember(apiBaseUrl) { apiBaseUrl.trimEnd('/') }
@@ -68,20 +69,23 @@ fun CashierOidcWebScreen(
                     settings.useWideViewPort = true
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                    var finished = false
+                    fun finishOidc(url: String) {
+                        if (finished || !isCashierOidcComplete(url, base)) return
+                        finished = true
+                        stopLoading()
+                        // Never render the server's web POS HTML in this WebView.
+                        loadUrl("about:blank")
+                        onComplete(url)
+                    }
                     webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            if (url != null && isCashierOidcComplete(url, base)) {
-                                onComplete()
-                            }
-                        }
-
                         override fun shouldOverrideUrlLoading(
                             view: WebView?,
                             request: WebResourceRequest?,
                         ): Boolean {
                             val url = request?.url?.toString() ?: return false
                             if (isCashierOidcComplete(url, base)) {
-                                onComplete()
+                                finishOidc(url)
                                 return true
                             }
                             return false
@@ -91,10 +95,28 @@ fun CashierOidcWebScreen(
                         override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                             val target = url ?: return false
                             if (isCashierOidcComplete(target, base)) {
-                                onComplete()
+                                finishOidc(target)
                                 return true
                             }
                             return false
+                        }
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            if (url == null || finished) return
+                            if (isCashierOidcComplete(url, base)) {
+                                finishOidc(url)
+                                return
+                            }
+                            view?.evaluateJavascript(
+                                "(document.body && document.body.innerText) || ''",
+                            ) { raw ->
+                                if (finished) return@evaluateJavascript
+                                val text = raw?.trim()?.trim('"') ?: return@evaluateJavascript
+                                if (text.contains("pending login approval", ignoreCase = true)) {
+                                    finished = true
+                                    onComplete(url)
+                                }
+                            }
                         }
                     }
                     loadUrl(loginUrl)
@@ -105,10 +127,13 @@ fun CashierOidcWebScreen(
     }
 }
 
-/** OIDC finished when the server redirects back to the app host (POS root or approval pending). */
+/** OIDC finished only on supervisor-approval redirect (includes request_token). */
 private fun isCashierOidcComplete(url: String, base: String): Boolean {
     if (!url.startsWith(base)) return false
-    if (url.contains("approval=pending")) return true
-    val normalized = url.substringBefore('?').trimEnd('/')
-    return normalized == base
+    return url.contains("approval=pending")
+}
+
+fun parsePendingRequestToken(completionUrl: String): String? {
+    val token = Uri.parse(completionUrl).getQueryParameter("request_token")?.trim()
+    return token?.takeIf { it.isNotEmpty() }
 }

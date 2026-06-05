@@ -186,6 +186,9 @@ Existing IdP vars unchanged: `IDP_POS_*`, `IDP_ADMIN_*`, `APP_PUBLIC_URL` — se
 1. Create groups **`store-cashiers`** and **`store-supervisors`** in the app identity domain.
 2. Assign cashier users / manager users to the right groups.
 3. On OIDC apps **cloud-store-pos** and **cloud-store-admin**: include **group membership** in ID token claims.
+   - **cloud-store-admin** → open app → **General information** (or **Resources**) → ensure **`groups`** is in **Allowed scopes**.
+   - **Sign-on policies** (or app **Token issuance** / **Claims**): add a claim so **`groups`** appears in the **ID token** (group names like `store-supervisors`, not just app assignment).
+   - Server requests `IDP_SCOPES=openid profile email groups` (default after recent deploy).
 4. POS sign-on policy: password + MFA on cashier’s own device (optional; separate from supervisor step).
 
 Supervisor approval is **app-level** — Identity Domains does not natively push “approve cashier Jane on register 2”; the admin UI (or future OCI Notifications email) handles that.

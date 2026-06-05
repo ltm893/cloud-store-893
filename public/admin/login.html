@@ -58,17 +58,32 @@
       border-radius: 8px;
       font-size: 1rem;
     }
-    button {
+    button, .btn {
       margin-top: 14px;
       width: 100%;
       padding: 10px;
       border: none;
       border-radius: 8px;
-      background: var(--accent-2);
-      color: #fff;
       font-weight: 600;
       font-size: 1rem;
       cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-oracle {
+      background: var(--accent-2);
+      color: #fff;
+    }
+    .btn-pin {
+      background: var(--accent);
+      color: #fff;
+    }
+    .divider {
+      margin: 18px 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
     }
     .portrait-blocker {
       display: none;
@@ -97,34 +112,68 @@
     <span aria-hidden="true">↻</span>
     <p>Rotate your device to <strong>landscape</strong> to use Admin.</p>
   </div>
-  <form class="card" id="loginForm">
+  <div class="card" id="loginCard">
     <h1>Admin sign in</h1>
-    <p>Enter the admin PIN to manage store data.</p>
-    <label for="pin">Admin PIN</label>
-    <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required>
-    <p id="error" style="color: var(--danger); min-height: 1.2em; margin-top: 10px; margin-bottom: 0;"></p>
-    <button type="submit">Sign in</button>
-    <p style="margin-top: 16px; font-size: 0.9rem;"><a id="idpLoginLink" href="/oauth/admin/login" hidden>Sign in with store account (Oracle)</a></p>
-  </form>
+    <p id="loginHint">Choose how to sign in.</p>
+
+    <div id="idpBlock" hidden>
+      <a id="idpLoginLink" class="btn btn-oracle" href="/oauth/admin/login?prompt=login">Sign in with Oracle</a>
+      <p style="font-size: 0.8rem; margin-top: 10px;">Uses your store Oracle account. Add <code>?prompt=login</code> to force username/password.</p>
+    </div>
+
+    <div id="pinBlock" hidden>
+      <div class="divider" id="pinDivider" hidden>or use admin PIN</div>
+      <form id="loginForm">
+        <label for="pin">Admin PIN</label>
+        <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password">
+        <p id="error" style="color: var(--danger); min-height: 1.2em; margin-top: 10px; margin-bottom: 0;"></p>
+        <button type="submit" class="btn-pin">Sign in with PIN</button>
+      </form>
+    </div>
+  </div>
   <script>
     const form = document.getElementById('loginForm');
     const errorEl = document.getElementById('error');
-
+    const idpBlock = document.getElementById('idpBlock');
+    const pinBlock = document.getElementById('pinBlock');
+    const pinDivider = document.getElementById('pinDivider');
     const idpLink = document.getElementById('idpLoginLink');
+    const loginHint = document.getElementById('loginHint');
+    const forceLogin = new URLSearchParams(window.location.search).has('reauth');
 
     fetch('/api/admin/session', { credentials: 'same-origin' })
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok) window.location.replace('/admin/');
-        if (data.idpEnabled && idpLink) {
-          idpLink.hidden = false;
-          if (data.idpLoginUrl) idpLink.href = data.idpLoginUrl;
+        if (data.ok && !forceLogin) {
+          window.location.replace('/admin/');
+          return;
         }
-        if (data.idpEnabled && data.idpLoginUrl && !data.ok) {
-          /* PIN still allowed unless server sets IDP_ALLOW_PIN=false */
+        if (data.idpEnabled) {
+          idpBlock.hidden = false;
+          if (data.idpLoginUrl) {
+            idpLink.href = `${data.idpLoginUrl}?prompt=login`;
+          }
+        }
+        if (data.pinAllowed !== false) {
+          pinBlock.hidden = false;
+          if (data.idpEnabled) pinDivider.hidden = false;
+        } else if (data.idpEnabled && data.idpLoginUrl && !data.ok) {
+          loginHint.textContent = 'Redirecting to Oracle sign-in…';
+          window.location.replace(`${data.idpLoginUrl}?prompt=login`);
+          return;
+        }
+        if (data.idpEnabled && !data.pinAllowed) {
+          loginHint.textContent = 'Sign in with your Oracle store account.';
+        } else if (data.idpEnabled) {
+          loginHint.textContent = 'Sign in with Oracle or the admin PIN.';
+        } else {
+          loginHint.textContent = 'Enter the admin PIN to manage store data.';
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        pinBlock.hidden = false;
+        loginHint.textContent = 'Enter the admin PIN to manage store data.';
+      });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();

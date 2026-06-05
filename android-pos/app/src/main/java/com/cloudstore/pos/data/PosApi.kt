@@ -2,6 +2,7 @@ package com.cloudstore.pos.data
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -155,6 +156,36 @@ class PosRepository(baseUrl: String) {
     fun syncWebViewCookies() {
         WebViewCookieSync.sync(normalizedBaseUrl, cookieJar)
     }
+
+    /** WebView→Retrofit bridge: inject pending token when CookieManager sync is unreliable. */
+    fun rememberPendingRequestToken(token: String?) {
+        val trimmed = token?.trim().orEmpty()
+        if (trimmed.isEmpty()) return
+        cookieJar.pinnedPendingToken = trimmed
+        val httpUrl = normalizedBaseUrl.toHttpUrlOrNull() ?: return
+        cookieJar.saveFromResponse(httpUrl, listOf(buildCookie(httpUrl, "cashier_pending", trimmed)))
+    }
+
+    fun hasPendingRequestCookie(): Boolean {
+        if (!cookieJar.pinnedPendingToken.isNullOrBlank()) return true
+        val httpUrl = normalizedBaseUrl.toHttpUrlOrNull() ?: return false
+        return cookieJar.loadForRequest(httpUrl).any { it.name == "cashier_pending" }
+    }
+
+    fun hasCashierSessionCookie(): Boolean {
+        if (!cookieJar.manualSessionId.isNullOrBlank()) return true
+        val httpUrl = normalizedBaseUrl.toHttpUrlOrNull() ?: return false
+        return cookieJar.loadForRequest(httpUrl).any { it.name == "cashier_session" }
+    }
+
+    private fun buildCookie(httpUrl: okhttp3.HttpUrl, name: String, value: String): Cookie =
+        Cookie.Builder()
+            .name(name)
+            .value(value)
+            .domain(httpUrl.host)
+            .path("/")
+            .httpOnly()
+            .build()
 
     fun clearCashierCookies() {
         normalizedBaseUrl.toHttpUrlOrNull()?.host?.let { cookieJar.clearHost(it) }

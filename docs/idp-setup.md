@@ -172,6 +172,9 @@ If `IDP_POS_REDIRECT_URI` or `IDP_ADMIN_REDIRECT_URI` is set, it **overrides** `
   - `registerOidcBrowserFlow(...)` creates login + callback handlers.
   - `buildAuthorizeUrl(...)` sends `redirect_uri=<cfg.redirectUri>` to Oracle.
   - `exchangeCode(...)` repeats the same `redirect_uri` in token exchange.
+  - `verifyJwt(...)` validates the ID token using the **`issuer` from OIDC discovery** (`https://identity.oraclecloud.com/` on Oracle IDCS), not the `IDP_*_ISSUER` host used to fetch discovery.
+  - JWKS: Oracle IDCS `jwks_uri` often returns **401** unless you either (A) enable **Settings → Default Settings → Access Signing Certificate** in the IdCS console, or (B) let the app fetch JWKS with `Authorization: Bearer <access_token>` from the token response (this repo does B automatically on OAuth callback).
+  - Oracle JWKS keys may list `key_ops: ["encrypt","verify"]`; Node rejects that for RS256 verify — the app strips `key_ops` before import.
 
 #### Callback completion
 

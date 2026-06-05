@@ -31,3 +31,14 @@ adb_admin_password = "YourStr0ng!Password"
 # ── Network lockdown (optional) ─────────────────────────────────────────────
 # ingress_allowed_cidrs = ["203.0.113.50/32"]   # shop IP; default ["0.0.0.0/0"]
 # allow_ssh_ingress     = false
+
+# ── IdP + Model B (optional — or use container_env.auto.tfvars) ─────────────
+# From repo root: ./scripts/sync-container-env-to-terraform.sh
+# generates terraform/container_env.auto.tfvars from .env, then terraform apply.
+#
+# app_public_url = "http://150.136.208.81:3000"
+# idp_pos_issuer = "https://idcs-....identity.oraclecloud.com"
+# idp_pos_client_id = "..."
+# idp_pos_client_secret = "..."
+# cashier_supervisor_approval = true
+# cashier_supervisor_pin_is_supervisor = true
