@@ -104,6 +104,10 @@ echo "== cloud-store-893 API curl tests =="
 echo "   BASE_URL=$BASE_URL"
 echo ""
 
+# ── GET /api/build-info ───────────────────────────────────────────────────
+curl_json GET "$BASE_URL/api/build-info"
+expect_code 200 "GET /api/build-info"
+
 # ── GET /api/products ─────────────────────────────────────────────────────
 curl_json GET "$BASE_URL/api/products"
 expect_code 200 "GET /api/products"
@@ -157,6 +161,16 @@ expect_code 400 "GET /api/cart?customerId=999999999 (invalid)"
 curl_json POST "$BASE_URL/api/cart/barcode" -d '{}'
 expect_code 400 "POST /api/cart/barcode {} (missing barcode)"
 
+# ── POST /api/cart validation (no cart mutation) ─────────────────────────────
+curl_json POST "$BASE_URL/api/cart" -d '{}'
+expect_code 400 "POST /api/cart {} (missing productId)"
+
+curl_json POST "$BASE_URL/api/cart" -d '{"productId":999999999}'
+expect_code 404 "POST /api/cart {unknown productId}"
+
+curl_json POST "$BASE_URL/api/cart/barcode" -d '{"barcode":"does-not-exist-xyz"}'
+expect_code 404 "POST /api/cart/barcode (unknown barcode)"
+
 # ── POST /api/cart (add line for mutation tests) ────────────────────────────
 if [[ -z "${PRODUCT_ID:-}" ]]; then
   echo "  SKIP cart mutation / checkout (no products from GET /api/products)"
@@ -181,9 +195,6 @@ elif confirm_destructive_phase; then
   else
     echo "  SKIP POST /api/cart/barcode (first product has no barcode)"
   fi
-
-  curl_json POST "$BASE_URL/api/cart/barcode" -d '{"barcode":"does-not-exist-xyz"}'
-  expect_code 404 "POST /api/cart/barcode (unknown barcode)"
 
   curl_json GET "$BASE_URL/api/cart"
   expect_code 200 "GET /api/cart (after adds)"

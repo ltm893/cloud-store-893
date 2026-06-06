@@ -6,8 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.CartResponse
 import com.cloudstore.pos.data.CashierSessionResponse
+import com.cloudstore.pos.data.CashierUserStore
 import com.cloudstore.pos.data.CheckoutPayment
 import com.cloudstore.pos.data.OfflineQueueStore
+import com.cloudstore.pos.data.PosIdentityLog
 import com.cloudstore.pos.data.PendingCheckout
 import com.cloudstore.pos.data.QueuedCartLine
 import com.cloudstore.pos.data.PosRepository
@@ -59,16 +61,21 @@ data class PosUiState(
     val recentSales: List<Sale> = emptyList(),
     val paymentMethod: String = "card",
     val barcodeInput: String = "",
+    val addItemError: String? = null,
     val quantityEditCartItemId: Int? = null,
     val quantityEditInput: String = "",
     val status: String = "Ready",
     val isAuthenticated: Boolean = false,
+    val loggedInUser: String? = null,
     val authGate: CashierAuthGate = CashierAuthGate.Checking,
     val idpLoginUrl: String? = null,
     val pinAllowed: Boolean = true,
     val pinInput: String = "",
     val queuedCheckoutCount: Int = 0,
     val queueSyncing: Boolean = false,
+    val receipt: SaleReceipt? = null,
+    val receiptPrintMessage: String? = null,
+    val receiptPrintProgress: Float = 0f,
 ) {
     fun selectedCustomer(): StoreCustomer? =
         selectedCustomerId?.let { id -> customers.find { it.id == id } }
@@ -82,6 +89,7 @@ data class PosUiState(
 class PosViewModel(
     private val repository: PosRepository,
     private val queueStore: OfflineQueueStore,
+    private val userStore: CashierUserStore,
 ) : ViewModel() {
     private data class FreshPos(
         val products: List<Product>,
@@ -102,16 +110,29 @@ class PosViewModel(
     private var cartRefreshGeneration = 0
     private var cardProcessingJob: Job? = null
     private var finalizeJob: Job? = null
+    private var printReceiptJob: Job? = null
     private var approvalPollJob: Job? = null
     private var oidcCompleting = false
 
     init {
-        _state.update { it.copy(queuedCheckoutCount = queueStore.all().size) }
+        val storedUser = userStore.get()
+        PosIdentityLog.d("init storedUser=${storedUser ?: "null"}")
+        _state.update {
+            it.copy(
+                queuedCheckoutCount = queueStore.all().size,
+                loggedInUser = storedUser,
+            )
+        }
         probeCashierSession()
         viewModelScope.launch {
             state.map { it.isAuthenticated }
                 .distinctUntilChanged()
-                .collect { authed -> if (!authed) resetCheckout() }
+                .collect { authed ->
+                    if (!authed) {
+                        resetCheckout()
+                        _state.update { it.copy(receipt = null) }
+                    }
+                }
         }
         viewModelScope.launch {
             combine(
@@ -125,10 +146,29 @@ class PosViewModel(
             state.map { it.status }
                 .distinctUntilChanged()
                 .collect { status ->
-                    if (status.startsWith("Sale complete") || status.startsWith("Offline: checkout")) {
+                    if (status.startsWith("Sale complete")) {
                         resetCheckout()
                     }
                 }
+        }
+    }
+
+    fun dismissReceipt() {
+        printReceiptJob?.cancel()
+        printReceiptJob = null
+        _state.update { it.copy(receipt = null, receiptPrintMessage = null, receiptPrintProgress = 0f, status = "Ready") }
+        refresh()
+    }
+
+    fun printReceipt() {
+        if (_state.value.receipt == null || printReceiptJob?.isActive == true) return
+        printReceiptJob = viewModelScope.launch {
+            _state.update { it.copy(receiptPrintMessage = "Printing Receipt", receiptPrintProgress = 0f) }
+            repeat(25) { index ->
+                delay(100)
+                _state.update { it.copy(receiptPrintProgress = (index + 1) / 25f) }
+            }
+            dismissReceipt()
         }
     }
 
@@ -272,8 +312,6 @@ class PosViewModel(
     ) {
         finalizeJob?.cancel()
         val method = checkoutFinalizeMethod(payments)
-        val message = finalizeProcessingMessage(payments)
-        val cardOnly = isCardOnlyCheckout(payments)
         if (!skipStateUpdate) {
             _checkoutState.update {
                 it.copy(
@@ -282,23 +320,13 @@ class PosViewModel(
                     pendingCheckoutPayments = payments,
                     pendingCheckoutTotal = registerTotal,
                     processingCheckoutMethod = method,
-                    processingDialogMessage = if (cardOnly) null else message,
+                    processingDialogMessage = null,
                 )
             }
         }
         finalizeJob = viewModelScope.launch {
-            if (cardOnly) {
-                _checkoutState.update {
-                    it.copy(processingDialogMessage = null, paymentProcessingProgress = 0f)
-                }
-            } else {
-                _checkoutState.update {
-                    it.copy(paymentProcessingProgress = 0f, processingDialogMessage = message)
-                }
-                repeat(50) { index ->
-                    delay(100)
-                    _checkoutState.update { it.copy(paymentProcessingProgress = (index + 1) / 50f) }
-                }
+            _checkoutState.update {
+                it.copy(processingDialogMessage = null, paymentProcessingProgress = 0f)
             }
             setPaymentMethod(method)
             checkout(payments = payments, checkoutTotal = registerTotal)
@@ -306,8 +334,43 @@ class PosViewModel(
         }
     }
 
+    fun syncCashierIdentity() {
+        if (!_state.value.isAuthenticated) {
+            PosIdentityLog.d("syncCashierIdentity skipped — not authenticated")
+            return
+        }
+        viewModelScope.launch {
+            PosIdentityLog.d("syncCashierIdentity fetching /api/cashier/session")
+            runCatching { repository.cashierSession() }
+                .onSuccess { session ->
+                    PosIdentityLog.session("syncCashierIdentity", session)
+                    if (!session.ok) {
+                        PosIdentityLog.d("syncCashierIdentity session ok=false")
+                        return@onSuccess
+                    }
+                    val user = rememberCashierUserFromSession(session, _state.value)
+                        ?: _state.value.loggedInUser
+                        ?: userStore.get()
+                    PosIdentityLog.resolved(
+                        "syncCashierIdentity",
+                        user,
+                        userStore.get(),
+                        _state.value.loggedInUser,
+                    )
+                    if (!user.isNullOrBlank()) {
+                        userStore.save(user)
+                        _state.update { it.copy(loggedInUser = user) }
+                    }
+                }
+                .onFailure { err ->
+                    PosIdentityLog.d("syncCashierIdentity failed: ${err.message}")
+                }
+        }
+    }
+
     fun refresh() {
         if (!_state.value.isAuthenticated) return
+        syncCashierIdentity()
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, status = "Loading...")
             runCatching {
@@ -400,7 +463,7 @@ class PosViewModel(
     }
 
     fun setBarcodeInput(value: String) {
-        _state.value = _state.value.copy(barcodeInput = value)
+        _state.value = _state.value.copy(barcodeInput = value, addItemError = null)
     }
 
     fun setPinInput(value: String) {
@@ -524,12 +587,21 @@ class PosViewModel(
                 it.copy(
                     authGate = CashierAuthGate.Checking,
                     isAuthenticated = false,
+                    loggedInUser = it.loggedInUser ?: userStore.get(),
                     status = "Checking session…",
                 )
             }
+            PosIdentityLog.d(
+                "probeCashierSession hasSessionCookie=${repository.hasCashierSessionCookie()} " +
+                    "storedUser=${userStore.get() ?: "null"}",
+            )
             runCatching { repository.cashierSession() }
-                .onSuccess { applySessionProbe(it) }
+                .onSuccess { session ->
+                    PosIdentityLog.session("probeCashierSession", session)
+                    applySessionProbe(session)
+                }
                 .onFailure { err ->
+                    PosIdentityLog.d("probeCashierSession failed: ${err.message}")
                     showSignInGate(
                         pinAllowed = true,
                         idpLoginUrl = null,
@@ -539,14 +611,60 @@ class PosViewModel(
         }
     }
 
+    private fun resolveLoggedInUser(session: CashierSessionResponse, current: PosUiState): String? {
+        session.displayUser()?.let { return it }
+        (current.authGate as? CashierAuthGate.WaitingApproval)?.email
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { return it }
+        userStore.get()?.let { return it }
+        return if (session.auth == "pin") "Cashier" else null
+    }
+
+    private fun rememberCashierUser(user: String?) {
+        val trimmed = user?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        PosIdentityLog.d("rememberCashierUser $trimmed")
+        userStore.save(trimmed)
+        _state.update { it.copy(loggedInUser = trimmed) }
+    }
+
+    private fun rememberCashierUserFromSession(session: CashierSessionResponse, current: PosUiState): String? {
+        val resolved = resolveLoggedInUser(session, current)
+        resolved?.let { userStore.save(it) }
+        return resolved ?: current.loggedInUser ?: userStore.get()
+    }
+
+    private fun rememberCashierUserFromApproval(email: String?, name: String? = null) {
+        listOf(email, name).forEach { candidate ->
+            candidate?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                rememberCashierUser(it)
+                return
+            }
+        }
+    }
+
+    fun noteCashierIdentity(email: String?, name: String? = null) {
+        rememberCashierUserFromApproval(email, name)
+    }
+
     private fun applySessionProbe(session: CashierSessionResponse) {
         val idpUrl = if (session.idpEnabled) resolveIdpLoginUrl(session.idpLoginUrl) else null
         when {
             session.ok -> {
                 stopApprovalPoll()
+                val resolvedUser = rememberCashierUserFromSession(session, _state.value)
+                    ?: _state.value.loggedInUser
+                    ?: userStore.get()
+                PosIdentityLog.resolved(
+                    "applySessionProbe",
+                    resolvedUser,
+                    userStore.get(),
+                    _state.value.loggedInUser,
+                )
                 _state.update {
                     it.copy(
                         isAuthenticated = true,
+                        loggedInUser = resolvedUser,
                         authGate = CashierAuthGate.SignedIn,
                         idpLoginUrl = idpUrl,
                         pinAllowed = session.pinAllowed,
@@ -555,9 +673,14 @@ class PosViewModel(
                     )
                 }
                 refresh()
+                syncCashierIdentity()
                 flushOfflineQueue()
             }
             session.pending -> {
+                rememberCashierUserFromApproval(
+                    session.approval?.cashierEmail,
+                    session.approval?.cashierName,
+                )
                 _state.update {
                     it.copy(
                         isAuthenticated = false,
@@ -588,9 +711,11 @@ class PosViewModel(
         status: String,
     ) {
         stopApprovalPoll()
+        userStore.clear()
         _state.update {
             it.copy(
                 isAuthenticated = false,
+                loggedInUser = null,
                 authGate = CashierAuthGate.PinSignIn(pinAllowed = pinAllowed),
                 idpLoginUrl = idpLoginUrl,
                 pinAllowed = pinAllowed,
@@ -649,15 +774,25 @@ class PosViewModel(
         when (status.status.lowercase()) {
             "approved" -> {
                 if (status.ok) {
+                    rememberCashierUserFromApproval(
+                        status.email ?: status.cashierEmail,
+                        status.name ?: status.cashierName,
+                    )
                     completeApprovedLogin()
                 }
             }
             "pending" -> {
+                val approvalEmail = status.email ?: status.cashierEmail
+                val approvalName = status.name ?: status.cashierName
+                rememberCashierUserFromApproval(approvalEmail, approvalName)
                 _state.update {
                     val gate = it.authGate
                     it.copy(
                         authGate = if (gate is CashierAuthGate.WaitingApproval) {
-                            gate.copy(secondsRemaining = status.secondsRemaining)
+                            gate.copy(
+                                email = approvalEmail ?: gate.email,
+                                secondsRemaining = status.secondsRemaining,
+                            )
                         } else {
                             gate
                         },
@@ -756,8 +891,12 @@ class PosViewModel(
             _state.value = _state.value.copy(status = "Signing in...")
             runCatching { repository.unlockCashier(entered) }
                 .onSuccess {
+                    val session = runCatching { repository.cashierSession() }.getOrNull()
+                    val loggedInUser = session?.let { rememberCashierUserFromSession(it, _state.value) }
+                        ?: "Cashier".also { userStore.save(it) }
                     _state.value = _state.value.copy(
                         isAuthenticated = true,
+                        loggedInUser = loggedInUser,
                         pinInput = "",
                         status = "Signed in",
                     )
@@ -790,6 +929,7 @@ class PosViewModel(
         viewModelScope.launch {
             stopApprovalPoll()
             runCatching { repository.logoutCashier() }
+            userStore.clear()
             _state.value = PosUiState(
                 isAuthenticated = false,
                 authGate = CashierAuthGate.PinSignIn(pinAllowed = _state.value.pinAllowed),
@@ -804,19 +944,29 @@ class PosViewModel(
         }
     }
 
+    private fun addItemErrorMessage(err: Throwable, label: String): String = when {
+        err is HttpException && err.code() == 401 -> "Session expired — sign in again"
+        err is HttpException && err.code() == 404 -> "Product not found: $label"
+        else -> "Add failed: ${err.message ?: "Unable to add item"}"
+    }
+
     fun addProduct(productId: Int) {
         viewModelScope.launch {
             val cid = _state.value.selectedCustomerId
+            if (_state.value.products.none { it.id == productId }) {
+                _state.value = _state.value.copy(addItemError = "Product not found: ID $productId")
+                return@launch
+            }
             runCatching { repository.addProduct(productId, cid) }
-                .onSuccess { applyCartResponse(it, _state.value.customerDiscountActive()) }
+                .onSuccess {
+                    applyCartResponse(it, _state.value.customerDiscountActive())
+                    _state.value = _state.value.copy(addItemError = null)
+                }
                 .onFailure { err ->
                     val authLost = err is HttpException && err.code() == 401
                     _state.value = _state.value.copy(
                         isAuthenticated = !authLost,
-                        status = when {
-                            authLost -> "Session expired — sign in again"
-                            else -> "Add failed: ${err.message}"
-                        },
+                        addItemError = addItemErrorMessage(err, "ID $productId"),
                     )
                 }
         }
@@ -829,7 +979,7 @@ class PosViewModel(
     fun addByBarcodeValue(input: String) {
         val cleaned = input.trim()
         if (cleaned.isEmpty()) {
-            _state.value = _state.value.copy(status = "Enter barcode or product ID")
+            _state.value = _state.value.copy(addItemError = "Enter barcode or product ID")
             return
         }
 
@@ -846,6 +996,10 @@ class PosViewModel(
                 _state.value = _state.value.copy(barcodeInput = "")
                 return
             }
+            if (!hasProduct) {
+                _state.value = _state.value.copy(addItemError = "Product not found: ID $cleaned")
+                return
+            }
         }
 
         viewModelScope.launch {
@@ -857,17 +1011,15 @@ class PosViewModel(
                     applyCartResponse(resp, _state.value.customerDiscountActive())
                     _state.value = _state.value.copy(
                         barcodeInput = "",
-                        status = if (treatAsId) "Added by id $cleaned" else "Scanned $cleaned",
+                        addItemError = null,
                     )
                 }
                 .onFailure { err ->
                     val authLost = err is HttpException && err.code() == 401
+                    val label = if (treatAsId) "ID $cleaned" else cleaned
                     _state.value = _state.value.copy(
                         isAuthenticated = !authLost,
-                        status = when {
-                            authLost -> "Session expired — sign in again"
-                            else -> "Add failed: ${err.message}"
-                        },
+                        addItemError = addItemErrorMessage(err, label),
                     )
                 }
         }
@@ -982,20 +1134,37 @@ class PosViewModel(
                 return@launch
             }
 
+            val snapshotState = _state.value
             val paymentMethod = payments
                 ?.takeIf { it.isNotEmpty() }
                 ?.let { checkoutFinalizeMethod(it) }
-                ?: _state.value.paymentMethod
-            val customerId = _state.value.selectedCustomerId
+                ?: snapshotState.paymentMethod
+            val customerId = snapshotState.selectedCustomerId
+            val paymentsUsed = payments.orEmpty()
+            val customerName = snapshotState.selectedCustomer()?.let { customer ->
+                customerDisplayName(customer, customer.id)
+            }
             runCatching { repository.checkout(paymentMethod, customerId, payments, checkoutTotal) }
-                .onSuccess { receipt ->
-                    val extra = buildList {
-                        if (receipt.linked893 == true) add("customer discount")
-                        receipt.memberDiscountPreTax?.takeIf { it > 0.001 }?.let { add("−${"%.2f".format(it)} pre-tax") }
-                    }.joinToString(" · ").takeIf { it.isNotEmpty() }
-                    val msg = listOfNotNull("Sale complete: ${receipt.orderNumber}", extra).joinToString(" — ")
+                .onSuccess { response ->
+                    val receipt = buildSaleReceipt(
+                        cart = snapshotState.cart,
+                        customerName = customerName,
+                        customerLinked = snapshotState.customerLinked(),
+                        customerDiscount = snapshotState.customerDiscountActive(),
+                        salesFeeRate = salesFeeRate,
+                        taxRate = taxRate,
+                        payments = paymentsUsed.ifEmpty {
+                            response.payments.orEmpty()
+                        },
+                        orderNumber = response.orderNumber,
+                    )
                     setSelectedCustomerId(null)
-                    _state.value = _state.value.copy(status = msg)
+                    _state.value = snapshotState.copy(
+                        receipt = receipt,
+                        status = "Ready",
+                        selectedCustomerId = null,
+                        selectedCustomerDiscount = false,
+                    )
                     refresh()
                 }
                 .onFailure { err ->
@@ -1019,10 +1188,27 @@ class PosViewModel(
                     }
 
                     val lines = _state.value.cart.map { QueuedCartLine(it.productId, it.quantity) }
+                    val snapshotState = _state.value
+                    val customerName = snapshotState.selectedCustomer()?.let { customer ->
+                        customerDisplayName(customer, customer.id)
+                    }
                     queueStore.enqueue(paymentMethod, customerId, lines, payments, checkoutTotal)
-                    _state.value = _state.value.copy(
-                        status = "Offline: checkout queued",
+                    val receipt = buildSaleReceipt(
+                        cart = snapshotState.cart,
+                        customerName = customerName,
+                        customerLinked = snapshotState.customerLinked(),
+                        customerDiscount = snapshotState.customerDiscountActive(),
+                        salesFeeRate = salesFeeRate,
+                        taxRate = taxRate,
+                        payments = paymentsUsed,
+                        queuedOffline = true,
+                    )
+                    _state.value = snapshotState.copy(
+                        receipt = receipt,
+                        status = "Ready",
                         queuedCheckoutCount = queueStore.all().size,
+                        selectedCustomerId = null,
+                        selectedCustomerDiscount = false,
                     )
                 }
         }
@@ -1121,11 +1307,12 @@ class PosViewModel(
 class PosViewModelFactory(
     private val repository: PosRepository,
     private val queueStore: OfflineQueueStore,
+    private val userStore: CashierUserStore,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(PosViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return PosViewModel(repository, queueStore) as T
+            return PosViewModel(repository, queueStore, userStore) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
@@ -61,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -70,8 +73,10 @@ import com.cloudstore.pos.BuildConfig
 import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.StoreCustomer
 import com.cloudstore.pos.ui.theme.PosBackground
+import com.cloudstore.pos.ui.theme.PosBorder
 import com.cloudstore.pos.ui.theme.PosButtonDefaults
 import com.cloudstore.pos.ui.theme.PosCardDefaults
+import com.cloudstore.pos.ui.theme.PosPanel
 import com.cloudstore.pos.ui.theme.PosPrimary
 import com.cloudstore.pos.ui.theme.PosText
 import kotlinx.coroutines.launch
@@ -99,15 +104,22 @@ fun PosScreen(viewModel: PosViewModel) {
         if (!state.isAuthenticated) scannerOpen = false
     }
 
-    var statusPanelExpanded by remember { mutableStateOf(false) }
     var customerFindOpen by remember { mutableStateOf(false) }
+    var queueStatusVisible by remember { mutableStateOf(false) }
     var adminOpen by remember { mutableStateOf(false) }
     var showCardOnFileConfirm by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.queuedCheckoutCount) {
+        if (state.queuedCheckoutCount > 0) {
+            queueStatusVisible = true
+        }
+    }
 
     LaunchedEffect(state.isAuthenticated) {
         if (!state.isAuthenticated) {
             customerFindOpen = false
             adminOpen = false
+            queueStatusVisible = false
         }
     }
 
@@ -122,6 +134,12 @@ fun PosScreen(viewModel: PosViewModel) {
         val editingId = state.quantityEditCartItemId ?: return@LaunchedEffect
         if (state.cart.none { it.id == editingId }) {
             viewModel.cancelQuantityEdit()
+        }
+    }
+
+    LaunchedEffect(state.isAuthenticated) {
+        if (state.isAuthenticated) {
+            viewModel.syncCashierIdentity()
         }
     }
 
@@ -144,6 +162,9 @@ fun PosScreen(viewModel: PosViewModel) {
                 }
             }
             is CashierAuthGate.WaitingApproval -> {
+                LaunchedEffect(gate.email) {
+                    viewModel.noteCashierIdentity(gate.email)
+                }
                 ApprovalWaitingScreen(
                     email = gate.email,
                     secondsRemaining = gate.secondsRemaining,
@@ -194,13 +215,6 @@ fun PosScreen(viewModel: PosViewModel) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     DrawerMenuButton(
-                        text = if (statusPanelExpanded) "Hide status" else "Show status",
-                        onClick = {
-                            statusPanelExpanded = !statusPanelExpanded
-                            scope.launch { drawerState.close() }
-                        },
-                    )
-                    DrawerMenuButton(
                         text = if (customerFindOpen) "Show keypad" else "Find customer",
                         onClick = {
                             if (!customerFindOpen) {
@@ -210,6 +224,15 @@ fun PosScreen(viewModel: PosViewModel) {
                             scope.launch { drawerState.close() }
                         },
                     )
+                    if (state.queuedCheckoutCount > 0 || state.queueSyncing) {
+                        DrawerMenuButton(
+                            text = if (queueStatusVisible) "Hide queue status" else "Show queue status",
+                            onClick = {
+                                queueStatusVisible = !queueStatusVisible
+                                scope.launch { drawerState.close() }
+                            },
+                        )
+                    }
                     if (state.queuedCheckoutCount > 0) {
                         DrawerMenuButton(
                             text = if (state.queueSyncing) {
@@ -238,7 +261,7 @@ fun PosScreen(viewModel: PosViewModel) {
                         },
                     )
                     DrawerMenuButton(
-                        text = "Lock",
+                        text = "Sign Out",
                         onClick = {
                             viewModel.lock()
                             scope.launch { drawerState.close() }
@@ -256,18 +279,19 @@ fun PosScreen(viewModel: PosViewModel) {
             val salesFeeRate = BuildConfig.POS_SALES_FEE_RATE.toDoubleOrNull() ?: 0.0
             val taxRate = BuildConfig.POS_TAX_RATE.toDoubleOrNull() ?: 0.0
 
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(PosPrimary)
-                    .padding(horizontal = 14.dp, vertical = 12.5.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .statusBarsPadding()
+                    .padding(start = 14.dp, end = 14.dp, top = 5.dp, bottom = 12.dp),
             ) {
                 IconButton(
                     onClick = { scope.launch { drawerState.open() } },
                     colors = IconButtonDefaults.iconButtonColors(
                         contentColor = PosBackground,
                     ),
+                    modifier = Modifier.align(Alignment.CenterStart),
                 ) {
                     Text(
                         text = "\u2630",
@@ -282,15 +306,31 @@ fun PosScreen(viewModel: PosViewModel) {
                     fontWeight = FontWeight.Bold,
                     color = PosBackground,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.align(Alignment.Center),
                 )
-                Text(
-                    text = "v${BuildConfig.VERSION_NAME}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = PosBackground,
-                    modifier = Modifier.width(48.dp),
-                    textAlign = TextAlign.End,
-                )
+                Row(
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    state.loggedInUser?.let { user ->
+                        Text(
+                            text = "user: $user",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = PosBackground.copy(alpha = 0.92f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .widthIn(max = 220.dp)
+                                .padding(end = 8.dp),
+                        )
+                    }
+                    Text(
+                        text = "v${BuildConfig.VERSION_NAME}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PosBackground,
+                        textAlign = TextAlign.End,
+                    )
+                }
             }
 
             Column(
@@ -307,6 +347,8 @@ fun PosScreen(viewModel: PosViewModel) {
                 .padding(top = 0.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            val receipt = state.receipt
+            val showReceipt = receipt != null
             // ── Scan & items (left) ─────────────────────────────────────────
             Card(
                 modifier = Modifier
@@ -315,7 +357,12 @@ fun PosScreen(viewModel: PosViewModel) {
                 colors = PosCardDefaults.contentColors(),
                 elevation = PosCardDefaults.elevation(),
             ) {
-                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                ) {
+                    if (!showReceipt) {
                     val barcodeFocus = remember { FocusRequester() }
                     val keyboard = LocalSoftwareKeyboardController.current
                     val focusManager = LocalFocusManager.current
@@ -394,9 +441,25 @@ fun PosScreen(viewModel: PosViewModel) {
                             Text("Add", style = MaterialTheme.typography.labelLarge)
                         }
                     }
+                    state.addItemError?.let { error ->
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    }
 
+                    if (showReceipt && receipt != null) {
+                        SaleReceiptContent(
+                            receipt = receipt,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
                     Text(
                         text = "Current Sale",
                         style = MaterialTheme.typography.titleSmall,
@@ -465,12 +528,52 @@ fun PosScreen(viewModel: PosViewModel) {
                             modifier = Modifier.padding(top = 8.dp),
                         )
                     }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                    ) {
+                        HorizontalDivider(
+                            color = PosBorder,
+                            thickness = 1.dp,
+                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(PosPanel)
+                                .padding(horizontal = 4.dp, vertical = 6.dp),
+                        ) {
+                            SaleTotalsPanel(
+                                cart = state.cart,
+                                linkedCustomer = state.selectedCustomer(),
+                                customerLinked = state.customerLinked(),
+                                customerDiscount = state.customerDiscountActive(),
+                                salesFeeRate = salesFeeRate,
+                                taxRate = taxRate,
+                            )
+                        }
+                    }
+                    }
                 }
             }
 
             // ── Status slot + fixed-size number pad (right) ───────────────────
             val showStatusSlot =
-                statusPanelExpanded || state.queuedCheckoutCount > 0
+                queueStatusVisible && (state.queuedCheckoutCount > 0 || state.queueSyncing)
+            if (showReceipt && receipt != null) {
+                Column(
+                    modifier = Modifier
+                        .width(PosNumpadColumnWidth)
+                        .fillMaxHeight(),
+                ) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    ReceiptActionPanel(
+                        onPrint = viewModel::printReceipt,
+                        printEnabled = state.receiptPrintMessage == null,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            } else {
             Column(
                 modifier = Modifier
                     .width(PosNumpadColumnWidth)
@@ -491,6 +594,7 @@ fun PosScreen(viewModel: PosViewModel) {
                                 Text(
                                     text = state.status,
                                     style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(bottom = 6.dp),
                                 )
                             }
                             OfflineQueueStatus(
@@ -498,7 +602,6 @@ fun PosScreen(viewModel: PosViewModel) {
                                 syncing = state.queueSyncing,
                                 onSyncQueued = viewModel::flushOfflineQueue,
                                 onDiscardQueued = viewModel::clearOfflineQueue,
-                                modifier = Modifier.padding(top = 4.dp),
                             )
                         }
                     }
@@ -611,56 +714,26 @@ fun PosScreen(viewModel: PosViewModel) {
                         )
                     }
                 }
-            }
-        }
-
-        // ── Totals + Pay (left) | payment flow under numpad (right) ────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                colors = PosCardDefaults.contentColors(),
-                elevation = PosCardDefaults.elevation(),
-            ) {
-                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-                    SaleTotalsPanel(
-                        cart = state.cart,
-                        linkedCustomer = state.selectedCustomer(),
-                        customerLinked = state.customerLinked(),
-                        customerDiscount = state.customerDiscountActive(),
-                        salesFeeRate = salesFeeRate,
-                        taxRate = taxRate,
-                    )
-                    if (!checkout.open) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.End,
-                        ) {
-                            Button(
-                                onClick = {
-                                    customerFindOpen = false
-                                    viewModel.openCheckout()
-                                },
-                                enabled = state.cart.isNotEmpty(),
-                                colors = PosButtonDefaults.teal(),
-                                modifier = Modifier
-                                    .fillMaxWidth(0.2f)
-                                    .height(44.dp),
-                                contentPadding = PaddingValues(vertical = 4.dp),
-                            ) {
-                                Text("Pay")
-                            }
-                        }
+                if (!checkout.open && !customerFindOpen) {
+                    val setQuantityEnabled =
+                        quantityEditing && state.quantityEditInput.isNotBlank()
+                    Button(
+                        onClick = {
+                            customerFindOpen = false
+                            viewModel.openCheckout()
+                        },
+                        enabled = state.cart.isNotEmpty() && !setQuantityEnabled,
+                        colors = PosButtonDefaults.teal(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp)
+                            .height(44.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp),
+                    ) {
+                        Text("Pay")
                     }
                 }
+            }
             }
         }
             }
@@ -671,6 +744,13 @@ fun PosScreen(viewModel: PosViewModel) {
         ProcessingStatusDialog(
             message = message,
             progress = checkout.paymentProcessingProgress,
+        )
+    }
+
+    state.receiptPrintMessage?.let { message ->
+        ProcessingStatusDialog(
+            message = message,
+            progress = state.receiptPrintProgress,
         )
     }
 
@@ -710,7 +790,7 @@ fun PosScreen(viewModel: PosViewModel) {
         )
     }
 
-    if (scannerOpen && !checkout.saleItemsLocked) {
+    if (scannerOpen && !checkout.saleItemsLocked && state.receipt == null) {
         BarcodeScannerDialog(
             onBarcodeDetected = { code ->
                 scannerOpen = false
@@ -806,13 +886,6 @@ private fun OfflineQueueStatus(
             )
         }
     }
-}
-
-private fun customerDisplayName(customer: StoreCustomer?, customerId: Int): String {
-    if (customer != null) {
-        return customer.name
-    }
-    return "Customer #$customerId"
 }
 
 @Composable
@@ -968,11 +1041,17 @@ private fun CartLineRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = item.name,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = "ID ${item.productId}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             TextButton(
                 onClick = onEditQuantity,
                 enabled = editEnabled,
@@ -1257,8 +1336,8 @@ private fun SaleTotalsPanel(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Sale total",
-            style = MaterialTheme.typography.titleMedium,
+            text = "Sale Total",
+            style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
         )
@@ -1267,13 +1346,14 @@ private fun SaleTotalsPanel(
                 text = customerDisplayName(customer, customer.id),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 1.dp),
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.Top,
         ) {
             TotalSaleStat(
@@ -1347,7 +1427,7 @@ private fun TotalSaleStat(
     valueColor: androidx.compose.ui.graphics.Color? = null,
 ) {
     Column(
-        modifier = modifier.padding(horizontal = 2.dp),
+        modifier = modifier.padding(horizontal = 1.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
@@ -1355,15 +1435,15 @@ private fun TotalSaleStat(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            maxLines = 3,
+            maxLines = 2,
+            lineHeight = MaterialTheme.typography.labelSmall.lineHeight * 0.9f,
         )
-        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = value,
             style = if (emphasize) {
-                MaterialTheme.typography.titleMedium
+                MaterialTheme.typography.titleSmall
             } else {
-                MaterialTheme.typography.bodyMedium
+                MaterialTheme.typography.bodySmall
             },
             fontWeight = if (emphasize) FontWeight.Bold else FontWeight.Medium,
             color = valueColor ?: if (emphasize) {

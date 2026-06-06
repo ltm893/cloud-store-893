@@ -69,11 +69,11 @@ Every `npm test` / `run-tests.sh` run ends with a **summary report**:
 ================================================================
   Suite                    Pass   Fail   Skip    Time
   ----------------------------------------------------------------
-  unit                       24      0      0      0s  PASS
+  unit                       32      0      0      0s  PASS
   auth                       55      0      0      2s  PASS
-  api                         8      0      0      1s  PASS
+  api                        12      0      0      1s  PASS
   ----------------------------------------------------------------
-  TOTAL                      87      0      0      3s  PASS
+  TOTAL                      99      0      0      3s  PASS
 ================================================================
 ```
 
@@ -119,6 +119,7 @@ Equivalent shell entry points:
 | `ords-client.test.js` | `lib/ords-client.js` — timestamp format, URL normalization, fetch errors |
 | `approval-errors.test.js` | `lib/approval-errors.js` |
 | `supervisor-config.test.js` | `lib/supervisor-config.js` |
+| `cashier-identity.test.js` | `lib/login-approval.js` — `identityFromCashierSub`, `identityFromApproval`, claim helpers |
 
 Run directly:
 
@@ -181,8 +182,10 @@ Exercises POS cart and checkout routes via curl.
 
 **Always runs (non-destructive):**
 
+- `GET /api/build-info` — deploy smoke (`BUILD_ID` from Docker build or `integration-test` in CI)
 - `GET /api/products`, unlock, customers, cart GETs, validation errors
-- `POST /api/cart/barcode {}` → 400
+- `POST /api/cart {}` → 400; `POST /api/cart {unknown productId}` → 404
+- `POST /api/cart/barcode {}` → 400; unknown barcode → 404
 - `GET /api/sales/recent`
 
 **Destructive phase** (cart mutation + checkout) runs only when:
@@ -264,11 +267,47 @@ Integration CI does **not** run the destructive cart/checkout phase.
 
 ---
 
+## OCI deploy verification (manual)
+
+Not part of `npm test`. After `./scripts/oci/redeploy-app-code.sh`:
+
+```bash
+APP=$(./scripts/oci/oci-app-url.sh)
+curl -s "$APP/api/build-info"                    # expect {"buildId":"<your BUILD_ID>"}
+curl -s -o /dev/null -w "%{http_code}\n" \
+  -X POST "$APP/api/cashier/unlock" \
+  -H 'Content-Type: application/json' -d '{"pin":"8930"}'   # expect 200, not 404
+```
+
+Optional API smoke against the live server (read-only; needs cashier unlock in script):
+
+```bash
+BASE_URL="$APP" SKIP_DESTRUCTIVE=yes ./scripts/test-api-curl.sh
+```
+
+See [README.md](../README.md#update-the-oci-container-after-code-changes) and [oci-network-recovery.md](oci-network-recovery.md).
+
+---
+
+## Local dev + tablet (manual)
+
+| Layer | Command | Notes |
+|-------|---------|-------|
+| Server | `npm run dev:up` | Probes ORDS; prints Mac LAN URL for tablet |
+| Unit + integration | `npm test` / `npm run test:all` | Integration uses ephemeral server + dev ADB |
+| Tablet APK | `cd android-pos && USE_LOCAL=1 ./RebuildReinstall.sh` | Bakes `API_BASE_URL` to Mac LAN IP |
+| Oracle sign-in on tablet | `./scripts/oci/idp-update-redirect-uris.sh` | Register `http://<LAN_IP>:3000/oauth/callback` — not `localhost` |
+| PIN-only local dev | `CASHIER_SUPERVISOR_APPROVAL=false` in `.env` | Avoids IdP redirect setup when testing cart flows |
+
+Integration tests do **not** cover Android UI (e.g. add-item error display); validate tablet behavior manually.
+
+---
+
 ## What is not covered
 
 - **Android POS** (`android-pos/`) — no JVM/instrumented tests yet
 - **Web POS / admin UI** — integration tests hit APIs and static admin pages, not browser JS
-- **OCI deploy / Terraform** — separate operational scripts; not in test suite
+- **OCI deploy / Terraform** — use `./scripts/oci/redeploy-app-code.sh` + curl checks above; not in `npm test`
 - **IdP OAuth redirect flows** — auth tests only check redirect status codes, not full Oracle login
 - **Production OCI** — run integration against local ephemeral server + dev ADB, not `oci.cloudstore893.com`, unless you point `BASE_URL` there deliberately
 
@@ -281,8 +320,12 @@ Integration CI does **not** run the destructive cart/checkout phase.
 | `ORDS_BASE_URL is not set` | Missing `.env` | Copy `.env.example`, set `ORDS_BASE_URL` |
 | `POST /api/cashier/unlock → 403` | Model B on server | Use integration runner (forces approval off) or set `CASHIER_SUPERVISOR_APPROVAL=false` |
 | `POST /api/cart/barcode → 404` on seed barcode | Empty products table | Run `scripts/seed.sql` in Database Actions |
+| `POST /api/cart {productId} → 404` on valid-looking id | Product not in ADB | Expected for unknown ids; seed products or use id from `GET /api/products` |
+| `POST /api/cart/barcode → 404` on unknown barcode | Expected | Non-destructive API test uses `does-not-exist-xyz` |
 | Auth passes, API cart routes → 500 | ORDS down or schema not enabled | `npm run dev:up` probe; fix ORDS enablement |
 | Summary shows `integration 0 1` | Sub-suite crashed before `== done (auth/api):` | Scroll up for server startup or ORDS errors |
+| `invalid_redirect_uri` on tablet Oracle sign-in | LAN IP not in IdP redirect list | Run `idp-update-redirect-uris.sh` with `APP_PUBLIC_HOST=<Mac LAN IP>` |
+| `curl build-info` shows `unknown` locally | No `BUILD_ID` at start | Normal for `npm run dev:up`; set `BUILD_ID=…` when testing deploy parity |
 | Destructive test aborts | Interactive prompt | Use `SKIP_CONFIRM=yes` or `SKIP_DESTRUCTIVE=yes` |
 
 ---
@@ -290,8 +333,9 @@ Integration CI does **not** run the destructive cart/checkout phase.
 ## Adding tests
 
 1. **Pure functions in `lib/`** → add `test/<module>.test.js`, run `npm test`.
-2. **New HTTP route** → extend `scripts/test-auth-protection.sh` and/or `scripts/test-api-curl.sh`.
+2. **New HTTP route** → extend `scripts/test-auth-protection.sh` and/or `scripts/test-api-curl.sh` (prefer non-destructive checks in the read-only section).
 3. **Model B behavior** → extend the opt-in scripts under `scripts/test-cashier-approval-*.sh`.
-4. **CI** → unit tests run automatically; integration picks up changes to curl scripts when secrets are configured.
+4. **OCI deploy** → document curl/`redeploy-app-code.sh` steps in this file; optional read-only `test-api-curl.sh` against live URL.
+5. **CI** → unit tests run automatically; integration picks up changes to curl scripts when secrets are configured.
 
 Keep destructive DB writes out of the default `npm run test:all` path so daily runs stay safe against shared dev ADB.

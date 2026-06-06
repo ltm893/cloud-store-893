@@ -66,23 +66,50 @@ data class PendingApprovalInfo(
     val status: String? = null,
     @Json(name = "expiresAt") val expiresAt: String? = null,
     @Json(name = "cashierEmail") val cashierEmail: String? = null,
+    @Json(name = "cashierName") val cashierName: String? = null,
     @Json(name = "secondsRemaining") val secondsRemaining: Int? = null,
 )
 
 data class CashierSessionResponse(
     val ok: Boolean = false,
     val pending: Boolean = false,
+    val auth: String? = null,
+    val sub: String? = null,
+    val email: String? = null,
+    val name: String? = null,
+    val user: String? = null,
+    @Json(name = "cashierEmail") val cashierEmail: String? = null,
     @Json(name = "supervisorApprovalRequired") val supervisorApprovalRequired: Boolean = false,
     @Json(name = "idpEnabled") val idpEnabled: Boolean = false,
     @Json(name = "idpLoginUrl") val idpLoginUrl: String? = null,
     @Json(name = "pinAllowed") val pinAllowed: Boolean = true,
     val approval: PendingApprovalInfo? = null,
     val error: String? = null,
-)
+) {
+    fun displayUser(): String? {
+        if (!ok) return null
+        listOf(
+            user,
+            email,
+            cashierEmail,
+            approval?.cashierEmail,
+            name,
+            approval?.cashierName,
+            sub?.takeIf { it.contains("@") },
+        ).forEach { candidate ->
+            candidate?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        }
+        return if (auth == "pin") "Cashier" else null
+    }
+}
 
 data class ApprovalStatusResponse(
     val status: String,
     val ok: Boolean = false,
+    val email: String? = null,
+    @Json(name = "cashierEmail") val cashierEmail: String? = null,
+    val name: String? = null,
+    @Json(name = "cashierName") val cashierName: String? = null,
     val reason: String? = null,
     @Json(name = "secondsRemaining") val secondsRemaining: Int? = null,
     @Json(name = "expiresAt") val expiresAt: String? = null,

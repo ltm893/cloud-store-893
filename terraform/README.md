@@ -81,7 +81,7 @@ Use `terraform output ocir_image_path` for `<ocir_image_path>` after the first a
 
 That ordering avoids the container failing immediately on a missing image.
 
-**App code only (keeps IP):** [`../scripts/oci/deploy-app-oci.sh`](../scripts/oci/deploy-app-oci.sh) builds/pushes a tagged image and applies with `-var ocir_image_tag=…`, or use `docker push` + [`../scripts/oci/restart-container-instance.sh`](../scripts/oci/restart-container-instance.sh).
+**App code only (keeps IP):** [`../scripts/oci/redeploy-app-code.sh`](../scripts/oci/redeploy-app-code.sh) — build, push, restart, verify. For a new tag via apply: [`../scripts/oci/deploy-app-oci.sh`](../scripts/oci/deploy-app-oci.sh).
 
 ---
 

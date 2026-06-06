@@ -40,13 +40,13 @@ fun detectLanIp(): String? {
 }
 
 val devLanIp = detectLanIp()
+val devLanIpResolved = devLanIp ?: "oci.cloudstore893.com"
 if (devLanIp == null) {
     println(
-        "[cloud-store-893] WARNING: could not detect LAN IP — set LAN_IP before building " +
-            "(e.g. LAN_IP=192.168.1.10 ./gradlew :app:assembleDebug)",
+        "[cloud-store-893] WARNING: could not detect LAN IP — debug API_BASE_URL defaults to $devLanIpResolved. " +
+            "For local dev set LAN_IP (e.g. LAN_IP=192.168.1.10 ./gradlew :app:assembleDebug).",
     )
 }
-val devLanIpResolved = devLanIp ?: "10.0.0.122"
 val devApiPort = System.getenv("PORT") ?: "3000"
 val devApiBaseUrl = "http://$devLanIpResolved:$devApiPort/"
 val releaseApiBaseUrl = System.getenv("RELEASE_API_BASE_URL") ?: devApiBaseUrl

@@ -300,7 +300,17 @@ app.get('/api/cart', asyncHandler(async (req, res) => {
 }));
 
 app.post('/api/cart', asyncHandler(async (req, res) => {
-  const { productId } = req.body;
+  const productId = Number(req.body?.productId);
+  if (!Number.isFinite(productId)) {
+    return res.status(400).json({ error: 'productId is required' });
+  }
+
+  const filter = encodeURIComponent(JSON.stringify({ id: { $eq: productId } }));
+  const products = await ordsGet(`products/?q=${filter}`);
+  if (!products.length) {
+    return res.status(404).json({ error: 'Product not found' });
+  }
+
   await upsertCartLine(productId);
   await respondWithCart(req, res);
 }));
@@ -314,7 +324,7 @@ app.post('/api/cart/barcode', asyncHandler(async (req, res) => {
   const filter = encodeURIComponent(JSON.stringify({ barcode: { $eq: String(barcode) } }));
   const products = await ordsGet(`products/?q=${filter}`);
   if (!products.length) {
-    return res.status(404).json({ error: 'Product not found for barcode' });
+    return res.status(404).json({ error: 'Product not found' });
   }
 
   await upsertCartLine(Number(products[0].id));

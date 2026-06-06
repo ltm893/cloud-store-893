@@ -5,8 +5,10 @@
 #   ./RebuildReinstall.sh
 #
 # Optional env:
-#   LAN_IP=192.168.1.10   Override Mac LAN IP baked into API_BASE_URL
-#   ADB=adb               Path to adb if not on PATH
+#   LAN_IP=192.168.1.10     Local Mac IP for dev against npm run dev:up
+#   USE_LOCAL=1             Same as auto-detecting Mac LAN IP (not OCI)
+#   OCI_API_HOST=oci.cloudstore893.com   Default cloud API host (when not USE_LOCAL)
+#   ADB=adb                 Path to adb if not on PATH
 
 set -euo pipefail
 
@@ -32,6 +34,8 @@ fi
 
 ADB="${ADB:-adb}"
 APK="app/build/outputs/apk/debug/app-debug.apk"
+OCI_API_HOST="${OCI_API_HOST:-oci.cloudstore893.com}"
+APP_PORT="${PORT:-3000}"
 
 detect_lan_ip() {
   if [[ -n "${LAN_IP:-}" ]]; then
@@ -48,13 +52,27 @@ detect_lan_ip() {
       fi
     done
   fi
-  echo "10.0.0.122"
+  echo ""
 }
 
-LAN_IP="$(detect_lan_ip)"
-export LAN_IP
+if [[ -n "${LAN_IP:-}" ]]; then
+  API_HOST="$LAN_IP"
+elif [[ "${USE_LOCAL:-}" == "1" ]]; then
+  API_HOST="$(detect_lan_ip)"
+  if [[ -z "$API_HOST" ]]; then
+    echo "error: USE_LOCAL=1 but could not detect Mac LAN IP — set LAN_IP=192.168.x.x" >&2
+    exit 1
+  fi
+else
+  API_HOST="$OCI_API_HOST"
+fi
 
-echo "==> LAN_IP=$LAN_IP (API_BASE_URL for debug build)"
+export LAN_IP="$API_HOST"
+
+echo "==> API_BASE_URL=http://${API_HOST}:${APP_PORT}/"
+if [[ "$API_HOST" == "$OCI_API_HOST" && "${USE_LOCAL:-}" != "1" ]]; then
+  echo "    (OCI default — local dev: USE_LOCAL=1 or LAN_IP=192.168.x.x ./RebuildReinstall.sh)"
+fi
 echo "==> ./gradlew :app:assembleDebug"
 ./gradlew :app:assembleDebug
 

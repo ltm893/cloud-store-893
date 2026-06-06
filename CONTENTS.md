@@ -42,9 +42,11 @@ npm run dev:up
 **App code only** (preferred — does not replace container instance / IP):
 
 ```bash
-./scripts/oci/deploy-app-oci.sh <tag>   # build, push, terraform apply with tag
-# or: docker push + ./scripts/oci/restart-container-instance.sh
+./scripts/oci/redeploy-app-code.sh              # build, push, restart, verify build-info
+./scripts/oci/redeploy-app-code.sh my-change-id # optional BUILD_ID for /api/build-info
 ```
+
+Use `./scripts/oci/deploy-app-oci.sh <tag>` only when you need a **new image tag** via Terraform (may replace instance / detach reserved IP).
 
 **Env changes** (replaces container — may detach reserved IP; see recovery doc):
 
@@ -274,11 +276,23 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 ## Quick test checklist
 
+**Automated (repo root):**
+
+```bash
+npm test                              # unit only (fast, no ORDS)
+npm run test:all                      # unit + auth + read-only API (needs ORDS in .env)
+```
+
+Covers cart validation (`POST /api/cart` unknown product → 404), session guards, and cashier identity helpers. Full matrix: [docs/testing.md](docs/testing.md).
+
+**Manual smoke:**
+
 1. `npm run dev:up` — `✅ ORDS is healthy`
 2. `curl` cashier unlock → 200
 3. Open `/admin/` — login, list products
-4. Tablet: PIN **Done** → add product **1** → **Pay** → **Complete Sale**
+4. Tablet: PIN **Done** → add product **1** → **Pay** → **Complete Sale** (rebuild APK with `USE_LOCAL=1` for local server)
 5. `☰` → Admin opens in browser
+6. OCI after code change: `./scripts/oci/redeploy-app-code.sh` then `curl -s "$(./scripts/oci/oci-app-url.sh)/api/build-info"`
 
 **Model B (supervisor approval, feature branch):** optional manual checks — not part of `dev:up`. See [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md#testing-manual-today) and [End-to-end (web + admin + tablet)](docs/cashier-supervisor-approval.md#end-to-end-manual-web--admin--tablet). Automated suite: [docs/testing.md](docs/testing.md).
 

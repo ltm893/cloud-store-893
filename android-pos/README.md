@@ -45,7 +45,7 @@ Baked into the APK at **Gradle configuration** time (`BuildConfig.API_BASE_URL`)
 
 1. `LAN_IP` env var if set
 2. macOS `ipconfig getifaddr en0`, then `en1`
-3. Fallback `10.0.0.122`
+3. Fallback `oci.cloudstore893.com` (OCI; set `LAN_IP` for local Mac dev)
 
 Watch the configure log: `[cloud-store-893] debug API_BASE_URL = http://…/`
 

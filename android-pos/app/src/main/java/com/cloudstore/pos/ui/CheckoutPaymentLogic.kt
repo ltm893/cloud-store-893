@@ -21,13 +21,15 @@ fun checkoutChangeTotal(payments: List<CheckoutPayment>): Double =
 fun isCardOnlyCheckout(payments: List<CheckoutPayment>): Boolean =
     payments.isNotEmpty() && payments.all { it.method == "card" }
 
+fun isCashOnlyCheckout(payments: List<CheckoutPayment>): Boolean =
+    payments.isNotEmpty() && payments.all { it.method == "cash" }
+
 fun finalizeProcessingMessage(payments: List<CheckoutPayment>): String {
     val change = checkoutChangeTotal(payments)
-    val method = checkoutFinalizeMethod(payments)
     val completion = when {
         payments.size > 1 -> "Completing sale"
-        method == "cash" -> "Printing Receipt"
-        else -> "Processing Card Payment"
+        isCardOnlyCheckout(payments) -> "Processing Card Payment"
+        else -> "Completing sale"
     }
     return if (change > 0.005) {
         "Give change ${formatMoney(change)}\n$completion"

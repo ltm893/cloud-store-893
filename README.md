@@ -204,7 +204,7 @@ Available npm scripts:
 | `npm run sync-env` | rewrites `.env`'s `ORDS_BASE_URL` from `terraform output` |
 | `npm run lan-url` | prints `http://<your-mac-lan-ip>:3000/` |
 | `npm test` / `npm run test:unit` | Unit tests + **summary report** (no server or ORDS) — see [docs/testing.md](docs/testing.md) |
-| `npm run test:integration` | Starts ephemeral server + auth/API smoke tests (needs ORDS; skips cart/checkout by default) |
+| `npm run test:integration` | Starts ephemeral server + auth/API smoke tests (needs ORDS; includes cart product validation) |
 | `npm run test:all` | Unit + integration + summary |
 | `npm run test:all:destructive` | Unit + integration including cart clear + checkout |
 | `npm run test:auth` | curl checks that POS/admin APIs require sessions (manual; server must be running) |
@@ -261,7 +261,7 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 2. **`.env` for sync** — `APP_PUBLIC_URL_FROM_REQUEST=true`; keep `APP_PUBLIC_URL` for local dev only (same host as step 1 is optional on OCI).
 3. **Push env via Terraform (once per env change)** — `./scripts/oci/sync-container-env-to-terraform.sh` then `./scripts/oci/terraform-apply-container.sh` (warns before replace/new IP). Then run the **network recovery** steps in [docs/oci-network-recovery.md](docs/oci-network-recovery.md) — **do not** apply again just to “fix” the URL.
 4. **Oracle Identity** — prefer hostname redirect URIs on `oci.cloudstore893.com`; use `./scripts/oci/idp-update-redirect-uris.sh` when adding IPs or after hostname changes.
-5. **App code** — `docker build` / `push` + `./scripts/oci/restart-container-instance.sh` (does not change IP). Required for Model B fields on `/api/admin/session`.
+5. **App code** — `./scripts/oci/redeploy-app-code.sh` (build, push, restart; does not change IP). Required for Model B fields on `/api/admin/session`.
 6. **Verify:**
    ```bash
    APP=$(./scripts/oci/oci-app-url.sh)
@@ -285,30 +285,28 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 
 ## Update the OCI container (after code changes)
 
-The tablet and browser talk to **whatever image is running** on the container instance. After changing `server.js` or admin UI, **push a new Docker image before** (or with) Terraform:
+The tablet and browser talk to **whatever image is running** on the container instance. After changing `server.js`, `lib/`, or admin UI:
 
 ```bash
-cd /Users/ltm893/Dev/projects/cloud-store-893   # repo root
-IMAGE=$(cd terraform && terraform output -raw ocir_image_path)
-
-docker buildx build --platform linux/arm64 -t "$IMAGE" .
-docker push "$IMAGE"
-
-cd terraform
-terraform apply    # recreates container if needed; see terraform/README.md
+./scripts/oci/redeploy-app-code.sh
+# optional BUILD_ID: ./scripts/oci/redeploy-app-code.sh my-change-20260606
 ```
+
+This builds for `linux/arm64`, pushes to the image tag in Terraform state, restarts the **same** container instance (keeps the public IP), and prints `/api/build-info`.
 
 Verify cashier login API (expect **200**, not **404**):
 
 ```bash
-APP=$(cd terraform && terraform output -raw app_url)
+APP=$(./scripts/oci/oci-app-url.sh)
 curl -s -o /dev/null -w "%{http_code}\n" \
   -X POST "$APP/api/cashier/unlock" \
   -H 'Content-Type: application/json' \
   -d '{"pin":"8930"}'
 ```
 
-If `terraform apply` fails on **Always Free ADB** with a 403 about OCPU/storage updates, see [terraform/README.md](terraform/README.md) — `database.tf` uses `lifecycle { ignore_changes = … }` so only the container should change.
+**Env var changes** replace the instance (may detach reserved IP): `./scripts/oci/sync-container-env-to-terraform.sh` then `./scripts/oci/terraform-apply-container.sh` — see [docs/oci-network-recovery.md](docs/oci-network-recovery.md).
+
+**New image tag via Terraform** (also may replace instance): `./scripts/oci/deploy-app-oci.sh <tag>`.
 
 ---
 
