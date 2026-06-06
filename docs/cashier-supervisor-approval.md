@@ -38,7 +38,7 @@ Related: [idp-setup.md](idp-setup.md) (Phase 2 IdP), [CONTENTS.md](../CONTENTS.m
 | 7 | Admin pending-approvals panel | **Done** |
 | 8 | Tablet WebView OIDC + poll | **Done** |
 | 9 | IdM groups + token claims in OCI Console | Not started |
-| 10 | Automated test suite + CI | **Later** — manual scripts exist; see [Testing](#testing-manual-today) |
+| 10 | Automated test suite + CI | **Done** — see [testing.md](testing.md) |
 
 ---
 
@@ -199,7 +199,7 @@ ORDS REST path (after seed): `{ORDS_BASE_URL}/login_approval_requests/`
 
 ## Testing (manual today)
 
-These checks are **opt-in**. They do **not** run on `npm start`, `npm run dev`, `npm run dev:up`, Docker build, or Terraform apply. There is **no GitHub Actions CI** yet; `npm test` is still a placeholder.
+These checks are **opt-in** for Model B–specific flows. The main automated suite is documented in [testing.md](testing.md) (`npm test`, `npm run test:all`, GitHub Actions).
 
 Run them after changing login-approval or supervisor code, or before merging `feature/cashier-supervisor-approval`.
 
@@ -240,17 +240,13 @@ ORDS=$(cd terraform && terraform output -raw ords_base_url)
 curl -s "${ORDS}/login_approval_requests/" | head
 ```
 
-### Later — wire into normal workflow (TODO)
+### Later — optional improvements
 
-Pick up when Model B is merge-ready or CI is added:
-
-- [ ] Add `npm run test:approval` that runs `test:login-approval` + documents server prerequisite for `test:supervisor-routes` (or starts server in script).
-- [ ] Point root `npm test` at a small runner (`test:auth` + `test:approval` when server/ORDS available).
-- [ ] GitHub Actions (or similar): ORDS smoke on schedule or PR; HTTP tests with ephemeral Node + env secrets.
+- [ ] Add `npm run test:approval` aggregating Model B scripts (`test:login-approval`, `test:supervisor-routes`, etc.).
 - [ ] Optional: extend `scripts/test-auth-protection.sh` for `/api/admin/login-approvals` 401/403 matrix.
-- [ ] Document `CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR` only for local dev — production uses IdP group `store-supervisors`.
+- [ ] Android JVM tests for `CheckoutPaymentLogic.kt` / `CartTotals.kt`.
 
-Until then, treat the scripts above as **manual regression checks**, not release gates.
+Done: root `npm test` + summary, integration runner, GitHub Actions — see [testing.md](testing.md).
 
 ### End-to-end manual (web + admin + tablet)
 
@@ -304,7 +300,7 @@ curl -s "${ORDS}/login_approval_requests/" | head
 4. Web POS waiting + poll (step 6)
 5. Admin pending-approvals panel (step 7)
 6. Tablet WebView OIDC + poll (step 8)
-7. **Next:** IdM groups in OCI Console (step 9); CI / `npm test` (step 10)
+7. **Next:** IdM groups in OCI Console (step 9). Automated testing: [testing.md](testing.md) (step 10).
 
 ---
 

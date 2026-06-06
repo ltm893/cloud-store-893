@@ -10,6 +10,7 @@
 #
 # The script has a DESTRUCTIVE phase (clears the shared cart + completes checkout).
 # You must type "yes" to continue, unless SKIP_CONFIRM=yes (for CI / automation).
+# Set SKIP_DESTRUCTIVE=yes to skip cart mutation and checkout entirely.
 
 set -u
 
@@ -66,6 +67,11 @@ clear_cart() {
 
 # Bash 3.2–safe lowercase (no ${var,,}).
 confirm_destructive_phase() {
+  if [[ "${SKIP_DESTRUCTIVE:-}" == "yes" ]]; then
+    echo "  (SKIP_DESTRUCTIVE=yes — skipping cart mutation / checkout)"
+    echo ""
+    return 1
+  fi
   if [[ "${SKIP_CONFIRM:-}" == "yes" ]]; then
     echo "  (SKIP_CONFIRM=yes — continuing without prompt)"
     echo ""
@@ -102,6 +108,7 @@ echo ""
 curl_json GET "$BASE_URL/api/products"
 expect_code 200 "GET /api/products"
 PRODUCT_ID=$(py -c "import json;d=open('$BODY').read();a=json.loads(d) if d.strip() else [];print(a[0]['id'] if isinstance(a,list)and a else '')" 2>/dev/null || true)
+PRODUCT_BARCODE=$(py -c "import json;d=open('$BODY').read();a=json.loads(d) if d.strip() else [];p=a[0] if isinstance(a,list)and a else {};print(p.get('barcode') or '')" 2>/dev/null || true)
 
 # ── POST /api/cashier/unlock (session cookie for protected APIs) ─────────
 curl_json POST "$BASE_URL/api/cashier/unlock" -d "{\"pin\":\"$CASHIER_PIN\"}"
@@ -153,9 +160,7 @@ expect_code 400 "POST /api/cart/barcode {} (missing barcode)"
 # ── POST /api/cart (add line for mutation tests) ────────────────────────────
 if [[ -z "${PRODUCT_ID:-}" ]]; then
   echo "  SKIP cart mutation / checkout (no products from GET /api/products)"
-else
-  confirm_destructive_phase
-
+elif confirm_destructive_phase; then
   echo "  -- clear cart, then mutation / checkout flow --"
   clear_cart
 
@@ -170,12 +175,11 @@ else
     expect_code 200 "POST /api/cart {productId,customerId} (893)"
   fi
 
-  curl_json POST "$BASE_URL/api/cart/barcode" -d '{"barcode":"100000000001"}'
-  if [[ "$HTTP_CODE" == "200" ]]; then
-    log_ok "POST /api/cart/barcode {barcode: OCI book} (HTTP 200)"
+  if [[ -n "${PRODUCT_BARCODE:-}" ]]; then
+    curl_json POST "$BASE_URL/api/cart/barcode" -d "{\"barcode\":\"$PRODUCT_BARCODE\"}"
+    expect_code 200 "POST /api/cart/barcode {seed product barcode}"
   else
-    log_bad "POST /api/cart/barcode (want 200, got $HTTP_CODE)"
-    sed 's/^/         /' "$BODY" | head -10
+    echo "  SKIP POST /api/cart/barcode (first product has no barcode)"
   fi
 
   curl_json POST "$BASE_URL/api/cart/barcode" -d '{"barcode":"does-not-exist-xyz"}'
@@ -206,6 +210,8 @@ else
 
   curl_json POST "$BASE_URL/api/checkout" -d '{"paymentMethod":"card"}'
   expect_code 400 "POST /api/checkout (empty cart after sale)"
+else
+  echo "  -- destructive phase skipped --"
 fi
 
 # ── GET /api/sales/recent ───────────────────────────────────────────────────
@@ -213,5 +219,5 @@ curl_json GET "$BASE_URL/api/sales/recent"
 expect_code 200 "GET /api/sales/recent"
 
 echo ""
-echo "== done: $pass passed, $fail failed =="
+echo "== done (api): $pass passed, $fail failed =="
 [[ "$fail" -eq 0 ]]

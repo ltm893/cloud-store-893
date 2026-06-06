@@ -1,0 +1,46 @@
+name: Test
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run test:unit
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: unit
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'push' && secrets.ORDS_BASE_URL != '')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Integration smoke (auth + read-only API)
+        env:
+          ORDS_BASE_URL: ${{ secrets.ORDS_BASE_URL }}
+          CASHIER_PIN: ${{ secrets.CASHIER_PIN }}
+          ADMIN_PIN: ${{ secrets.ADMIN_PIN }}
+        run: npm run test:integration

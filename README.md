@@ -203,6 +203,10 @@ Available npm scripts:
 | `npm run dev:up` | preflight + `node --watch server.js` (recommended) |
 | `npm run sync-env` | rewrites `.env`'s `ORDS_BASE_URL` from `terraform output` |
 | `npm run lan-url` | prints `http://<your-mac-lan-ip>:3000/` |
+| `npm test` / `npm run test:unit` | Unit tests + **summary report** (no server or ORDS) — see [docs/testing.md](docs/testing.md) |
+| `npm run test:integration` | Starts ephemeral server + auth/API smoke tests (needs ORDS; skips cart/checkout by default) |
+| `npm run test:all` | Unit + integration + summary |
+| `npm run test:all:destructive` | Unit + integration including cart clear + checkout |
 | `npm run test:auth` | curl checks that POS/admin APIs require sessions (manual; server must be running) |
 | `npm run test:api` | curl smoke tests for POS/admin APIs (manual; destructive phase — see script) |
 | `npm run test:login-approval` | ORDS smoke test for Model B login-approval store (manual; live ADB) |
@@ -210,7 +214,7 @@ Available npm scripts:
 | `npm run test:cashier-approval-session` | Pending cookie + `/api/cashier/session` for Model B (manual; server needs `CASHIER_SUPERVISOR_APPROVAL=true`) |
 | `npm run test:cashier-approval-poll` | Poll → supervisor approve → session cookie E2E (manual; server + supervisor env) |
 
-`npm test` is not wired to these yet — they are opt-in. Planned CI / `npm test` aggregation: [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md#later--wire-into-normal-workflow-todo).
+`npm test` runs unit tests on every push (GitHub Actions). Integration tests run when `ORDS_BASE_URL` is configured as a repo secret, or via **Actions → Test → Run workflow**. Full guide: [docs/testing.md](docs/testing.md). Model B scripts below remain opt-in.
 
 Typical flow after a `terraform apply` that may have changed the ADB
 hostname:

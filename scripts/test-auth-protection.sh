@@ -116,7 +116,11 @@ echo "-- Cashier: public without session --"
 expect_public_anon GET /api/products
 expect_public_anon GET /api/cashier/session
 curl_req GET "$BASE_URL/api/cashier/approval/status"
-[[ "$HTTP_CODE" == "401" ]] && log_ok "GET /api/cashier/approval/status (no pending) → 401" || log_fail "GET /api/cashier/approval/status → $HTTP_CODE"
+case "$HTTP_CODE" in
+  401) log_ok "GET /api/cashier/approval/status (no pending) → 401" ;;
+  404) log_ok "GET /api/cashier/approval/status → 404 (Model B disabled)" ;;
+  *)   log_fail "GET /api/cashier/approval/status → $HTTP_CODE" ;;
+esac
 curl_req POST "$BASE_URL/api/cashier/logout"
 [[ "$HTTP_CODE" == "200" ]] && log_ok "public POST /api/cashier/logout → 200" || log_fail "public POST /api/cashier/logout → $HTTP_CODE"
 
@@ -150,7 +154,7 @@ curl_req POST "$BASE_URL/api/cashier/unlock" -c "$CASHIER_JAR" -d "{\"pin\":\"$C
 if [[ "$HTTP_CODE" != "200" ]]; then
   log_fail "POST /api/cashier/unlock (valid PIN) → $HTTP_CODE — check CASHIER_PIN"
   echo ""
-  echo "== done: $pass passed, $fail failed, $skip skipped =="
+  echo "== done (auth): $pass passed, $fail failed, $skip skipped =="
   exit 1
 fi
 log_ok "POST /api/cashier/unlock (valid PIN) → 200"
@@ -218,7 +222,7 @@ curl_req POST "$BASE_URL/api/admin/login" -c "$ADMIN_JAR" -d "{\"pin\":\"$ADMIN_
 if [[ "$HTTP_CODE" != "200" ]]; then
   log_fail "POST /api/admin/login (valid PIN) → $HTTP_CODE — check ADMIN_PIN"
   echo ""
-  echo "== done: $pass passed, $fail failed, $skip skipped =="
+  echo "== done (auth): $pass passed, $fail failed, $skip skipped =="
   exit 1
 fi
 log_ok "POST /api/admin/login (valid PIN) → 200"
@@ -251,5 +255,5 @@ for path in /oauth/login /oauth/admin/login; do
 done
 
 echo ""
-echo "== done: $pass passed, $fail failed, $skip skipped =="
+echo "== done (auth): $pass passed, $fail failed, $skip skipped =="
 [[ "$fail" -eq 0 ]]
