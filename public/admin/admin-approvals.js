@@ -20,14 +20,6 @@
   let active = false;
   let loading = false;
 
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
   function formatTimer(secondsRemaining, expiresAt) {
     if (Number.isFinite(secondsRemaining) && secondsRemaining >= 0) {
       const mins = Math.floor(secondsRemaining / 60);

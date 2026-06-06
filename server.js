@@ -19,6 +19,7 @@ app.get('/api/build-info', (req, res) => {
 // ── ORDS client ───────────────────────────────────────────────────────────
 
 const { createOrdsClient } = require('./lib/ords-client');
+const { asyncHandler } = require('./lib/async-handler');
 const {
   ordsGet,
   ordsTryGet,
@@ -228,37 +229,27 @@ function mapProductRow(p) {
 
 // ── Products ──────────────────────────────────────────────────────────────
 
-app.get('/api/products', async (req, res) => {
-  try {
-    const products = await ordsGet('products/');
-    res.json(products.map(mapProductRow));
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+app.get('/api/products', asyncHandler(async (req, res) => {
+  const products = await ordsGet('products/');
+  res.json(products.map(mapProductRow));
+}));
 
 // ── Customers (for linking at checkout / cart preview) ────────────────────
 
-app.get('/api/customers', async (req, res) => {
-  try {
-    const rows = await ordsGet('customers/');
-    const out = rows.map((c) => ({
-      id: Number(c.id),
-      name: c.name,
-      email: c.email,
-      phone: c.phone,
-      memberCode: c.member_code ?? null,
-      is893: customerDiscountApplies(c),
-      hasCardOnFile: hasCardOnFile(c),
-      cardLast4: cardLast4(c),
-    }));
-    res.json(out);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+app.get('/api/customers', asyncHandler(async (req, res) => {
+  const rows = await ordsGet('customers/');
+  const out = rows.map((c) => ({
+    id: Number(c.id),
+    name: c.name,
+    email: c.email,
+    phone: c.phone,
+    memberCode: c.member_code ?? null,
+    is893: customerDiscountApplies(c),
+    hasCardOnFile: hasCardOnFile(c),
+    cardLast4: cardLast4(c),
+  }));
+  res.json(out);
+}));
 
 // ── Cart ──────────────────────────────────────────────────────────────────
 
@@ -304,212 +295,177 @@ async function upsertCartLine(productId) {
   }
 }
 
-app.get('/api/cart', async (req, res) => {
-  try {
-    await respondWithCart(req, res);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: err.message });
+app.get('/api/cart', asyncHandler(async (req, res) => {
+  await respondWithCart(req, res);
+}));
+
+app.post('/api/cart', asyncHandler(async (req, res) => {
+  const { productId } = req.body;
+  await upsertCartLine(productId);
+  await respondWithCart(req, res);
+}));
+
+app.post('/api/cart/barcode', asyncHandler(async (req, res) => {
+  const { barcode } = req.body;
+  if (!barcode) {
+    return res.status(400).json({ error: 'barcode is required' });
   }
-});
 
-app.post('/api/cart', async (req, res) => {
-  try {
-    const { productId } = req.body;
-    await upsertCartLine(productId);
-    await respondWithCart(req, res);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: err.message });
+  const filter = encodeURIComponent(JSON.stringify({ barcode: { $eq: String(barcode) } }));
+  const products = await ordsGet(`products/?q=${filter}`);
+  if (!products.length) {
+    return res.status(404).json({ error: 'Product not found for barcode' });
   }
-});
 
-app.post('/api/cart/barcode', async (req, res) => {
-  try {
-    const { barcode } = req.body;
-    if (!barcode) {
-      return res.status(400).json({ error: 'barcode is required' });
-    }
-
-    const filter = encodeURIComponent(JSON.stringify({ barcode: { $eq: String(barcode) } }));
-    const products = await ordsGet(`products/?q=${filter}`);
-    if (!products.length) {
-      return res.status(404).json({ error: 'Product not found for barcode' });
-    }
-
-    await upsertCartLine(Number(products[0].id));
-    await respondWithCart(req, res);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+  await upsertCartLine(Number(products[0].id));
+  await respondWithCart(req, res);
+}));
 
 /** Replace server cart with exact line quantities (used when replaying offline checkouts). */
-app.post('/api/cart/replace', async (req, res) => {
-  try {
-    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+app.post('/api/cart/replace', asyncHandler(async (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
 
-    const existing = await ordsGet('cart_items/');
-    for (const row of existing) {
-      await ordsDelete(`cart_items/${row.id}`);
-    }
-
-    for (const line of items) {
-      const productId = Number(line.productId);
-      const quantity = Number(line.quantity);
-      if (!Number.isFinite(productId) || quantity < 1) continue;
-      await ordsPost('cart_items/', { product_id: productId, quantity });
-    }
-
-    await respondWithCart(req, res);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: err.message });
+  const existing = await ordsGet('cart_items/');
+  for (const row of existing) {
+    await ordsDelete(`cart_items/${row.id}`);
   }
-});
 
-app.put('/api/cart/:id', async (req, res) => {
-  try {
-    const cartItemId = req.params.id;
-    const quantity = Number(req.body?.quantity);
-    if (!Number.isFinite(quantity)) {
-      return res.status(400).json({ error: 'quantity must be a number' });
-    }
-
-    if (quantity <= 0) {
-      await ordsDelete(`cart_items/${cartItemId}`);
-    } else {
-      const existing = await ordsTryGet(`cart_items/${cartItemId}`);
-      if (!existing || Number(existing.id) !== Number(cartItemId)) {
-        return res.status(404).json({ error: 'Cart item not found' });
-      }
-      await ordsPut(`cart_items/${cartItemId}`, {
-        product_id: existing.product_id,
-        quantity,
-      });
-    }
-
-    await respondWithCart(req, res);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: err.message });
+  for (const line of items) {
+    const productId = Number(line.productId);
+    const quantity = Number(line.quantity);
+    if (!Number.isFinite(productId) || quantity < 1) continue;
+    await ordsPost('cart_items/', { product_id: productId, quantity });
   }
-});
 
-app.delete('/api/cart/:id', async (req, res) => {
-  try {
-    await ordsDelete(`cart_items/${req.params.id}`);
-    await respondWithCart(req, res);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: err.message });
+  await respondWithCart(req, res);
+}));
+
+app.put('/api/cart/:id', asyncHandler(async (req, res) => {
+  const cartItemId = req.params.id;
+  const quantity = Number(req.body?.quantity);
+  if (!Number.isFinite(quantity)) {
+    return res.status(400).json({ error: 'quantity must be a number' });
   }
-});
 
-app.post('/api/checkout', async (req, res) => {
-  try {
-    const paymentMethod = normalizePaymentMethod(req.body?.paymentMethod);
-    const customerIdRaw = req.body?.customerId;
-    const checkoutTotalResult = normalizeCheckoutTotal(req.body?.checkoutTotal);
-    if (checkoutTotalResult?.error) {
-      return res.status(400).json({ error: checkoutTotalResult.error });
+  if (quantity <= 0) {
+    await ordsDelete(`cart_items/${cartItemId}`);
+  } else {
+    const existing = await ordsTryGet(`cart_items/${cartItemId}`);
+    if (!existing || Number(existing.id) !== Number(cartItemId)) {
+      return res.status(404).json({ error: 'Cart item not found' });
     }
-    const checkoutTotal = checkoutTotalResult?.checkoutTotal ?? null;
-    const cartRows = await ordsGet('cart_view/');
-    const rows = Array.isArray(cartRows) ? cartRows : [];
+    await ordsPut(`cart_items/${cartItemId}`, {
+      product_id: existing.product_id,
+      quantity,
+    });
+  }
 
-    if (!rows.length) {
-      return res.status(400).json({ error: 'Cart is empty' });
+  await respondWithCart(req, res);
+}));
+
+app.delete('/api/cart/:id', asyncHandler(async (req, res) => {
+  await ordsDelete(`cart_items/${req.params.id}`);
+  await respondWithCart(req, res);
+}));
+
+app.post('/api/checkout', asyncHandler(async (req, res) => {
+  const paymentMethod = normalizePaymentMethod(req.body?.paymentMethod);
+  const customerIdRaw = req.body?.customerId;
+  const checkoutTotalResult = normalizeCheckoutTotal(req.body?.checkoutTotal);
+  if (checkoutTotalResult?.error) {
+    return res.status(400).json({ error: checkoutTotalResult.error });
+  }
+  const checkoutTotal = checkoutTotalResult?.checkoutTotal ?? null;
+  const cartRows = await ordsGet('cart_view/');
+  const rows = Array.isArray(cartRows) ? cartRows : [];
+
+  if (!rows.length) {
+    return res.status(400).json({ error: 'Cart is empty' });
+  }
+
+  let customerRow = null;
+  let customerId = null;
+  if (customerIdRaw !== undefined && customerIdRaw !== null && String(customerIdRaw).trim() !== '') {
+    customerId = Number(customerIdRaw);
+    if (Number.isNaN(customerId)) {
+      return res.status(400).json({ error: 'Invalid customerId' });
     }
-
-    let customerRow = null;
-    let customerId = null;
-    if (customerIdRaw !== undefined && customerIdRaw !== null && String(customerIdRaw).trim() !== '') {
-      customerId = Number(customerIdRaw);
-      if (Number.isNaN(customerId)) {
-        return res.status(400).json({ error: 'Invalid customerId' });
-      }
-      customerRow = await ordsTryGet(`customers/${customerId}`);
-      if (!customerRow || Number(customerRow.id) !== customerId) {
-        return res.status(400).json({ error: 'Invalid customerId' });
-      }
+    customerRow = await ordsTryGet(`customers/${customerId}`);
+    if (!customerRow || Number(customerRow.id) !== customerId) {
+      return res.status(400).json({ error: 'Invalid customerId' });
     }
+  }
 
-    const linked893 = is893Member(customerRow);
-    const summary = summarizeCart(rows, linked893);
-    const recordedTotal = checkoutTotal ?? summary.subtotalPayable;
-    const paymentResult = normalizeCheckoutPayments(req.body?.payments, recordedTotal);
-    if (paymentResult?.error) {
-      return res.status(400).json({ error: paymentResult.error });
-    }
-    const payments = paymentResult?.payments || null;
-    const persistedPayments = payments || [{
-      method: paymentMethod,
-      amount: recordedTotal,
-      tenderedAmount: recordedTotal,
-      changeGiven: null,
-    }];
-    const recordedPaymentMethod = serializePaymentMethod(paymentMethod, payments);
-    const orderNumber = `POS-${Date.now()}`;
+  const linked893 = is893Member(customerRow);
+  const summary = summarizeCart(rows, linked893);
+  const recordedTotal = checkoutTotal ?? summary.subtotalPayable;
+  const paymentResult = normalizeCheckoutPayments(req.body?.payments, recordedTotal);
+  if (paymentResult?.error) {
+    return res.status(400).json({ error: paymentResult.error });
+  }
+  const payments = paymentResult?.payments || null;
+  const persistedPayments = payments || [{
+    method: paymentMethod,
+    amount: recordedTotal,
+    tenderedAmount: recordedTotal,
+    changeGiven: null,
+  }];
+  const recordedPaymentMethod = serializePaymentMethod(paymentMethod, payments);
+  const orderNumber = `POS-${Date.now()}`;
 
-    await ordsPost('sales/', {
+  await ordsPost('sales/', {
+    order_number: orderNumber,
+    total: recordedTotal,
+    payment_method: recordedPaymentMethod,
+    customer_id: customerId,
+    subtotal_pre_member: summary.subtotalPreMember,
+    member_discount_pre_tax: summary.memberDiscountPreTax,
+    linked_893: linked893 ? 1 : 0,
+    created_at: ordsTimestamp(),
+  });
+
+  for (const item of summary.items) {
+    const quantity = Number(item.quantity);
+    const unitPrice = item.unitPricePayable;
+    await ordsPost('sale_items/', {
       order_number: orderNumber,
-      total: recordedTotal,
-      payment_method: recordedPaymentMethod,
-      customer_id: customerId,
-      subtotal_pre_member: summary.subtotalPreMember,
-      member_discount_pre_tax: summary.memberDiscountPreTax,
-      linked_893: linked893 ? 1 : 0,
+      product_id: Number(item.productId),
+      quantity,
+      unit_price: unitPrice,
+      line_total: roundMoney(unitPrice * quantity),
+    });
+  }
+
+  for (const [index, payment] of persistedPayments.entries()) {
+    await ordsPost('sale_payments/', {
+      order_number: orderNumber,
+      sequence_number: index + 1,
+      payment_method: payment.method,
+      amount: payment.amount,
+      tendered_amount: payment.tenderedAmount,
+      change_given: payment.changeGiven,
       created_at: ordsTimestamp(),
     });
-
-    for (const item of summary.items) {
-      const quantity = Number(item.quantity);
-      const unitPrice = item.unitPricePayable;
-      await ordsPost('sale_items/', {
-        order_number: orderNumber,
-        product_id: Number(item.productId),
-        quantity,
-        unit_price: unitPrice,
-        line_total: roundMoney(unitPrice * quantity),
-      });
-    }
-
-    for (const [index, payment] of persistedPayments.entries()) {
-      await ordsPost('sale_payments/', {
-        order_number: orderNumber,
-        sequence_number: index + 1,
-        payment_method: payment.method,
-        amount: payment.amount,
-        tendered_amount: payment.tenderedAmount,
-        change_given: payment.changeGiven,
-        created_at: ordsTimestamp(),
-      });
-    }
-
-    const cartItems = await ordsGet('cart_items/');
-    for (const item of cartItems) {
-      await ordsDelete(`cart_items/${item.id}`);
-    }
-
-    return res.json({
-      ok: true,
-      orderNumber,
-      paymentMethod: recordedPaymentMethod,
-      total: recordedTotal,
-      subtotalPreMember: summary.subtotalPreMember,
-      memberDiscountPreTax: summary.memberDiscountPreTax,
-      linked893,
-      customerId,
-      payments: persistedPayments,
-      itemCount: summary.items.reduce((sum, item) => sum + Number(item.quantity), 0),
-    });
-  } catch (err) {
-    console.error(err.message);
-    return res.status(500).json({ error: err.message });
   }
-});
+
+  const cartItems = await ordsGet('cart_items/');
+  for (const item of cartItems) {
+    await ordsDelete(`cart_items/${item.id}`);
+  }
+
+  return res.json({
+    ok: true,
+    orderNumber,
+    paymentMethod: recordedPaymentMethod,
+    total: recordedTotal,
+    subtotalPreMember: summary.subtotalPreMember,
+    memberDiscountPreTax: summary.memberDiscountPreTax,
+    linked893,
+    customerId,
+    payments: persistedPayments,
+    itemCount: summary.items.reduce((sum, item) => sum + Number(item.quantity), 0),
+  });
+}));
 
 const { registerAdminRoutes } = require('./lib/admin-routes');
 const { registerSupervisorRoutes } = require('./lib/supervisor-routes');
@@ -517,24 +473,19 @@ const { registerSupervisorRoutes } = require('./lib/supervisor-routes');
 registerSupervisorRoutes(app, { loginApprovalStore });
 registerAdminRoutes(app, { ordsGet, ordsPost, ordsPut, ordsDelete, ordsTimestamp });
 
-app.get('/api/sales/recent', async (req, res) => {
-  try {
-    const sales = await ordsGet('sales/?limit=20&offset=0&order=created_at:desc');
-    const mapped = sales.map((s) => ({
-      id: Number(s.id),
-      orderNumber: s.order_number,
-      total: Number(s.total),
-      paymentMethod: s.payment_method,
-      linked893: Number(s.linked_893) === 1,
-      memberDiscountPreTax: s.member_discount_pre_tax != null ? Number(s.member_discount_pre_tax) : 0,
-      subtotalPreMember: s.subtotal_pre_member != null ? Number(s.subtotal_pre_member) : Number(s.total),
-    }));
-    res.json(mapped);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+app.get('/api/sales/recent', asyncHandler(async (req, res) => {
+  const sales = await ordsGet('sales/?limit=20&offset=0&order=created_at:desc');
+  const mapped = sales.map((s) => ({
+    id: Number(s.id),
+    orderNumber: s.order_number,
+    total: Number(s.total),
+    paymentMethod: s.payment_method,
+    linked893: Number(s.linked_893) === 1,
+    memberDiscountPreTax: s.member_discount_pre_tax != null ? Number(s.member_discount_pre_tax) : 0,
+    subtotalPreMember: s.subtotal_pre_member != null ? Number(s.subtotal_pre_member) : Number(s.total),
+  }));
+  res.json(mapped);
+}));
 
 app.listen(PORT, () => {
   console.log(`✅ Cart app running on http://localhost:${PORT}`);

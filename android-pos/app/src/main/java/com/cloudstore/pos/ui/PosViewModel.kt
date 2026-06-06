@@ -972,18 +972,6 @@ class PosViewModel(
         }
     }
 
-    private fun effectivePaymentMethod(
-        fallbackMethod: String,
-        payments: List<CheckoutPayment>?,
-    ): String {
-        val normalized = payments?.takeIf { it.isNotEmpty() } ?: return fallbackMethod
-        return if (normalized.size == 1) {
-            normalized.first().method
-        } else {
-            "split"
-        }
-    }
-
     fun checkout(
         payments: List<CheckoutPayment>? = null,
         checkoutTotal: Double? = null,
@@ -994,7 +982,10 @@ class PosViewModel(
                 return@launch
             }
 
-            val paymentMethod = effectivePaymentMethod(_state.value.paymentMethod, payments)
+            val paymentMethod = payments
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { checkoutFinalizeMethod(it) }
+                ?: _state.value.paymentMethod
             val customerId = _state.value.selectedCustomerId
             runCatching { repository.checkout(paymentMethod, customerId, payments, checkoutTotal) }
                 .onSuccess { receipt ->

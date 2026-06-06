@@ -33,14 +33,6 @@ function setStatus(message, isError = false) {
   statusEl.classList.toggle('error', isError);
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 function formatCell(value) {
   if (value === null || value === undefined) return '';
   if (typeof value === 'object') return escapeHtml(JSON.stringify(value));
@@ -156,12 +148,6 @@ function renderCreateForm(meta) {
       setStatus(err.message, true);
     }
   };
-}
-
-function attrEscape(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;');
 }
 
 function openEdit(row) {

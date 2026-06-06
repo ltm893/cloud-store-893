@@ -140,16 +140,39 @@ if [[ "$RESERVED_STATE" == "ASSIGNED" && "$RESERVED_ASSIGNED_PRIVATE" == "$PRIVA
 fi
 
 detach_ephemeral_public_ips() {
-  local ephemeral_ids id
-  ephemeral_ids="$(oci network public-ip list \
-    --private-ip-id "$PRIVATE_IP_ID" \
-    --query 'data[?lifetime==`EPHEMERAL`].id' \
+  local vnic_public compartment ad ephemeral_id
+  vnic_public="$(oci network vnic get \
+    --vnic-id "$VNIC_ID" \
+    --query 'data."public-ip"' \
     --raw-output 2>/dev/null || true)"
-  for id in $ephemeral_ids; do
-    [[ -z "$id" || "$id" == "null" ]] && continue
-    echo "==> Removing ephemeral public IP on new VNIC ($id)..."
-    oci network public-ip delete --public-ip-id "$id" --force --wait-for-state TERMINATED
-  done
+  if [[ -z "$vnic_public" || "$vnic_public" == "null" ]]; then
+    return 0
+  fi
+  if [[ -n "${RESERVED_IP:-}" && "$vnic_public" == "$RESERVED_IP" ]]; then
+    return 0
+  fi
+
+  compartment="$(oci container-instances container-instance get \
+    --container-instance-id "$INSTANCE_OCID" \
+    --query 'data."compartment-id"' \
+    --raw-output)"
+  ad="$(oci network private-ip get \
+    --private-ip-id "$PRIVATE_IP_ID" \
+    --query 'data."availability-domain"' \
+    --raw-output)"
+
+  ephemeral_id="$(oci network public-ip list \
+    --compartment-id "$compartment" \
+    --lifetime EPHEMERAL \
+    --scope AVAILABILITY_DOMAIN \
+    --availability-domain "$ad" \
+    --query "data[?\"ip-address\"=='${vnic_public}'].id | [0]" \
+    --raw-output 2>/dev/null || true)"
+
+  if [[ -n "$ephemeral_id" && "$ephemeral_id" != "null" && "$ephemeral_id" == ocid1.* ]]; then
+    echo "==> Removing ephemeral public IP on new VNIC ($ephemeral_id / $vnic_public)..."
+    oci network public-ip delete --public-ip-id "$ephemeral_id" --force --wait-for-state TERMINATED
+  fi
 }
 
 if [[ "$NEEDS_REATTACH" == "true" ]]; then

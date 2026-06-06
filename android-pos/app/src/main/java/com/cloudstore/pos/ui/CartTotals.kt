@@ -57,8 +57,8 @@ fun computeSaleSavings(cart: List<CartItem>): Double {
     return roundMoney(raw.coerceAtLeast(0.0))
 }
 
-/** Linked customer present — show full pricing breakdown (guest discount may be $0). */
-fun computeCartTotalsForLinkedCustomer(cart: List<CartItem>, customerDiscount: Boolean): CartTotals {
+/** Cart line totals; [customerDiscount] drives member pricing and sets [CartTotals.linked893]. */
+fun computeCartTotals(cart: List<CartItem>, customerDiscount: Boolean): CartTotals {
     val shelf = cart.sumOf { it.lineSubtotalPublic }
     val preTax = if (customerDiscount) {
         cart.sumOf { it.lineSubtotalPayable }
@@ -85,11 +85,7 @@ fun computeSaleGrandTotal(
     taxRate: Double,
 ): Double {
     val items = if (customerLinked) normalizeCartItems(cart, customerDiscount) else cart
-    val totals = if (customerLinked) {
-        computeCartTotalsForLinkedCustomer(items, customerDiscount)
-    } else {
-        computeCartTotals(items, customerDiscount = false)
-    }
+    val totals = computeCartTotals(items, customerLinked && customerDiscount)
     val salesFee = totals.itemPreTax * salesFeeRate
     val taxable = totals.itemPreTax + salesFee
     val taxAmt = taxable * taxRate
@@ -106,21 +102,3 @@ fun computeCashAmountDue(
 ): Double = roundToNickel(
     computeSaleGrandTotal(cart, customerLinked, customerDiscount, salesFeeRate, taxRate),
 )
-
-fun computeCartTotals(cart: List<CartItem>, customerDiscount: Boolean): CartTotals {
-    val shelf = cart.sumOf { it.lineSubtotalPublic }
-    val preTax = if (customerDiscount) {
-        cart.sumOf { it.lineSubtotalPayable }
-    } else {
-        shelf
-    }
-    val discount = if (customerDiscount) roundMoney(shelf - preTax) else 0.0
-    return CartTotals(
-        itemCount = cart.sumOf { it.quantity },
-        shelfSubtotal = roundMoney(shelf),
-        itemPreTax = roundMoney(preTax),
-        memberDiscount = discount,
-        saleSavings = computeSaleSavings(cart),
-        linked893 = customerDiscount,
-    )
-}

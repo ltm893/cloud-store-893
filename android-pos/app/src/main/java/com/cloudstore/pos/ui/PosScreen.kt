@@ -1250,11 +1250,7 @@ private fun SaleTotalsPanel(
         taxRate = taxRate,
     )
     val items = if (customerLinked) normalizeCartItems(cart, customerDiscount) else cart
-    val totals = if (customerLinked) {
-        computeCartTotalsForLinkedCustomer(items, customerDiscount)
-    } else {
-        computeCartTotals(items, customerDiscount = false)
-    }
+    val totals = computeCartTotals(items, customerLinked && customerDiscount)
     val salesFee = totals.itemPreTax * salesFeeRate
     val taxable = totals.itemPreTax + salesFee
     val taxAmt = taxable * taxRate

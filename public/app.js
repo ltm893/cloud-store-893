@@ -38,14 +38,6 @@ function money(value) {
   return `$${Number(value).toFixed(2)}`;
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 function customerQs() {
   return selectedCustomerId != null ? `?customerId=${encodeURIComponent(selectedCustomerId)}` : '';
 }
