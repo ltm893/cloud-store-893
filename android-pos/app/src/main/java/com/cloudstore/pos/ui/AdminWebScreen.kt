@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.cloudstore.pos.data.PocSelfSignedTls
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -67,7 +68,7 @@ fun AdminWebScreen(
                     settings.useWideViewPort = true
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                    webViewClient = object : WebViewClient() {
+                    val client = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(
                             view: WebView?,
                             request: WebResourceRequest?,
@@ -90,6 +91,7 @@ fun AdminWebScreen(
                             return false
                         }
                     }
+                    webViewClient = PocSelfSignedTls.wrapWebViewClient(client)
                     loadUrl(adminStartUrl)
                 }
             },

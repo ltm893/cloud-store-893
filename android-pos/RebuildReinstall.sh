@@ -8,6 +8,8 @@
 #   LAN_IP=192.168.1.10     Local Mac IP for dev against npm run dev:up
 #   USE_LOCAL=1             Same as auto-detecting Mac LAN IP (not OCI)
 #   OCI_API_HOST=oci.cloudstore893.com   Default cloud API host (when not USE_LOCAL)
+#   OCI_API_SCHEME=https      Cloudflare Tunnel default for OCI (http for legacy direct IP)
+#   OCI_API_PORT=             Empty = standard port (443 for https)
 #   ADB=adb                 Path to adb if not on PATH
 
 set -euo pipefail
@@ -35,6 +37,8 @@ fi
 ADB="${ADB:-adb}"
 APK="app/build/outputs/apk/debug/app-debug.apk"
 OCI_API_HOST="${OCI_API_HOST:-oci.cloudstore893.com}"
+OCI_API_SCHEME="${OCI_API_SCHEME:-https}"
+OCI_API_PORT="${OCI_API_PORT-}"
 APP_PORT="${PORT:-3000}"
 
 detect_lan_ip() {
@@ -67,11 +71,37 @@ else
   API_HOST="$OCI_API_HOST"
 fi
 
-export LAN_IP="$API_HOST"
+if [[ "${USE_LOCAL:-}" == "1" || "$API_HOST" != "$OCI_API_HOST" ]]; then
+  export LAN_IP="$API_HOST"
+  unset RELEASE_API_BASE_URL
+else
+  unset LAN_IP
+fi
 
-echo "==> API_BASE_URL=http://${API_HOST}:${APP_PORT}/"
+if [[ "${USE_LOCAL:-}" == "1" || "$API_HOST" != "$OCI_API_HOST" ]]; then
+  API_SCHEME="http"
+  API_PORT="${APP_PORT}"
+elif [[ -n "$OCI_API_PORT" ]]; then
+  API_SCHEME="$OCI_API_SCHEME"
+  API_PORT="$OCI_API_PORT"
+else
+  API_SCHEME="$OCI_API_SCHEME"
+  API_PORT=""
+fi
+
+port_suffix=""
+if [[ -n "$API_PORT" ]]; then
+  if [[ "$API_SCHEME" == "https" && "$API_PORT" == "443" ]] || [[ "$API_SCHEME" == "http" && "$API_PORT" == "80" ]]; then
+    port_suffix=""
+  else
+    port_suffix=":${API_PORT}"
+  fi
+fi
+
+export RELEASE_API_BASE_URL="${API_SCHEME}://${API_HOST}${port_suffix}/"
+echo "==> API_BASE_URL=${RELEASE_API_BASE_URL}"
 if [[ "$API_HOST" == "$OCI_API_HOST" && "${USE_LOCAL:-}" != "1" ]]; then
-  echo "    (OCI default — local dev: USE_LOCAL=1 or LAN_IP=192.168.x.x ./RebuildReinstall.sh)"
+  echo "    (OCI HTTPS — local dev: USE_LOCAL=1 or LAN_IP=192.168.x.x ./RebuildReinstall.sh)"
 fi
 echo "==> ./gradlew :app:assembleDebug"
 ./gradlew :app:assembleDebug

@@ -43,24 +43,26 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 
 Baked into the APK at **Gradle configuration** time (`BuildConfig.API_BASE_URL`):
 
-1. `LAN_IP` env var if set
-2. macOS `ipconfig getifaddr en0`, then `en1`
-3. Fallback `oci.cloudstore893.com` (OCI; set `LAN_IP` for local Mac dev)
+1. `RELEASE_API_BASE_URL` if set (`RebuildReinstall.sh` sets `https://oci.cloudstore893.com/` for OCI)
+2. Private LAN IP (`LAN_IP` or `ipconfig en0`) → `http://192.168.x.x:3000/`
+3. Default OCI → `https://oci.cloudstore893.com/` (HTTPS LB, **no** `:3000`)
 
-Watch the configure log: `[cloud-store-893] debug API_BASE_URL = http://…/`
+Watch the configure log: `[cloud-store-893] API_BASE_URL = https://…/`
 
 ```bash
-# Mac on same Wi‑Fi as backend (npm run dev:up)
+# OCI cloud (HTTPS)
 ./RebuildReinstall.sh
 
-# Or manually:
-LAN_IP=$(ipconfig getifaddr en0) ./gradlew :app:assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+# Local Mac dev (npm run dev:up)
+USE_LOCAL=1 ./RebuildReinstall.sh
+# or: LAN_IP=192.168.1.10 ./RebuildReinstall.sh
 ```
 
-`RebuildReinstall.sh` detects `LAN_IP` from `en0`/`en1` (override with `LAN_IP=…`), builds debug, and installs via `adb`.
+`RebuildReinstall.sh` builds debug and installs via `adb`. **Rebuild required** after changing the API host — the URL is compiled in.
 
 **Wrong URL symptoms:** `Failed to connect`, login **404** (server missing `/api/cashier/unlock` — redeploy Docker image), or **401** (wrong PIN).
+
+**OCI self-signed LB cert:** `generate-lb-tls.sh` uses a self-signed cert. Browsers may warn; the **debug APK** trusts it automatically (`PocSelfSignedTls`, debug builds only). For production, install a public CA cert on the OCI load balancer instead.
 
 **PIN works on Mac but add-to-cart returns 401 on tablet:** the APK must target your Mac’s **current** Wi‑Fi IP (not `localhost`). Rebuild with the IP shown by `npm run lan-url` or `scripts/dev-up.sh`, then reinstall:
 

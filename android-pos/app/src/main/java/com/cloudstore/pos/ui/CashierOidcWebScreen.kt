@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.cloudstore.pos.data.PocSelfSignedTls
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -78,7 +79,7 @@ fun CashierOidcWebScreen(
                         loadUrl("about:blank")
                         onComplete(url)
                     }
-                    webViewClient = object : WebViewClient() {
+                    val client = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(
                             view: WebView?,
                             request: WebResourceRequest?,
@@ -119,6 +120,7 @@ fun CashierOidcWebScreen(
                             }
                         }
                     }
+                    webViewClient = PocSelfSignedTls.wrapWebViewClient(client)
                     loadUrl(loginUrl)
                 }
             },

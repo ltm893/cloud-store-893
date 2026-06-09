@@ -9,13 +9,10 @@ plugins {
 }
 
 // ── API_BASE_URL auto-detection ───────────────────────────────────────────────
-// Resolves the dev backend URL at Gradle configuration time:
-//   1. LAN_IP env var (manual override, e.g. `LAN_IP=192.168.1.50 ./gradlew ...`)
-//   2. macOS `ipconfig getifaddr en0` (Wi-Fi / primary)
-//   3. macOS `ipconfig getifaddr en1` (fallback for USB-C ethernet setups)
-//   4. Hardcoded fallback so non-mac CI / Linux builds still compile.
-//
-// Override the release value with RELEASE_API_BASE_URL when shipping to cloud.
+// Priority:
+//   1. RELEASE_API_BASE_URL (set by RebuildReinstall.sh for OCI HTTPS)
+//   2. LAN_IP / ipconfig — private RFC1918 → http://IP:PORT (local npm run dev:up)
+//   3. Default OCI cloud → https://oci.cloudstore893.com/ (LB :443, no :3000)
 fun detectLanIp(): String? {
     System.getenv("LAN_IP")?.takeIf { it.isNotBlank() }?.let { return it }
     for (iface in listOf("en0", "en1")) {
@@ -39,19 +36,35 @@ fun detectLanIp(): String? {
     return null
 }
 
-val devLanIp = detectLanIp()
-val devLanIpResolved = devLanIp ?: "oci.cloudstore893.com"
-if (devLanIp == null) {
-    println(
-        "[cloud-store-893] WARNING: could not detect LAN IP — debug API_BASE_URL defaults to $devLanIpResolved. " +
-            "For local dev set LAN_IP (e.g. LAN_IP=192.168.1.10 ./gradlew :app:assembleDebug).",
-    )
+fun isPrivateLanHost(host: String): Boolean {
+    if (host == "127.0.0.1" || host.equals("localhost", ignoreCase = true)) return true
+    if (host.startsWith("10.")) return true
+    if (host.startsWith("192.168.")) return true
+    return host.matches(Regex("^172\\.(1[6-9]|2\\d|3[01])\\..+"))
 }
+
+fun normalizeApiBaseUrl(raw: String): String {
+    val trimmed = raw.trim()
+    return if (trimmed.endsWith("/")) trimmed else "$trimmed/"
+}
+
+val ociApiHost = "oci.cloudstore893.com"
 val devApiPort = System.getenv("PORT") ?: "3000"
-val devApiBaseUrl = "http://$devLanIpResolved:$devApiPort/"
-val releaseApiBaseUrl = System.getenv("RELEASE_API_BASE_URL") ?: devApiBaseUrl
-println("[cloud-store-893] debug   API_BASE_URL = $devApiBaseUrl")
-println("[cloud-store-893] release API_BASE_URL = $releaseApiBaseUrl")
+val devLanIp = detectLanIp()
+
+val apiBaseUrl = System.getenv("RELEASE_API_BASE_URL")?.takeIf { it.isNotBlank() }?.let(::normalizeApiBaseUrl)
+    ?: when {
+        devLanIp != null && isPrivateLanHost(devLanIp) -> "http://$devLanIp:$devApiPort/"
+        else -> {
+            println(
+                "[cloud-store-893] OCI default API_BASE_URL: https://$ociApiHost/ " +
+                    "(HTTPS via LB). Local dev: USE_LOCAL=1 or LAN_IP=192.168.x.x",
+            )
+            "https://$ociApiHost/"
+        }
+    }
+
+println("[cloud-store-893] API_BASE_URL = $apiBaseUrl")
 
 // ── POS totals (sales fee + tax) from android-pos/pos.properties ─────────────
 val posPropertiesFile = rootProject.file("pos.properties")
@@ -94,7 +107,7 @@ android {
             useSupportLibrary = true
         }
 
-        buildConfigField("String", "API_BASE_URL", "\"$devApiBaseUrl\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         // Decimal rates from android-pos/pos.properties (e.g. 0.0825 = 8.25%).
         buildConfigField("String", "POS_SALES_FEE_RATE", "\"$posSalesFeeRate\"")
         buildConfigField("String", "POS_TAX_RATE", "\"$posTaxRate\"")
@@ -107,7 +120,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
+            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         }
     }
 

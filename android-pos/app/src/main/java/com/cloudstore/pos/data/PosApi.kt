@@ -90,10 +90,11 @@ class PosRepository(baseUrl: String) {
             level = HttpLoggingInterceptor.Level.BASIC
         }
 
-        val okHttp = OkHttpClient.Builder()
-            .cookieJar(cookieJar)
-            .addInterceptor(logger)
-            .build()
+        val okHttp = PocSelfSignedTls.applyToOkHttpIfDebug(
+            OkHttpClient.Builder()
+                .cookieJar(cookieJar)
+                .addInterceptor(logger),
+        ).build()
 
         val moshi = Moshi.Builder()
             .add(KotlinJsonAdapterFactory())
