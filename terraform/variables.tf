@@ -106,9 +106,77 @@ variable "admin_pin" {
 }
 
 variable "cashier_session_secure" {
-  description = "Set true when the app is served over HTTPS (adds Secure flag on cashier session cookie)."
+  description = "Set true when the app is served over HTTPS (adds Secure flag on cashier session cookie). Auto-enabled when cloudflare_tunnel_token is set."
   type        = bool
   default     = false
+}
+
+variable "cloudflare_tunnel_token" {
+  description = "Cloudflare Tunnel token (CLOUDFLARE_TUNNEL_TOKEN). When set, the container runs cloudflared alongside Node."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "cloudflare_tunnel_hostname" {
+  description = "Public HTTPS hostname on the tunnel (e.g. oci.cloudstore893.com). Used by confirm-public-url.sh / app_url_https output — not injected into the container."
+  type        = string
+  default     = ""
+}
+
+# ── Load Balancer (HTTPS) ─────────────────────────────────────────────────────
+# Preferred production path when HTTPS must terminate on OCI. See docs/oci-load-balancer-https.md.
+# TLS PEMs: terraform/lb_tls.auto.tfvars (gitignored) from scripts/generate-lb-tls.sh or Let's Encrypt.
+
+variable "enable_load_balancer" {
+  description = "When true, create a flexible OCI Load Balancer in front of the container instance."
+  type        = bool
+  default     = false
+}
+
+variable "lb_public_hostname" {
+  description = "Public DNS hostname for HTTPS (e.g. oci.cloudstore893.com). Used in app_url_https output."
+  type        = string
+  default     = "oci.cloudstore893.com"
+}
+
+variable "lb_bandwidth_mbps" {
+  description = "Flexible load balancer bandwidth (Mbps). Minimum 10 on OCI."
+  type        = number
+  default     = 10
+}
+
+variable "lb_enable_http_listener" {
+  description = "When true and HTTPS certs are not yet set, expose HTTP :80 on the load balancer for bring-up."
+  type        = bool
+  default     = true
+}
+
+variable "lb_certificate_ocid" {
+  description = "OCI Certificates service OCID for the HTTPS listener (Let's Encrypt import). Preferred over lb_tls_* PEMs."
+  type        = string
+  default     = ""
+}
+
+variable "lb_tls_certificate_pem" {
+  description = "TLS certificate PEM for the HTTPS listener (public / leaf cert)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "lb_tls_private_key_pem" {
+  description = "TLS private key PEM for the HTTPS listener."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "lb_tls_ca_certificate_pem" {
+  description = "Optional CA / intermediate chain PEM (fullchain minus leaf). Omit for self-signed POC."
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 # ── App / IdP / Model B (container env) ───────────────────────────────────────

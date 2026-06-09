@@ -54,8 +54,9 @@ resource "oci_core_security_list" "main" {
     }
   }
 
+  # App port: VCN-only when LB fronts the container; otherwise public per ingress_allowed_cidrs.
   dynamic "ingress_security_rules" {
-    for_each = var.ingress_allowed_cidrs
+    for_each = var.enable_load_balancer ? [var.vcn_cidr] : var.ingress_allowed_cidrs
     content {
       protocol  = "6"
       source    = ingress_security_rules.value
@@ -63,6 +64,32 @@ resource "oci_core_security_list" "main" {
       tcp_options {
         min = var.app_port
         max = var.app_port
+      }
+    }
+  }
+
+  dynamic "ingress_security_rules" {
+    for_each = var.enable_load_balancer ? var.ingress_allowed_cidrs : []
+    content {
+      protocol  = "6"
+      source    = ingress_security_rules.value
+      stateless = false
+      tcp_options {
+        min = 443
+        max = 443
+      }
+    }
+  }
+
+  dynamic "ingress_security_rules" {
+    for_each = var.enable_load_balancer && var.lb_enable_http_listener ? var.ingress_allowed_cidrs : []
+    content {
+      protocol  = "6"
+      source    = ingress_security_rules.value
+      stateless = false
+      tcp_options {
+        min = 80
+        max = 80
       }
     }
   }

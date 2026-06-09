@@ -40,7 +40,7 @@ oci_ip_print_status() {
       --output table 2>/dev/null || true
   fi
 
-  echo "  tip: ./scripts/oci/oci-app-url.sh  (live IP via OCI CLI)"
+  echo "  tip: ./scripts/oci/confirm-public-url.sh  (live public URL via OCI CLI / terraform)"
   echo ""
 }
 
@@ -101,7 +101,7 @@ oci_ip_terraform_plan_container_change() {
   echo "╚══════════════════════════════════════════════════════════════════════╝"
   echo ""
   echo "After apply:"
-  echo "  1. ./scripts/oci/oci-app-url.sh          # live IP (may differ from terraform output)"
+  echo "  1. ./scripts/oci/confirm-public-url.sh   # live public URL (may differ from terraform output)"
   echo "  2. ./scripts/oci/reattach-reserved-ip.sh   # or pass --recover-network to deploy/apply scripts"
   echo "  3. Update IdCS redirect URIs if using raw IPs — ./scripts/oci/idp-update-redirect-uris.sh"
   echo "  4. cloud-store-refresh-ocid  # or: export CLOUD_STORE_OCID=\$(cd terraform && terraform output -raw container_instance_ocid)"

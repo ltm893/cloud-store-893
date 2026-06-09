@@ -52,12 +52,16 @@ if [[ "$plan_signal" -eq 1 ]]; then
 fi
 
 cd "$TF_DIR"
-terraform apply
+if [[ "$YES" == "--yes" ]]; then
+  terraform apply -auto-approve
+else
+  terraform apply
+fi
 
 if [[ "$plan_signal" -eq 1 ]]; then
   oci_ip_offer_recover_network "$RECOVER_NETWORK" "$OCI_SCRIPTS"
 else
   echo ""
   echo "Post-apply: instance unchanged — reserved IP should still be attached."
-  echo "  ./scripts/oci/oci-app-url.sh"
+  echo "  ./scripts/oci/confirm-public-url.sh"
 fi

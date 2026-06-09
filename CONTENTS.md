@@ -1,6 +1,6 @@
 # Cloud Store 893 — session handoff
 
-Last updated: 2026-05-29
+Last updated: 2026-06-07
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
 
@@ -14,10 +14,71 @@ Use this file to resume work in a new session. Canonical setup details live in [
 | **Admin** (`/admin/`) | CRUD on DB tables; PIN login (`ADMIN_PIN`) |
 | **Tablet POS** | Numpad login; unified Pay panel; split tender cash/card; auto-finalize at zero balance |
 | **Local dev** | `npm run dev:up` + `.env` |
-| **OCI** | Container + ADB; stable URL `http://oci.cloudstore893.com:3000` (reserved IP); live IP via `./scripts/oci/oci-app-url.sh` |
-| **Git** | Feature work on branch `dev` (pushed May 2026) |
+| **OCI app URL** | **`https://oci.cloudstore893.com/`** (no `:3000`) — LB :443 → container :3000 |
+| **HTTPS / TLS** | **Let's Encrypt** (public CA) via **OCI Certificates** → LB listener by cert OCID (see below) |
+| **DNS** | `oci.cloudstore893.com` **delegated to OCI DNS** (Route 53 NS → OCI nameservers); A → LB IP |
+| **Git** | Feature work on branch `dev` |
 
 **PINs (defaults):** `CASHIER_PIN=8930`, `ADMIN_PIN=8930` (or admin defaults to cashier). Set in `.env` locally; on OCI via `terraform/container.tf` (`cashier_pin`, `admin_pin` variables).
+
+---
+
+## HTTPS / TLS (OCI) — where we stopped (2026-06-07)
+
+Full guide: [docs/oci-load-balancer-https.md](docs/oci-load-balancer-https.md) (Let's Encrypt, certbot, OCI Certificates, diagrams).
+
+### Done
+
+| Step | Detail |
+|------|--------|
+| OCI Load Balancer | HTTPS :443 → backend HTTP :3000 |
+| DNS delegation | Route 53 `oci` NS → OCI DNS zone `oci.cloudstore893.com` |
+| Let's Encrypt cert | Issued via **certbot + dns-oci** (DNS-01); expires **2026-09-05** |
+| OCI Certificates | Imported as **`oci-cloudstore893-com`** (ACTIVE) |
+| LB listener | **`https`** listener uses **Certificates service OCID** (not inline self-signed PEM) |
+| Tablet | Debug APK: `https://oci.cloudstore893.com/`; `PocSelfSignedTls` only needed for self-signed (legacy) |
+
+**Live resources (us-ashburn-1 / compartment `cloud-store`):**
+
+| Resource | Value |
+|----------|--------|
+| Public URL | `https://oci.cloudstore893.com/` |
+| LB public IP | `129.158.38.166` (`terraform output load_balancer_public_ip`) |
+| LB OCID | `ocid1.loadbalancer.oc1.iad.aaaaaaaaprg2umooac3xuxvy375zkjbjb2pacf3kwerjqhcnuao3zkmb7b5q` |
+| Certificate name | `oci-cloudstore893-com` |
+| Certificate OCID | `ocid1.certificate.oc1.iad.amaaaaaa36usv6qaoaudedygsdmpusa3qdmhopypbgeiyny62k6dmw7xtx4q` |
+| Certbot files (local, gitignored) | `certs/certbot/config/live/oci.cloudstore893.com/` |
+
+**Verify (no `-k` needed):**
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://oci.cloudstore893.com/api/build-info   # 200
+./scripts/oci/verify-certbot-dns-oci.sh   # DNS + plugin pre-checks
+```
+
+### Not done yet (pick up next session)
+
+1. **Terraform drift** — `terraform/loadbalancer.tf` still manages inline PEM via `lb_tls.auto.tfvars` / `oci_load_balancer_certificate`. A future `terraform apply` may **revert** the listener to the old self-signed cert. **Fix:** switch listener to `certificate_ids = [cert_ocid]` in Terraform, or `lifecycle { ignore_changes }` on cert/listener until IaC is updated.
+2. **Renewal automation** — certbot renew (~day 60) + deploy hook → `oci certs-mgmt certificate update-certificate-by-importing-config-details` (LB picks up new version automatically). Candidate: OCI Function + Resource Scheduler + `certbot-dns-oci` (see doc).
+3. **Optional:** script `import-le-cert-to-oci-certs.sh` (inline PEM import; `file://` fails on Mac OCI CLI).
+4. **IdP** — confirm POS app redirect URIs are all `https://oci.cloudstore893.com/...` (admin was fixed earlier).
+
+### Cert flow (summary)
+
+```text
+Resource Scheduler (future) ──► OCI Function (future)
+                                      │
+Certbot (Mac today) ──► Let's Encrypt ◄── DNS-01 TXT ──► OCI DNS (oci.cloudstore893.com)
+        │
+        ▼ import / update PEM
+OCI Certificates (oci-cloudstore893-com)
+        │
+        ▼ listener ssl_certificate_ids (cert OCID)
+OCI Load Balancer :443
+        │
+        ▼ HTTP :3000 (VCN)
+Node container
+```
 
 ---
 
@@ -39,6 +100,8 @@ npm run dev:up
 
 ## Start developing (OCI / tablet on cloud URL)
 
+**Public URL:** `https://oci.cloudstore893.com/` — `./scripts/oci/confirm-public-url.sh` should print `https://…/`.
+
 **App code only** (preferred — does not replace container instance / IP):
 
 ```bash
@@ -58,12 +121,12 @@ Use `./scripts/oci/deploy-app-oci.sh <tag>` only when you need a **new image tag
 
 **Network recovery after replace:** [docs/oci-network-recovery.md](docs/oci-network-recovery.md) — `./scripts/oci/reattach-reserved-ip.sh`, operator env vars (`CLOUD_STORE_OCID`, `CLOUD_STORE_RESERVED_PUBLIC_IP_OCID`).
 
-1. **Live URL** — `./scripts/oci/oci-app-url.sh` (not `terraform output app_url` after IP drift).
+1. **Live URL** — `./scripts/oci/confirm-public-url.sh` (not `terraform output app_url` after IP drift).
 
 2. **Verify API:**
 
    ```bash
-   APP=$(./scripts/oci/oci-app-url.sh)
+   APP=$(./scripts/oci/confirm-public-url.sh)
    curl -s -o /dev/null -w "%{http_code}\n" \
      -X POST "$APP/api/cashier/unlock" \
      -H 'Content-Type: application/json' -d '{"pin":"8930"}'
@@ -71,11 +134,10 @@ Use `./scripts/oci/deploy-app-oci.sh <tag>` only when you need a **new image tag
 
    Must be **200**. **404** = stale image (push + restart or redeploy).
 
-3. **Rebuild tablet APK** when host changes:
+3. **Rebuild tablet APK** when API host changes:
 
    ```bash
-   cd android-pos
-   LAN_IP=oci.cloudstore893.com ./RebuildReinstall.sh
+   cd android-pos && ./RebuildReinstall.sh   # default https://oci.cloudstore893.com/
    ```
 
 ---
@@ -292,7 +354,7 @@ Covers cart validation (`POST /api/cart` unknown product → 404), session guard
 3. Open `/admin/` — login, list products
 4. Tablet: PIN **Done** → add product **1** → **Pay** → **Complete Sale** (rebuild APK with `USE_LOCAL=1` for local server)
 5. `☰` → Admin opens in browser
-6. OCI after code change: `./scripts/oci/redeploy-app-code.sh` then `curl -s "$(./scripts/oci/oci-app-url.sh)/api/build-info"`
+6. OCI after code change: `./scripts/oci/redeploy-app-code.sh` then `curl -s "$(./scripts/oci/confirm-public-url.sh)/api/build-info"`
 
 **Model B (supervisor approval, feature branch):** optional manual checks — not part of `dev:up`. See [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md#testing-manual-today) and [End-to-end (web + admin + tablet)](docs/cashier-supervisor-approval.md#end-to-end-manual-web--admin--tablet). Automated suite: [docs/testing.md](docs/testing.md).
 
@@ -314,7 +376,8 @@ Then manually: cashier signs in (web `/` or tablet **Sign in with Oracle**) → 
 
 ## Known issues / follow-ups
 
-- Admin + cashier use **shared PIN in env** — not production-grade on a public IP; add HTTPS and stronger auth later.
+- Admin + cashier use **shared PIN in env** — HTTPS is live on OCI; stronger auth still TBD.
+- **Terraform vs live LB cert** — listener updated via CLI to OCI Certificates OCID; IaC not yet aligned (see HTTPS section above).
 - Web POS has cashier gate + Model B waiting screen when supervisor approval is enabled.
 - Android `build/` artifacts can dirty `git status` — keep `.gitignore` tight.
 - Optional: discard-queue button, cart snapshot in offline queue, receipt printing.

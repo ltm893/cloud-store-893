@@ -18,6 +18,7 @@ locals {
 
   optional_app_env = {
     for k, v in {
+      CLOUDFLARE_TUNNEL_TOKEN              = var.cloudflare_tunnel_token
       APP_PUBLIC_URL                       = var.app_public_url
       IDP_POS_ISSUER                       = var.idp_pos_issuer
       IDP_POS_CLIENT_ID                    = var.idp_pos_client_id
@@ -37,7 +38,12 @@ locals {
       ORDS_BASE_URL          = local.ords_base_url
       CASHIER_PIN            = var.cashier_pin
       ADMIN_PIN              = var.admin_pin != "" ? var.admin_pin : var.cashier_pin
-      CASHIER_SESSION_SECURE = var.cashier_session_secure ? "true" : "false"
+      CASHIER_SESSION_SECURE = (
+        var.cashier_session_secure
+        || var.cloudflare_tunnel_token != ""
+        || (var.enable_load_balancer && var.lb_certificate_ocid != "")
+        || (var.enable_load_balancer && var.lb_tls_certificate_pem != "" && var.lb_tls_private_key_pem != "")
+      ) ? "true" : "false"
       IDP_ALLOW_PIN          = var.idp_allow_pin ? "true" : "false"
       CASHIER_SUPERVISOR_APPROVAL = var.cashier_supervisor_approval ? "true" : "false"
       CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR = var.cashier_supervisor_pin_is_supervisor ? "true" : "false"

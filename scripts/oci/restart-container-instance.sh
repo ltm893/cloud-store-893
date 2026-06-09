@@ -60,7 +60,7 @@ if command -v oci >/dev/null 2>&1 && [[ -n "${CLOUD_STORE_RESERVED_PUBLIC_IP_OCI
     --raw-output 2>/dev/null || true)"
   if [[ "$reserved_state" == "AVAILABLE" ]]; then
     echo "WARNING: reserved public IP is AVAILABLE (not attached). App may only be reachable on the ephemeral IP."
-    echo "         Run ./scripts/oci/oci-app-url.sh for the live URL."
+    echo "         Run ./scripts/oci/confirm-public-url.sh for the live URL."
     echo ""
   fi
 fi

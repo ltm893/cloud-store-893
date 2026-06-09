@@ -257,14 +257,14 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 
 **After instance replace:** reserved IP does not reattach automatically. Run **`./scripts/oci/reattach-reserved-ip.sh`** (or pass `--recover-network` to deploy/apply scripts). See **[docs/oci-network-recovery.md](docs/oci-network-recovery.md)** for the full checklist.
 
-1. **Live app URL (OCI CLI)** — `./scripts/oci/oci-app-url.sh` (preferred) or `terraform output app_url` after apply (may be stale until refresh). Set `CLOUD_STORE_OCID` from terraform after every replace — see recovery doc.
+1. **Live app URL (OCI CLI)** — `./scripts/oci/confirm-public-url.sh` (preferred) or `terraform output app_url` after apply (may be stale until refresh). Set `CLOUD_STORE_OCID` from terraform after every replace — see recovery doc.
 2. **`.env` for sync** — `APP_PUBLIC_URL_FROM_REQUEST=true`; keep `APP_PUBLIC_URL` for local dev only (same host as step 1 is optional on OCI).
 3. **Push env via Terraform (once per env change)** — `./scripts/oci/sync-container-env-to-terraform.sh` then `./scripts/oci/terraform-apply-container.sh` (warns before replace/new IP). Then run the **network recovery** steps in [docs/oci-network-recovery.md](docs/oci-network-recovery.md) — **do not** apply again just to “fix” the URL.
 4. **Oracle Identity** — prefer hostname redirect URIs on `oci.cloudstore893.com`; use `./scripts/oci/idp-update-redirect-uris.sh` when adding IPs or after hostname changes.
 5. **App code** — `./scripts/oci/redeploy-app-code.sh` (build, push, restart; does not change IP). Required for Model B fields on `/api/admin/session`.
 6. **Verify:**
    ```bash
-   APP=$(./scripts/oci/oci-app-url.sh)
+   APP=$(./scripts/oci/confirm-public-url.sh)
    curl -s "$APP/api/admin/session"
    curl -sI "$APP/oauth/login" | grep -i '^location:'   # redirect_uri must use same host as $APP
    ```
@@ -297,7 +297,7 @@ This builds for `linux/arm64`, pushes to the image tag in Terraform state, resta
 Verify cashier login API (expect **200**, not **404**):
 
 ```bash
-APP=$(./scripts/oci/oci-app-url.sh)
+APP=$(./scripts/oci/confirm-public-url.sh)
 curl -s -o /dev/null -w "%{http_code}\n" \
   -X POST "$APP/api/cashier/unlock" \
   -H 'Content-Type: application/json' \

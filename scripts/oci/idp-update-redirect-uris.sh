@@ -6,8 +6,9 @@
 # Usage:
 #   export IDP_DOMAIN_ENDPOINT="https://idcs-XXXX....us-ashburn-idcs-1.identity.us-ashburn-1.oci.oraclecloud.com"
 #   (base domain URL only — do NOT append /admin/v1; the CLI adds it)
-#   export APP_PUBLIC_HOST="150.136.37.236"   # no scheme
-#   export APP_PORT="3000"
+#   export APP_PUBLIC_HOST="oci.cloudstore893.com"   # no scheme
+#   export APP_PUBLIC_SCHEME="https"                 # default http
+#   export APP_PUBLIC_PORT=""                        # empty = omit port (443 for https)
 #   ./scripts/oci/idp-update-redirect-uris.sh
 #
 # Find IDP_DOMAIN_ENDPOINT: OCI Console → Domains → cloud-store-apps →
@@ -20,9 +21,19 @@ RAW_ENDPOINT="${IDP_DOMAIN_ENDPOINT:?Set IDP_DOMAIN_ENDPOINT (domain base URL)}"
 ENDPOINT="${RAW_ENDPOINT%/admin/v1}"
 ENDPOINT="${ENDPOINT%/}"
 ENDPOINT="${ENDPOINT%:443}"
-HOST="${APP_PUBLIC_HOST:?Set APP_PUBLIC_HOST (e.g. 150.136.37.236)}"
-PORT="${APP_PORT:-3000}"
-BASE="http://${HOST}:${PORT}"
+HOST="${APP_PUBLIC_HOST:?Set APP_PUBLIC_HOST (e.g. oci.cloudstore893.com)}"
+SCHEME="${APP_PUBLIC_SCHEME:-http}"
+PORT="${APP_PUBLIC_PORT:-${APP_PORT:-3000}}"
+
+port_suffix=""
+if [[ -n "$PORT" ]]; then
+  if [[ "$SCHEME" == "https" && "$PORT" == "443" ]] || [[ "$SCHEME" == "http" && "$PORT" == "80" ]]; then
+    port_suffix=""
+  else
+    port_suffix=":${PORT}"
+  fi
+fi
+BASE="${SCHEME}://${HOST}${port_suffix}"
 
 add_redirects_for_app() {
   local name="$1"

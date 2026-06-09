@@ -49,7 +49,7 @@ export CLOUD_STORE_OCID=$(cd /path/to/cloud-store-893/terraform && terraform out
 export CLOUD_STORE_RESERVED_PUBLIC_IP_OCID="ocid1.publicip.oc1.iad.amaaaaaa36usv6qatlrxmwbk2ehpwj5wr43rusqjcobno54msiok4mqfbh7q"
 ```
 
-If `CLOUD_STORE_OCID` is stale, `./scripts/oci/oci-app-url.sh` may fail with `NotAuthorizedOrNotFound` even when the app responds on the reserved IP. **Unset it** or refresh from terraform output.
+If `CLOUD_STORE_OCID` is stale, `./scripts/oci/confirm-public-url.sh` may fail with `NotAuthorizedOrNotFound` even when the app responds on the reserved IP. **Unset it** or refresh from terraform output.
 
 Optional alias (referenced in deploy scripts; define locally if useful):
 
@@ -67,7 +67,7 @@ cloud-store-refresh-ocid() {
 | Step | Status | Tool |
 |------|--------|------|
 | Warn before instance replace | **Scripted** | `scripts/oci/lib/oci-ip-warn.sh` |
-| Resolve live public URL | **Scripted** | `./scripts/oci/oci-app-url.sh` |
+| Resolve live public URL | **Scripted** | `./scripts/oci/confirm-public-url.sh` |
 | Detect detached reserved IP | **Partial** | `restart-container-instance.sh` warns if reserved IP is `AVAILABLE` |
 | Reattach reserved IP to new VNIC | **Scripted** | `./scripts/oci/reattach-reserved-ip.sh` |
 | Refresh `CLOUD_STORE_OCID` | **Scripted** | `reattach-reserved-ip.sh --refresh-ocid` or terraform output |
@@ -144,7 +144,7 @@ oci network public-ip get --public-ip-id "$RESERVED_OCID" \
 curl -s -o /dev/null -w "%{http_code}\n" http://oci.cloudstore893.com:3000/
 curl -s http://oci.cloudstore893.com:3000/api/admin/session | python3 -m json.tool
 
-./scripts/oci/oci-app-url.sh
+./scripts/oci/confirm-public-url.sh
 # expect http://129.153.187.63:3000 (or reserved IP)
 ```
 
@@ -190,7 +190,7 @@ LAN_IP=oci.cloudstore893.com ./RebuildReinstall.sh
 Implemented scripts and hooks (see sections above for manual CLI equivalent):
 
 1. **`./scripts/oci/reattach-reserved-ip.sh`**
-   - Resolves VNIC → private IP → `public-ip update` → wait → verify curl + `oci-app-url.sh`
+   - Resolves VNIC → private IP → `public-ip update` → wait → verify curl + `confirm-public-url.sh`
    - Uses `CLOUD_STORE_RESERVED_PUBLIC_IP_OCID` (or documented default OCID)
    - Flags: `--yes`, `--dry-run`, `--refresh-ocid`, `--update-idp`
 
@@ -208,7 +208,7 @@ Implemented scripts and hooks (see sections above for manual CLI equivalent):
 | Symptom | Likely cause | First check |
 |---------|--------------|-------------|
 | `oci.cloudstore893.com` timeout after apply | Reserved IP detached | `oci network public-ip get --public-ip-id $RESERVED_OCID` → state `AVAILABLE` |
-| `oci-app-url.sh` → `NotAuthorizedOrNotFound` | Stale `CLOUD_STORE_OCID` | `unset CLOUD_STORE_OCID` or `cloud-store-refresh-ocid` |
+| `confirm-public-url.sh` → `NotAuthorizedOrNotFound` | Stale `CLOUD_STORE_OCID` | `unset CLOUD_STORE_OCID` or `cloud-store-refresh-ocid` |
 | OAuth redirect mismatch | IdP URIs for old IP | Browse via hostname; update IdCS |
 | `404` on `/api/cashier/unlock` | Stale container image | `restart-container-instance.sh` or redeploy image |
 | Ephemeral IP works, hostname does not | Reserved IP not attached | `./scripts/oci/reattach-reserved-ip.sh` |

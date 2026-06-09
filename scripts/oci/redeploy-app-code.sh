@@ -75,11 +75,11 @@ echo "==> Restarting container instance"
 
 echo ""
 echo "==> Verify build on running app:"
-APP="$("$OCI_SCRIPTS/oci-app-url.sh" 2>/dev/null || true)"
+APP="$("$OCI_SCRIPTS/confirm-public-url.sh" 2>/dev/null || true)"
 if [[ -n "$APP" ]]; then
   curl -sS "${APP}/api/build-info" || true
   echo ""
 else
-  echo "    APP=\$($OCI_SCRIPTS/oci-app-url.sh)"
+  echo "    APP=\$($OCI_SCRIPTS/confirm-public-url.sh)"
   echo "    curl -s \"\$APP/api/build-info\""
 fi

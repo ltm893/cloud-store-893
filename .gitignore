@@ -1,6 +1,10 @@
 # Environment variables - never commit these
 .env
 
+# Local TLS key material (scripts/generate-dev-tls.sh)
+certs/
+.venv-barcode/
+
 # Local dev auth session persistence (DEV_PERSIST_AUTH_SESSIONS via dev-up.sh)
 .dev-auth-sessions.json
 
@@ -22,6 +26,7 @@ wallet/
 # Terraform - secrets and generated state
 terraform/terraform.tfvars
 terraform/container_env.auto.tfvars
+terraform/lb_tls.auto.tfvars
 terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
@@ -41,3 +46,4 @@ android-pos/*.iml
 android-pos/captures/
 android-pos/.externalNativeBuild/
 android-pos/.cxx/
+.venv-certbot/

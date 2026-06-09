@@ -217,7 +217,7 @@ fi
 if [[ "$DRY_RUN" == "true" ]]; then
   echo "[dry-run] would verify:"
   echo "  curl -s -o /dev/null -w '%{http_code}' http://${APP_HOST}:${PORT}/"
-  echo "  $OCI_SCRIPTS/oci-app-url.sh"
+  echo "  $OCI_SCRIPTS/confirm-public-url.sh"
   exit 0
 fi
 
@@ -235,11 +235,11 @@ fi
 echo ""
 echo "    Live URL via OCI CLI:"
 export CLOUD_STORE_OCID="$INSTANCE_OCID"
-live_url="$("$OCI_SCRIPTS/oci-app-url.sh" 2>/dev/null || true)"
+live_url="$("$OCI_SCRIPTS/confirm-public-url.sh" 2>/dev/null || true)"
 if [[ -n "$live_url" ]]; then
   echo "      $live_url"
 else
-  echo "      (oci-app-url.sh failed — check CLOUD_STORE_OCID and instance state)"
+  echo "      (confirm-public-url.sh failed — check CLOUD_STORE_OCID and instance state)"
 fi
 echo ""
 

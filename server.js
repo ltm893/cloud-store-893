@@ -497,7 +497,10 @@ app.get('/api/sales/recent', asyncHandler(async (req, res) => {
   res.json(mapped);
 }));
 
-app.listen(PORT, () => {
-  console.log(`✅ Cart app running on http://localhost:${PORT}`);
+const { startServer } = require('./lib/start-server');
+
+const { server, scheme } = startServer(app, PORT);
+server.on('listening', () => {
+  console.log(`✅ Cart app running on ${scheme}://localhost:${PORT}`);
   console.log(`🗄  ORDS base: ${ORDS_BASE}`);
 });

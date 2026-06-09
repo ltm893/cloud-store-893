@@ -272,7 +272,7 @@ Integration CI does **not** run the destructive cart/checkout phase.
 Not part of `npm test`. After `./scripts/oci/redeploy-app-code.sh`:
 
 ```bash
-APP=$(./scripts/oci/oci-app-url.sh)
+APP=$(./scripts/oci/confirm-public-url.sh)
 curl -s "$APP/api/build-info"                    # expect {"buildId":"<your BUILD_ID>"}
 curl -s -o /dev/null -w "%{http_code}\n" \
   -X POST "$APP/api/cashier/unlock" \

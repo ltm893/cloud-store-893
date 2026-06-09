@@ -9,8 +9,29 @@ output "container_instance_ocid" {
 }
 
 output "app_url" {
-  description = "Public URL to reach the shopping cart app"
+  description = "Direct HTTP URL on the container public IP (bypasses load balancer / tunnel)"
   value       = "http://${data.oci_core_vnic.main.public_ip_address}:${var.app_port}"
+}
+
+output "app_url_https" {
+  description = "Public HTTPS URL when OCI LB or Cloudflare Tunnel hostname is configured (hostname only — does not imply TLS listener is up; check terraform plan for listener resources)"
+  value = (
+    var.enable_load_balancer && var.lb_public_hostname != ""
+  ) ? "https://${var.lb_public_hostname}/" : (
+    var.cloudflare_tunnel_hostname != "" ? "https://${var.cloudflare_tunnel_hostname}/" : null
+  )
+}
+
+output "load_balancer_public_ip" {
+  description = "Public IP on the flexible load balancer (point DNS here when LB is enabled)"
+  value = var.enable_load_balancer ? one([
+    for ip in oci_load_balancer_load_balancer.main[0].ip_address_details : ip.ip_address if ip.is_public
+  ]) : null
+}
+
+output "cloudflare_tunnel_hostname" {
+  description = "Public hostname served by Cloudflare Tunnel (empty when not configured)"
+  value       = var.cloudflare_tunnel_hostname != "" ? var.cloudflare_tunnel_hostname : ""
 }
 
 output "ocir_image_path" {

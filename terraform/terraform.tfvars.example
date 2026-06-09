@@ -26,7 +26,16 @@ adb_admin_password = "YourStr0ng!Password"
 # ── App PINs (container env — tablet login + admin UI) ───────────────────────
 # cashier_pin = "8930"
 # admin_pin   = "8930"   # optional; defaults to cashier_pin when empty
-# cashier_session_secure = true   # use when HTTPS terminates in front of the app
+# cashier_session_secure = true   # use when HTTPS terminates in front of the app (auto when tunnel token set)
+#
+# HTTPS — OCI Load Balancer (required for POC when LB is mandated). See docs/oci-load-balancer-https.md
+# enable_load_balancer = true
+# lb_public_hostname   = "oci.cloudstore893.com"
+# TLS PEMs in lb_tls.auto.tfvars — run: ./scripts/generate-lb-tls.sh oci.cloudstore893.com
+#
+# Optional alternative — Cloudflare Tunnel (docs/cloudflare-tunnel.md)
+# cloudflare_tunnel_token    = "eyJh..."
+# cloudflare_tunnel_hostname = "oci.cloudstore893.com"
 
 # ── Network lockdown (optional) ─────────────────────────────────────────────
 # ingress_allowed_cidrs = ["203.0.113.50/32"]   # shop IP; default ["0.0.0.0/0"]

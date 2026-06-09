@@ -1,0 +1,8 @@
+# Copy to lb_tls.auto.tfvars (gitignored) or generate via:
+#   ./scripts/generate-lb-tls.sh oci.cloudstore893.com
+#
+# For production, use Let's Encrypt / a public CA and paste PEMs here.
+# lb_tls_ca_certificate_pem = "..."   # optional intermediate chain
+
+# lb_tls_certificate_pem = "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"
+# lb_tls_private_key_pem   = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
