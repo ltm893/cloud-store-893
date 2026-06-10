@@ -1,0 +1,2 @@
+// Copy to Local.xcconfig (gitignored) for Mac LAN dev: npm run dev:up
+// API_BASE_URL = http:/$()/192.168.1.10:3000/

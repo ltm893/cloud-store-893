@@ -46,4 +46,10 @@ android-pos/*.iml
 android-pos/captures/
 android-pos/.externalNativeBuild/
 android-pos/.cxx/
+
+# iOS admin — Xcode local overrides and user state
+ios-admin/Config/Local.xcconfig
+ios-admin/**/xcuserdata/
+ios-admin/**/DerivedData/
+
 .venv-certbot/

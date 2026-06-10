@@ -22,7 +22,8 @@
     "test:inventory": "./scripts/test-inventory-api.sh",
     "test:inventory:ephemeral": "RUN_EPHEMERAL=yes SKIP_DESTRUCTIVE=yes ./scripts/test-inventory-api.sh",
     "test:model-b-session": "./scripts/test-model-b-session.sh",
-    "test:model-b-session:ephemeral": "RUN_EPHEMERAL=yes ./scripts/test-model-b-session.sh"
+    "test:model-b-session:ephemeral": "RUN_EPHEMERAL=yes ./scripts/test-model-b-session.sh",
+    "test:ios-admin": "./scripts/run-ios-admin-tests.sh"
   },
   "keywords": [],
   "author": "",

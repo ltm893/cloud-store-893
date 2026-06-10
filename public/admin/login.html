@@ -104,6 +104,8 @@
     @media (orientation: portrait) {
       .portrait-blocker { display: flex; }
       body.admin-landscape > :not(.portrait-blocker) { visibility: hidden; }
+      html.admin-portrait-ok .portrait-blocker { display: none !important; }
+      html.admin-portrait-ok body.admin-landscape > :not(.portrait-blocker) { visibility: visible !important; }
     }
   </style>
 </head>
