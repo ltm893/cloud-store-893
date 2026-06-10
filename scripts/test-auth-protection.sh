@@ -12,27 +12,11 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=lib/http-test-lib.sh
+source "$SCRIPT_DIR/lib/http-test-lib.sh"
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:3000}"
 BASE_URL="${BASE_URL%/}"
-
-read_env_var() {
-  local key="$1" default="${2:-}"
-  if [[ -n "${!key:-}" ]]; then
-    printf '%s' "${!key}"
-    return
-  fi
-  if [[ -f "$PROJECT_ROOT/.env" ]]; then
-    local line
-    line=$(grep -E "^${key}=" "$PROJECT_ROOT/.env" 2>/dev/null | head -1 || true)
-    if [[ -n "$line" ]]; then
-      printf '%s' "${line#*=}" | tr -d '"' | tr -d "'"
-      return
-    fi
-  fi
-  printf '%s' "$default"
-}
 
 CASHIER_PIN="$(read_env_var CASHIER_PIN 8930)"
 ADMIN_PIN="$(read_env_var ADMIN_PIN "")"
@@ -111,6 +95,7 @@ if [[ "$HTTP_CODE" != "200" ]]; then
   echo "  Start with: npm run dev:up"
   exit 1
 fi
+http_test_probe_cashier_session "$BASE_URL" "$BODY" || true
 
 echo "-- Cashier: public without session --"
 expect_public_anon GET /api/products
@@ -125,7 +110,13 @@ curl_req POST "$BASE_URL/api/cashier/logout"
 [[ "$HTTP_CODE" == "200" ]] && log_ok "public POST /api/cashier/logout → 200" || log_fail "public POST /api/cashier/logout → $HTTP_CODE"
 
 curl_req POST "$BASE_URL/api/cashier/unlock" -d '{"pin":"0000"}'
-[[ "$HTTP_CODE" == "401" ]] && log_ok "POST /api/cashier/unlock bad PIN → 401" || log_fail "POST /api/cashier/unlock bad PIN → $HTTP_CODE"
+if [[ "${SESSION_SUPERVISOR_REQUIRED:-false}" == "true" ]]; then
+  [[ "$HTTP_CODE" == "403" ]] && log_ok "POST /api/cashier/unlock bad PIN → 403 (Model B)" \
+    || log_fail "POST /api/cashier/unlock bad PIN → $HTTP_CODE (want 403 under Model B)"
+else
+  [[ "$HTTP_CODE" == "401" ]] && log_ok "POST /api/cashier/unlock bad PIN → 401" \
+    || log_fail "POST /api/cashier/unlock bad PIN → $HTTP_CODE"
+fi
 
 echo ""
 echo "-- Cashier: protected without session (expect 401) --"
@@ -150,23 +141,34 @@ done
 
 echo ""
 echo "-- Cashier: unlock and re-test --"
-curl_req POST "$BASE_URL/api/cashier/unlock" -c "$CASHIER_JAR" -d "{\"pin\":\"$CASHIER_PIN\"}"
-if [[ "$HTTP_CODE" != "200" ]]; then
-  log_fail "POST /api/cashier/unlock (valid PIN) → $HTTP_CODE — check CASHIER_PIN"
-  echo ""
-  echo "== done (auth): $pass passed, $fail failed, $skip skipped =="
-  exit 1
-fi
-log_ok "POST /api/cashier/unlock (valid PIN) → 200"
-
-for entry in "${POS_PROTECTED[@]}"; do
-  IFS='|' read -r method path payload <<< "$entry"
-  if [[ -n "${payload:-}" ]]; then
-    expect_allowed_authed "$method" "$path" "$CASHIER_JAR" -d "$payload"
-  else
-    expect_allowed_authed "$method" "$path" "$CASHIER_JAR"
+CASHIER_UNLOCKED=0
+if [[ "${SESSION_OK:-false}" == "true" ]]; then
+  log_skip "PIN unlock (existing cashier session)"
+  CASHIER_UNLOCKED=1
+elif [[ "${SESSION_SUPERVISOR_REQUIRED:-false}" == "true" ]]; then
+  log_skip "PIN unlock + authed POS routes (Model B — use Oracle sign-in or ephemeral server with approval off)"
+else
+  curl_req POST "$BASE_URL/api/cashier/unlock" -c "$CASHIER_JAR" -d "{\"pin\":\"$CASHIER_PIN\"}"
+  if [[ "$HTTP_CODE" != "200" ]]; then
+    log_fail "POST /api/cashier/unlock (valid PIN) → $HTTP_CODE — check CASHIER_PIN"
+    echo ""
+    echo "== done (auth): $pass passed, $fail failed, $skip skipped =="
+    exit 1
   fi
-done
+  log_ok "POST /api/cashier/unlock (valid PIN) → 200"
+  CASHIER_UNLOCKED=1
+fi
+
+if [[ "$CASHIER_UNLOCKED" == "1" ]]; then
+  for entry in "${POS_PROTECTED[@]}"; do
+    IFS='|' read -r method path payload <<< "$entry"
+    if [[ -n "${payload:-}" ]]; then
+      expect_allowed_authed "$method" "$path" "$CASHIER_JAR" -d "$payload"
+    else
+      expect_allowed_authed "$method" "$path" "$CASHIER_JAR"
+    fi
+  done
+fi
 
 echo ""
 echo "-- Cashier cookie must not grant admin API --"

@@ -152,11 +152,13 @@ function renderCreateForm(meta) {
 
 function openEdit(row) {
   editingRow = row;
+  const readOnlyCols = new Set(activeMeta.readOnlyColumns || []);
   editFieldsEl.innerHTML = activeMeta.columns
     .filter((c) => c !== 'id')
     .map((col) => {
       const val = row[col] ?? '';
-      return `<label>${escapeHtml(col)}<input name="${escapeHtml(col)}" type="text" value="${attrEscape(val)}"></label>`;
+      const disabled = readOnlyCols.has(col) ? ' disabled' : '';
+      return `<label>${escapeHtml(col)}<input name="${escapeHtml(col)}" type="text" value="${attrEscape(val)}"${disabled}></label>`;
     })
     .join('');
   editDialog.showModal();
@@ -182,9 +184,24 @@ async function loadTable(name) {
   if (!activeMeta) return;
 
   tableTitleEl.textContent = activeMeta.label;
-  tableHintEl.textContent = activeMeta.readOnly
-    ? 'Read-only view (ORDS cart_view).'
-    : 'Create, edit, and delete rows. Changes apply to the live database.';
+  if (activeMeta.name === 'inventory_status_view') {
+    tableHintEl.textContent =
+      'Read-only stock levels for tracked products. Use Inventory movements for history; receive/adjust via API or Product inventory + movements.';
+  } else if (activeMeta.name === 'product_inventory') {
+    tableHintEl.textContent =
+      'On-hand counts are read-only here — use POST /api/admin/inventory/receive, /adjust, or /set-count. Edit reorder points below.';
+  } else if (activeMeta.name === 'bulk_inventory') {
+    tableHintEl.textContent =
+      'Kitchen bulk stock (oz). Quantity read-only — use POST /api/admin/inventory/bulk/receive, /adjust, or /set-count.';
+  } else if (activeMeta.name === 'inventory_consumption_rules') {
+    tableHintEl.textContent =
+      'Oz (or unit) consumed per POS unit sold by product_type. Example: made coffee → 1.5 oz kitchen beans per drink.';
+  } else if (activeMeta.readOnly) {
+    tableHintEl.textContent = 'Read-only view.';
+  } else {
+    tableHintEl.textContent =
+      'Create, edit, and delete rows. Changes apply to the live database.';
+  }
 
   renderCreateForm(activeMeta);
   setStatus('Loading…');
@@ -199,7 +216,13 @@ async function loadTable(name) {
 
     dataBodyEl.innerHTML = rows
       .map((row) => {
-        const cells = cols.map((c) => `<td>${formatCell(row[c])}</td>`).join('');
+        const lowStock = activeMeta.name === 'inventory_status_view' && Number(row.low_stock) === 1;
+        const cells = cols
+          .map((c) => {
+            const cls = lowStock && c === 'quantity_on_hand' ? ' class="low-stock"' : '';
+            return `<td${cls}>${formatCell(row[c])}</td>`;
+          })
+          .join('');
         const actions = activeMeta.readOnly
           ? ''
           : `<td class="row-actions">

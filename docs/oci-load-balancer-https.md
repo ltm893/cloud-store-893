@@ -378,12 +378,21 @@ Source defaults to `certs/certbot/` (config, work, logs from section 3).
 ./scripts/oci/invoke-cert-renew-function.sh --force-renew
 ```
 
-### 7f. Schedule (Console)
+### 7f. Schedule (Terraform — default)
 
-1. **Governance → Resource Scheduler → Create schedule**
-2. Resource type: **Functions → Function** → select `cert-renew`
-3. Cron example: `0 3 * * 0` (Sundays 03:00 UTC)
-4. IAM: dynamic group must include the schedule if OCI prompts (see [scheduling functions](https://docs.oracle.com/en-us/iaas/Content/Functions/Tasks/functionsscheduling.htm))
+When `enable_cert_renew_function = true`, Terraform also creates a **Resource Scheduler** job (unless `enable_cert_renew_schedule = false`):
+
+- **Action:** `START_RESOURCE` (OCI’s action for scheduled Functions; detached invoke with empty body → normal `certbot renew`)
+- **Default cron:** `0 3 * * 0` (Sundays 03:00 UTC) — override with `cert_renew_schedule_cron`
+- **IAM:** policy `${project_name}-cert-renew-schedule` grants the schedule permission to invoke the function
+
+```bash
+cd terraform && terraform apply
+terraform output cert_renew_schedule_ocid
+terraform output cert_renew_schedule_next_run
+```
+
+**Console alternative:** Governance → Resource Scheduler → create schedule → add `cert-renew` function → same cron. You still need the IAM policy (see [scheduling functions](https://docs.oracle.com/en-us/iaas/Content/Functions/Tasks/functionsscheduling.htm)).
 
 ### Function config (set by Terraform)
 

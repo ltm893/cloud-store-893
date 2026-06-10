@@ -133,9 +133,23 @@ API_SEC=$((SECONDS - API_START))
 echo "== timing (api): $API_SEC =="
 
 echo ""
-if [[ "$AUTH_EXIT" -eq 0 && "$API_EXIT" -eq 0 ]]; then
-  echo "== Integration tests passed (${AUTH_SEC}s auth, ${API_SEC}s api) =="
+echo "== Integration: inventory API (destructive=${RUN_DESTRUCTIVE:-no}) =="
+INV_FLAGS=(SKIP_DESTRUCTIVE=yes)
+if [[ "${RUN_DESTRUCTIVE:-}" == "yes" ]]; then
+  INV_FLAGS=(SKIP_CONFIRM=yes)
+fi
+INV_START=$SECONDS
+set +e
+env "${INV_FLAGS[@]}" ./scripts/test-inventory-api.sh
+INV_EXIT=$?
+set -e
+INV_SEC=$((SECONDS - INV_START))
+echo "== timing (inventory): $INV_SEC =="
+
+echo ""
+if [[ "$AUTH_EXIT" -eq 0 && "$API_EXIT" -eq 0 && "$INV_EXIT" -eq 0 ]]; then
+  echo "== Integration tests passed (${AUTH_SEC}s auth, ${API_SEC}s api, ${INV_SEC}s inventory) =="
   exit 0
 fi
-echo "== Integration tests failed (auth exit=$AUTH_EXIT, api exit=$API_EXIT) =="
+echo "== Integration tests failed (auth exit=$AUTH_EXIT, api exit=$API_EXIT, inventory exit=$INV_EXIT) =="
 exit 1

@@ -36,7 +36,8 @@ flowchart TB
   end
 
   subgraph optin ["Opt-in"]
-    modelB["test:cashier-approval-*"]
+    modelB["test:model-b-session / test:cashier-approval-*"]
+    inventory["test:inventory"]
     supervisor["test:supervisor-routes"]
     ordsLib["test:login-approval"]
   end
@@ -100,6 +101,10 @@ Equivalent shell entry points:
 | `npm run test:all:destructive` | Unit + integration (with cart/checkout) + summary |
 | `npm run test:auth` | Auth protection only (server must already be running) |
 | `npm run test:api` | API curl tests only (server must already be running) |
+| `npm run test:inventory` | Inventory field shape, stock 409s (server must be running) |
+| `npm run test:inventory:ephemeral` | Same, starts ephemeral server (`ORDS_BASE_URL` from `.env`) |
+| `npm run test:model-b-session` | Model B session flags + PIN unlock 403 (server must have Model B on) |
+| `npm run test:model-b-session:ephemeral` | Same, starts ephemeral server with `CASHIER_SUPERVISOR_APPROVAL=true` |
 | `npm run test:login-approval` | ORDS store smoke test (no HTTP server) |
 | `npm run test:supervisor-routes` | Supervisor approval HTTP routes |
 | `npm run test:cashier-approval-session` | Model B pending cookie + session probe |
@@ -118,7 +123,10 @@ Equivalent shell entry points:
 | `session-cookies.test.js` | `lib/session-cookies.js` — `parseCookies` |
 | `ords-client.test.js` | `lib/ords-client.js` — timestamp format, URL normalization, fetch errors |
 | `approval-errors.test.js` | `lib/approval-errors.js` |
-| `supervisor-config.test.js` | `lib/supervisor-config.js` |
+| `supervisor-config.test.js` | `lib/supervisor-config.js` — `isSupervisorPinFallbackEnabled` |
+| `supervisor-approval.test.js` | `lib/login-approval.js` — `isSupervisorApprovalEnabled`; `lib/cashier-auth.js` — `sessionStatusPayload` / `pinAllowed` |
+| `supervisor-auth.test.js` | `lib/supervisor-auth.js` — `isSupervisorIdentity` (OIDC groups vs PIN fallback) |
+| `inventory.test.js` | `lib/inventory.js` — retail qty, `mapProductForCashier`, bulk `aggregateBulkConsumption`, `canFulfillBulkConsumption` |
 | `cashier-identity.test.js` | `lib/login-approval.js` — `identityFromCashierSub`, `identityFromApproval`, claim helpers |
 
 Run directly:
@@ -152,7 +160,7 @@ When `BASE_URL` is not preset, the script:
    | `BUILD_ID` | `integration-test` | Identifiable in logs |
 
 3. Waits for `GET /api/cashier/session` → 200
-4. Runs sub-suites
+4. Runs sub-suites: auth, API curl, inventory API
 5. Stops the server on exit
 
 Use an **existing** server instead:
@@ -207,6 +215,32 @@ Destructive actions:
 SKIP_DESTRUCTIVE=yes ./scripts/test-api-curl.sh   # default in npm run test:all
 ```
 
+**Model B on the server under test:** `test-api-curl.sh` probes `GET /api/cashier/session` first. When `supervisorApprovalRequired` is true, it skips protected POS routes instead of failing on `POST /api/cashier/unlock` → 403.
+
+### Sub-suite: inventory (`test-inventory-api.sh`)
+
+Runs automatically in `npm run test:all` after the API curl suite.
+
+**Always runs (non-destructive when possible):**
+
+- `GET /api/products` — `inStock` + `quantityOnHand` (null for bar drinks, numeric for retail)
+- `POST /api/cart` → **409** when retail SKU is out of stock (uses natural OOS row or admin `set-count` → 0, then restores)
+- `POST /api/cart` → **409** when kitchen beans insufficient (admin sets `kitchen_beans` to 0.5 oz, then restores)
+
+**Destructive phase** (mixed drink + retail checkout):
+
+- Verifies bulk −1.5 oz, retail −1, and `inventory_movements` rows (`sale` + `consume`) for the order
+- Same gates as API curl: `RUN_DESTRUCTIVE=yes` / `SKIP_DESTRUCTIVE=yes`
+
+Skips cart tests when Model B is on and no cashier session exists.
+
+```bash
+npm run dev:up && npm run test:inventory
+npm run test:inventory:ephemeral          # no dev server needed (reads .env)
+SKIP_DESTRUCTIVE=yes npm run test:inventory
+RUN_DESTRUCTIVE=yes SKIP_CONFIRM=yes npm run test:inventory:ephemeral
+```
+
 ---
 
 ## Manual / Model B scripts
@@ -215,6 +249,7 @@ Not part of `npm test` or `npm run test:all`. Run when working on supervisor app
 
 | Script | Server env | What it verifies |
 |--------|------------|------------------|
+| `test:model-b-session` | `CASHIER_SUPERVISOR_APPROVAL=true` (or `RUN_EPHEMERAL=yes`) | Session flags, PIN unlock → 403, approval status → 401 |
 | `test:login-approval` | None (ORDS only) | `lib/login-approval.js` create/list/approve against live ADB |
 | `test:supervisor-routes` | `CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true` recommended | Admin approval list/approve/deny routes |
 | `test:cashier-approval-session` | `CASHIER_SUPERVISOR_APPROVAL=true` | Pending cookie + `/api/cashier/session` shapes |
@@ -333,7 +368,7 @@ Integration tests do **not** cover Android UI (e.g. add-item error display); val
 ## Adding tests
 
 1. **Pure functions in `lib/`** → add `test/<module>.test.js`, run `npm test`.
-2. **New HTTP route** → extend `scripts/test-auth-protection.sh` and/or `scripts/test-api-curl.sh` (prefer non-destructive checks in the read-only section).
+2. **New HTTP route** → extend `scripts/test-auth-protection.sh` and/or `scripts/test-api-curl.sh` (prefer non-destructive checks in the read-only section). Inventory/stock behavior → `scripts/test-inventory-api.sh`.
 3. **Model B behavior** → extend the opt-in scripts under `scripts/test-cashier-approval-*.sh`.
 4. **OCI deploy** → document curl/`redeploy-app-code.sh` steps in this file; optional read-only `test-api-curl.sh` against live URL.
 5. **CI** → unit tests run automatically; integration picks up changes to curl scripts when secrets are configured.

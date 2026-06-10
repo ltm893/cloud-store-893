@@ -12,8 +12,19 @@ if (!ORDS_BASE) {
 
 app.use(express.json());
 
+function buildInfoLabel(buildId) {
+  if (buildId === 'unknown' || buildId === 'dev') return buildId;
+  const stamp = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(buildId);
+  if (stamp) {
+    const [, y, mo, d, h, mi, s] = stamp;
+    return `deploy ${y}-${mo}-${d} ${h}:${mi}:${s} UTC`;
+  }
+  return buildId.replace(/-/g, ' ');
+}
+
 app.get('/api/build-info', (req, res) => {
-  res.json({ buildId: process.env.BUILD_ID || 'unknown' });
+  const buildId = process.env.BUILD_ID || 'unknown';
+  res.json({ buildId, label: buildInfoLabel(buildId) });
 });
 
 // ── ORDS client ───────────────────────────────────────────────────────────
@@ -212,26 +223,26 @@ function summarizeCart(cartRows, linked893) {
   };
 }
 
-function mapProductRow(p) {
-  const regularPrice = roundMoney(Number(p.price));
-  const onSale = isOnSale(p);
-  const salePrice =
-    p.sale_price == null || p.sale_price === '' ? null : roundMoney(Number(p.sale_price));
-  return {
-    id: Number(p.id),
-    barcode: p.barcode,
-    name: p.name,
-    regularPrice,
-    salePrice: onSale ? salePrice : null,
-    onSale,
-  };
-}
+const {
+  applyBulkConsumptionForSale,
+  canFulfillBulkConsumption,
+  canFulfillQuantity,
+  loadBulkInventoryMap,
+  loadConsumptionRulesMap,
+  loadInventoryMap,
+  mapProductForCashier,
+  recordInventoryMovement,
+  tracksInventory,
+} = require('./lib/inventory');
 
 // ── Products ──────────────────────────────────────────────────────────────
 
 app.get('/api/products', asyncHandler(async (req, res) => {
-  const products = await ordsGet('products/');
-  res.json(products.map(mapProductRow));
+  const [products, inventoryMap] = await Promise.all([
+    ordsGet('products/'),
+    loadInventoryMap(ordsGet),
+  ]);
+  res.json(products.map((p) => mapProductForCashier(p, inventoryMap)));
 }));
 
 // ── Customers (for linking at checkout / cart preview) ────────────────────
@@ -280,19 +291,91 @@ async function respondWithCart(req, res) {
   res.json(await fetchCartSummary(linked893));
 }
 
-async function upsertCartLine(productId) {
+async function getProductById(productId) {
+  const filter = encodeURIComponent(JSON.stringify({ id: { $eq: Number(productId) } }));
+  const products = await ordsGet(`products/?q=${filter}`);
+  return products.length > 0 ? products[0] : null;
+}
+
+async function loadProductsById() {
+  const products = await ordsGet('products/');
+  return new Map(products.map((p) => [Number(p.id), p]));
+}
+
+async function validateCartLines(cartLines) {
+  const productsById = await loadProductsById();
+  const inventoryMap = await loadInventoryMap(ordsGet);
+  const rulesByType = await loadConsumptionRulesMap(ordsGet);
+  const bulkMap = await loadBulkInventoryMap(ordsGet);
+
+  for (const line of cartLines) {
+    const productId = Number(line.productId);
+    const quantity = Number(line.quantity);
+    const product = productsById.get(productId);
+    if (!product) {
+      return { error: `Product not found: ${productId}`, status: 404 };
+    }
+    const stockCheck = canFulfillQuantity(product, inventoryMap, quantity);
+    if (!stockCheck.ok) {
+      return { error: stockCheck.error, status: 409 };
+    }
+  }
+
+  const bulkCheck = canFulfillBulkConsumption(cartLines, productsById, rulesByType, bulkMap);
+  if (!bulkCheck.ok) {
+    return { error: bulkCheck.error, status: 409 };
+  }
+
+  return { ok: true, productsById, rulesByType };
+}
+
+function cartLinesAfterQuantityChange(cartItems, productId, newQty) {
+  const lines = [];
+  let found = false;
+  for (const row of cartItems) {
+    const pid = Number(row.product_id);
+    if (pid === Number(productId)) {
+      found = true;
+      if (newQty > 0) {
+        lines.push({ productId: pid, quantity: newQty });
+      }
+    } else {
+      lines.push({ productId: pid, quantity: Number(row.quantity) });
+    }
+  }
+  if (!found && newQty > 0) {
+    lines.push({ productId: Number(productId), quantity: newQty });
+  }
+  return lines;
+}
+
+async function upsertCartLine(productId, quantityDelta = 1) {
+  const product = await getProductById(productId);
+  if (!product) {
+    return { error: 'Product not found', status: 404 };
+  }
+
   const filter = encodeURIComponent(JSON.stringify({ product_id: { $eq: productId } }));
   const existing = await ordsGet(`cart_items/?q=${filter}`);
+  const currentCartQty = existing.length > 0 ? Number(existing[0].quantity) : 0;
+  const newQty = currentCartQty + quantityDelta;
+  const cartItems = await ordsGet('cart_items/');
+  const cartLines = cartLinesAfterQuantityChange(cartItems, productId, newQty);
+  const validation = await validateCartLines(cartLines);
+  if (validation.error) {
+    return { error: validation.error, status: validation.status || 409 };
+  }
 
   if (existing.length > 0) {
     const item = existing[0];
     await ordsPut(`cart_items/${item.id}`, {
       product_id: item.product_id,
-      quantity: item.quantity + 1,
+      quantity: newQty,
     });
   } else {
-    await ordsPost('cart_items/', { product_id: productId, quantity: 1 });
+    await ordsPost('cart_items/', { product_id: productId, quantity: newQty });
   }
+  return { ok: true };
 }
 
 app.get('/api/cart', asyncHandler(async (req, res) => {
@@ -305,13 +388,10 @@ app.post('/api/cart', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'productId is required' });
   }
 
-  const filter = encodeURIComponent(JSON.stringify({ id: { $eq: productId } }));
-  const products = await ordsGet(`products/?q=${filter}`);
-  if (!products.length) {
-    return res.status(404).json({ error: 'Product not found' });
+  const result = await upsertCartLine(productId);
+  if (result.error) {
+    return res.status(result.status || 400).json({ error: result.error });
   }
-
-  await upsertCartLine(productId);
   await respondWithCart(req, res);
 }));
 
@@ -327,7 +407,10 @@ app.post('/api/cart/barcode', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Product not found' });
   }
 
-  await upsertCartLine(Number(products[0].id));
+  const result = await upsertCartLine(Number(products[0].id));
+  if (result.error) {
+    return res.status(result.status || 400).json({ error: result.error });
+  }
   await respondWithCart(req, res);
 }));
 
@@ -340,10 +423,25 @@ app.post('/api/cart/replace', asyncHandler(async (req, res) => {
     await ordsDelete(`cart_items/${row.id}`);
   }
 
+  const requestedByProduct = new Map();
+
   for (const line of items) {
     const productId = Number(line.productId);
     const quantity = Number(line.quantity);
     if (!Number.isFinite(productId) || quantity < 1) continue;
+    requestedByProduct.set(productId, (requestedByProduct.get(productId) || 0) + quantity);
+  }
+
+  const cartLines = [...requestedByProduct.entries()].map(([productId, quantity]) => ({
+    productId,
+    quantity,
+  }));
+  const validation = await validateCartLines(cartLines);
+  if (validation.error) {
+    return res.status(validation.status || 409).json({ error: validation.error });
+  }
+
+  for (const [productId, quantity] of requestedByProduct.entries()) {
     await ordsPost('cart_items/', { product_id: productId, quantity });
   }
 
@@ -363,6 +461,12 @@ app.put('/api/cart/:id', asyncHandler(async (req, res) => {
     const existing = await ordsTryGet(`cart_items/${cartItemId}`);
     if (!existing || Number(existing.id) !== Number(cartItemId)) {
       return res.status(404).json({ error: 'Cart item not found' });
+    }
+    const cartItems = await ordsGet('cart_items/');
+    const cartLines = cartLinesAfterQuantityChange(cartItems, existing.product_id, quantity);
+    const validation = await validateCartLines(cartLines);
+    if (validation.error) {
+      return res.status(validation.status || 409).json({ error: validation.error });
     }
     await ordsPut(`cart_items/${cartItemId}`, {
       product_id: existing.product_id,
@@ -408,6 +512,12 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
 
   const linked893 = is893Member(customerRow);
   const summary = summarizeCart(rows, linked893);
+  const validation = await validateCartLines(summary.items);
+  if (validation.error) {
+    return res.status(validation.status || 409).json({ error: validation.error });
+  }
+  const { productsById, rulesByType } = validation;
+
   const recordedTotal = checkoutTotal ?? summary.subtotalPayable;
   const paymentResult = normalizeCheckoutPayments(req.body?.payments, recordedTotal);
   if (paymentResult?.error) {
@@ -445,6 +555,31 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
       line_total: roundMoney(unitPrice * quantity),
     });
   }
+
+  for (const item of summary.items) {
+    const product = productsById.get(Number(item.productId));
+    if (product && tracksInventory(product)) {
+      await recordInventoryMovement(
+        { ordsGet, ordsPost, ordsPut, ordsTimestamp },
+        {
+          productId: item.productId,
+          delta: -Number(item.quantity),
+          reason: 'sale',
+          orderNumber,
+        },
+      );
+    }
+  }
+
+  await applyBulkConsumptionForSale(
+    { ordsGet, ordsPost, ordsPut, ordsTimestamp },
+    {
+      cartLines: summary.items,
+      productsById,
+      rulesByType,
+      orderNumber,
+    },
+  );
 
   for (const [index, payment] of persistedPayments.entries()) {
     await ordsPost('sale_payments/', {

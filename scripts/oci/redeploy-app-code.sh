@@ -46,7 +46,7 @@ for arg in "$@"; do
   esac
 done
 
-BUILD_ID="${BUILD_ID:-$(date +%Y%m%d%H%M%S)}"
+BUILD_ID="${BUILD_ID:-deploy-$(date +%Y%m%d%H%M%S)}"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "error: docker not found" >&2
@@ -71,7 +71,12 @@ docker push "$IMAGE"
 
 echo ""
 echo "==> Restarting container instance"
-"$OCI_SCRIPTS/restart-container-instance.sh" "${RESTART_ARGS[@]}"
+# bash 3.2 + set -u treats empty "${RESTART_ARGS[@]}" as unbound on macOS
+if ((${#RESTART_ARGS[@]} > 0)); then
+  "$OCI_SCRIPTS/restart-container-instance.sh" "${RESTART_ARGS[@]}"
+else
+  "$OCI_SCRIPTS/restart-container-instance.sh"
+fi
 
 echo ""
 echo "==> Verify build on running app:"

@@ -37,6 +37,8 @@ adb_admin_password = "YourStr0ng!Password"
 # Automated renewal (OCI Function) — docs/oci-load-balancer-https.md
 # enable_cert_renew_function = true
 # cert_renew_email           = "you@example.com"
+# enable_cert_renew_schedule = true              # weekly Resource Scheduler (default on)
+# cert_renew_schedule_cron   = "0 3 * * 0"     # Sundays 03:00 UTC
 #
 # Optional alternative — Cloudflare Tunnel (docs/cloudflare-tunnel.md)
 # cloudflare_tunnel_token    = "eyJh..."

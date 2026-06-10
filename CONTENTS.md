@@ -70,8 +70,11 @@ Automated renewal: **Resource Scheduler → OCI Function → certbot DNS-01 → 
 | Application | `cert-renew-cloud-store` |
 | Image | `iad.ocir.io/ideccm0ly8vq/cloud-store:cert-renew` |
 | State bucket | `cloud-store-certbot-state` / object `certbot-state.tar.gz` |
-| Function timeout | **300 s max** (OCI limit; 600 is rejected) |
+| Function timeout | **300 s max** (OCI limit) |
 | Memory | 512 MB |
+| Resource Scheduler | `cert-renew-weekly` — cron `0 3 * * 0` (Sundays 03:00 UTC) |
+| Schedule OCID | `ocid1.resourceschedule.oc1.iad.amaaaaaa36usv6qaqvnn663dcq5ig4gx7jegw2pllz6v33j5mx6fnhgsyxra` |
+| Next run | `terraform output cert_renew_schedule_next_run` (e.g. 2026-06-14 03:00 UTC) |
 
 **Validate (fast — recommended):**
 
@@ -115,14 +118,14 @@ Certbot 5 **`renew --dry-run` always simulates a full DNS-01 challenge** (even w
 
 ### Pick up next
 
-1. **Resource Scheduler** — weekly invoke (normal renew; no-op until Aug 2026).
+1. **Commit** scheduler Terraform (if not yet pushed).
 2. Optional: `--force-renew` after staging rate limit cools off (POC only).
 3. **IdP** — confirm redirect URIs use `https://oci.cloudstore893.com/...`.
 
 ### Cert flow (summary)
 
 ```text
-Resource Scheduler ──► OCI Function (cert-renew)   [deployed; smoke-test green]
+Resource Scheduler ──► OCI Function (cert-renew)   [weekly schedule live]
                            │
          restore/save ◄──► Object Storage (certbot-state.tar.gz)
                            │
@@ -147,8 +150,7 @@ Node container
 
 ### Not done yet (broader HTTPS)
 
-1. **Resource Scheduler** — weekly trigger after dry-run passes.
-2. **IdP** — confirm POS app redirect URIs are all `https://oci.cloudstore893.com/...`.
+1. **IdP** — confirm POS app redirect URIs are all `https://oci.cloudstore893.com/...`.
 
 ---
 

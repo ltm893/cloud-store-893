@@ -68,3 +68,13 @@ output "certbot_state_bucket" {
   description = "Object Storage bucket for certbot state between function invocations"
   value       = var.enable_cert_renew_function ? var.certbot_state_bucket_name : null
 }
+
+output "cert_renew_schedule_ocid" {
+  description = "OCID of the weekly cert-renew Resource Scheduler schedule (null when disabled)"
+  value       = var.enable_cert_renew_function && var.enable_cert_renew_schedule ? oci_resource_scheduler_schedule.cert_renew[0].id : null
+}
+
+output "cert_renew_schedule_next_run" {
+  description = "Next scheduled cert-renew invocation (UTC), when schedule is enabled"
+  value       = var.enable_cert_renew_function && var.enable_cert_renew_schedule ? oci_resource_scheduler_schedule.cert_renew[0].time_next_run : null
+}

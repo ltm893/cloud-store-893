@@ -178,6 +178,28 @@ h1, h2 {
   gap: 8px;
 }
 
+.product-card--oos {
+  opacity: 0.72;
+}
+
+.stock-badge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.stock-badge.in-stock {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.stock-badge.out-of-stock {
+  color: #b42318;
+  background: #fee4e2;
+}
+
 .product-name {
   font-weight: 600;
 }

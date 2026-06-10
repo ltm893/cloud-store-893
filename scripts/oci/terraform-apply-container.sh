@@ -52,11 +52,13 @@ if [[ "$plan_signal" -eq 1 ]]; then
 fi
 
 cd "$TF_DIR"
+echo "==> Running terraform apply (container env + networking; may take several minutes)..."
 if [[ "$YES" == "--yes" ]]; then
   terraform apply -auto-approve
 else
   terraform apply
 fi
+echo "==> Terraform apply finished."
 
 if [[ "$plan_signal" -eq 1 ]]; then
   oci_ip_offer_recover_network "$RECOVER_NETWORK" "$OCI_SCRIPTS"

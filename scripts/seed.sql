@@ -14,7 +14,17 @@
 -- ── 0. Cleanup (safe to re-run) ─────────────────────────────────────────────
 -- Drop objects in reverse dependency order so re-runs start clean.
 
+BEGIN EXECUTE IMMEDIATE 'DROP VIEW inventory_status_view'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
 BEGIN EXECUTE IMMEDIATE 'DROP VIEW cart_view';   EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE inventory_movements'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE inventory_consumption_rules'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE product_inventory'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE bulk_inventory'; EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE sale_payments'; EXCEPTION WHEN OTHERS THEN NULL; END;
 /
@@ -35,13 +45,68 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE customers';  EXCEPTION WHEN OTHERS THEN NULL
 -- ── 1. PRODUCTS table ─────────────────────────────────────────────────────────
 
 CREATE TABLE products (
-  id           NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  barcode      VARCHAR2(32)   NOT NULL UNIQUE,
-  name         VARCHAR2(200)  NOT NULL,
-  product_type VARCHAR2(50)   NOT NULL,
-  manufacturer VARCHAR2(200)  NOT NULL,
-  price        NUMBER(10, 2)  NOT NULL,
-  sale_price   NUMBER(10, 2)
+  id               NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  barcode          VARCHAR2(32)   NOT NULL UNIQUE,
+  name             VARCHAR2(200)  NOT NULL,
+  product_type     VARCHAR2(50)   NOT NULL,
+  manufacturer     VARCHAR2(200)  NOT NULL,
+  price            NUMBER(10, 2)  NOT NULL,
+  sale_price       NUMBER(10, 2),
+  track_inventory  NUMBER(1)      DEFAULT 0 NOT NULL
+);
+
+
+-- ── 1b. PRODUCT_INVENTORY table ───────────────────────────────────────────────
+-- One balance row per tracked SKU. Admins see exact counts; POS uses in/out-of-stock only.
+
+CREATE TABLE product_inventory (
+  product_id       NUMBER PRIMARY KEY REFERENCES products(id),
+  quantity_on_hand NUMBER DEFAULT 0 NOT NULL,
+  reorder_point    NUMBER DEFAULT 0 NOT NULL,
+  updated_at       TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
+  CONSTRAINT product_inventory_qty_nonneg CHECK (quantity_on_hand >= 0)
+);
+
+
+-- ── 1c. BULK_INVENTORY (kitchen stock — oz/lb, not sold at POS) ───────────────
+
+CREATE TABLE bulk_inventory (
+  sku_key           VARCHAR2(50) PRIMARY KEY,
+  name              VARCHAR2(200) NOT NULL,
+  quantity_on_hand  NUMBER(12, 3) DEFAULT 0 NOT NULL,
+  unit              VARCHAR2(20)  DEFAULT 'oz' NOT NULL,
+  reorder_point     NUMBER(12, 3) DEFAULT 0 NOT NULL,
+  updated_at        TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
+  CONSTRAINT bulk_inventory_qty_nonneg CHECK (quantity_on_hand >= 0)
+);
+
+
+-- ── 1d. INVENTORY_CONSUMPTION_RULES (product_type → bulk depletion) ───────────
+
+CREATE TABLE inventory_consumption_rules (
+  product_type      VARCHAR2(50) PRIMARY KEY,
+  bulk_sku_key      VARCHAR2(50) NOT NULL REFERENCES bulk_inventory(sku_key),
+  quantity_per_unit NUMBER(12, 3) NOT NULL,
+  unit              VARCHAR2(20)  NOT NULL
+);
+
+
+-- ── 1e. INVENTORY_MOVEMENTS table (audit ledger) ─────────────────────────────
+
+CREATE TABLE inventory_movements (
+  id              NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  product_id      NUMBER REFERENCES products(id),
+  bulk_sku_key    VARCHAR2(50) REFERENCES bulk_inventory(sku_key),
+  delta           NUMBER NOT NULL,
+  quantity_after  NUMBER NOT NULL,
+  reason          VARCHAR2(50) NOT NULL,
+  order_number    VARCHAR2(64),
+  note            VARCHAR2(500),
+  created_at      TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
+  CONSTRAINT inventory_movements_target_ck CHECK (
+    (product_id IS NOT NULL AND bulk_sku_key IS NULL)
+    OR (product_id IS NULL AND bulk_sku_key IS NOT NULL)
+  )
 );
 
 
@@ -147,6 +212,22 @@ CREATE OR REPLACE VIEW cart_view AS
     ci.quantity
   FROM cart_items ci
   JOIN products p ON p.id = ci.product_id;
+
+
+-- ── 8b. INVENTORY_STATUS_VIEW (admin read-only dashboard) ────────────────────
+
+CREATE OR REPLACE VIEW inventory_status_view AS
+  SELECT
+    p.id            AS product_id,
+    p.barcode,
+    p.name,
+    p.product_type,
+    pi.quantity_on_hand,
+    pi.reorder_point,
+    CASE WHEN pi.quantity_on_hand <= pi.reorder_point THEN 1 ELSE 0 END AS low_stock
+  FROM products p
+  JOIN product_inventory pi ON pi.product_id = p.id
+  WHERE p.track_inventory = 1;
 
 
 -- ── 9. Enable ORDS on the ADMIN schema ───────────────────────────────────────
@@ -275,7 +356,87 @@ END;
 /
 
 
--- ── 17. Enable ORDS on LOGIN_APPROVAL_REQUESTS table ─────────────────────────
+-- ── 17. Enable ORDS on PRODUCT_INVENTORY table ───────────────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'PRODUCT_INVENTORY',
+    p_object_type   => 'TABLE',
+    p_object_alias  => 'product_inventory',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
+-- ── 18. Enable ORDS on INVENTORY_MOVEMENTS table ─────────────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'INVENTORY_MOVEMENTS',
+    p_object_type   => 'TABLE',
+    p_object_alias  => 'inventory_movements',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
+-- ── 19. Enable ORDS on INVENTORY_STATUS_VIEW ─────────────────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'INVENTORY_STATUS_VIEW',
+    p_object_type   => 'VIEW',
+    p_object_alias  => 'inventory_status_view',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
+-- ── 20. Enable ORDS on BULK_INVENTORY table ─────────────────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'BULK_INVENTORY',
+    p_object_type   => 'TABLE',
+    p_object_alias  => 'bulk_inventory',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
+-- ── 21. Enable ORDS on INVENTORY_CONSUMPTION_RULES table ────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'INVENTORY_CONSUMPTION_RULES',
+    p_object_type   => 'TABLE',
+    p_object_alias  => 'inventory_consumption_rules',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
+-- ── 22. Enable ORDS on LOGIN_APPROVAL_REQUESTS table ─────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
@@ -291,7 +452,7 @@ END;
 /
 
 
--- ── 18. Sample products — Java Rocks (coffee store) ───────────────────────────
+-- ── 23. Sample products — Java Rocks (coffee store) ───────────────────────────
 
 -- Made coffee (bar)
 INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
@@ -333,7 +494,40 @@ VALUES ('872000000303', 'Java Rocks Hoodie — Charcoal', 'clothes', 'Independen
 INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
 VALUES ('872000000304', 'Java Rocks Barista Apron', 'clothes', 'Chef Works', 29.99, NULL);
 
--- ── 19. Sample customers ───────────────────────────────────────────────────────
+-- ── 24. Inventory for retail SKUs (made coffee uses bulk beans, not shelf stock) ─
+
+INSERT INTO bulk_inventory (sku_key, name, quantity_on_hand, unit, reorder_point)
+VALUES ('kitchen_beans', 'Kitchen bulk coffee beans', 8000, 'oz', 500);
+
+INSERT INTO inventory_consumption_rules (product_type, bulk_sku_key, quantity_per_unit, unit)
+VALUES ('made coffee', 'kitchen_beans', 1.5, 'oz');
+
+-- ── 25. Retail product_inventory ──────────────────────────────────────────────
+
+UPDATE products
+SET track_inventory = 1
+WHERE product_type IN ('coffee beans', 'go cups', 'clothes');
+
+INSERT INTO product_inventory (product_id, quantity_on_hand, reorder_point)
+SELECT
+  p.id,
+  CASE p.product_type
+    WHEN 'coffee beans' THEN 30
+    WHEN 'go cups' THEN 20
+    WHEN 'clothes' THEN 10
+    ELSE 0
+  END,
+  CASE p.product_type
+    WHEN 'coffee beans' THEN 5
+    WHEN 'go cups' THEN 3
+    WHEN 'clothes' THEN 2
+    ELSE 0
+  END
+FROM products p
+WHERE p.track_inventory = 1;
+
+
+-- ── 26. Sample customers ───────────────────────────────────────────────────────
 
 INSERT INTO customers (name, email, phone, address_line1, city, state, postal_code, card_fake, member_code)
 VALUES (
@@ -367,6 +561,14 @@ COMMIT;
 -- ── Verify ────────────────────────────────────────────────────────────────────
 
 SELECT 'products'  AS tbl, COUNT(*) AS row_count FROM products
+UNION ALL
+SELECT 'product_inventory', COUNT(*) FROM product_inventory
+UNION ALL
+SELECT 'inventory_movements', COUNT(*) FROM inventory_movements
+UNION ALL
+SELECT 'bulk_inventory', COUNT(*) FROM bulk_inventory
+UNION ALL
+SELECT 'inventory_consumption_rules', COUNT(*) FROM inventory_consumption_rules
 UNION ALL
 SELECT 'customers', COUNT(*) FROM customers
 UNION ALL

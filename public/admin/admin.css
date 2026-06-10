@@ -307,6 +307,11 @@ th {
   white-space: nowrap;
 }
 
+td.low-stock {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .row-actions {
   display: flex;
   gap: 6px;

@@ -18,7 +18,11 @@
     "test:login-approval": "node scripts/test-login-approval-lib.js",
     "test:supervisor-routes": "./scripts/test-supervisor-routes.sh",
     "test:cashier-approval-session": "./scripts/test-cashier-approval-session.sh",
-    "test:cashier-approval-poll": "./scripts/test-cashier-approval-poll.sh"
+    "test:cashier-approval-poll": "./scripts/test-cashier-approval-poll.sh",
+    "test:inventory": "./scripts/test-inventory-api.sh",
+    "test:inventory:ephemeral": "RUN_EPHEMERAL=yes SKIP_DESTRUCTIVE=yes ./scripts/test-inventory-api.sh",
+    "test:model-b-session": "./scripts/test-model-b-session.sh",
+    "test:model-b-session:ephemeral": "RUN_EPHEMERAL=yes ./scripts/test-model-b-session.sh"
   },
   "keywords": [],
   "author": "",

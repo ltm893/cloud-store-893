@@ -51,7 +51,10 @@ read_env() {
     printf ''
     return
   fi
-  printf '%s' "${line#*=}" | tr -d '"' | tr -d "'"
+  local val="${line#*=}"
+  val="${val#"${val%%[![:space:]]*}"}"
+  val="${val%"${val##*[![:space:]]}"}"
+  printf '%s' "$val" | tr -d '"' | tr -d "'"
 }
 
 to_tf_bool() {

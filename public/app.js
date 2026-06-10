@@ -307,16 +307,28 @@ async function loadProducts() {
 
   productsEl.innerHTML = products
     .map((product) => {
+      const inStock = product.inStock !== false;
       const reg = money(product.regularPrice);
       const saleLine =
         product.onSale && product.salePrice != null
           ? `<div class="product-prices"><span class="price-reg">Reg ${reg}</span><span class="price-sale">Sale ${money(product.salePrice)}</span></div>`
           : `<div class="product-prices"><span class="price-reg">${reg}</span></div>`;
+      const qty = product.quantityOnHand;
+      const stockBadge =
+        qty == null
+          ? ''
+          : Number(qty) > 0
+            ? `<span class="stock-badge in-stock">Qty ${Number(qty)}</span>`
+            : '<span class="stock-badge out-of-stock">Qty 0</span>';
+      const addBtn = inStock
+        ? `<button onclick="addToCart(${product.id})">Add</button>`
+        : '<button disabled title="Out of stock">Add</button>';
       return `
-    <article class="product-card">
+    <article class="product-card${inStock ? '' : ' product-card--oos'}">
       <div class="product-name">${escapeHtml(product.name)}</div>
       ${saleLine}
-      <button onclick="addToCart(${product.id})">Add</button>
+      ${stockBadge}
+      ${addBtn}
     </article>
   `;
     })

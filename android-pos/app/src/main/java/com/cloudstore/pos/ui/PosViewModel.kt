@@ -947,14 +947,22 @@ class PosViewModel(
     private fun addItemErrorMessage(err: Throwable, label: String): String = when {
         err is HttpException && err.code() == 401 -> "Session expired — sign in again"
         err is HttpException && err.code() == 404 -> "Product not found: $label"
+        err is HttpException && err.code() == 409 -> err.message?.takeIf { it.isNotBlank() }
+            ?: "Insufficient stock"
         else -> "Add failed: ${err.message ?: "Unable to add item"}"
     }
 
     fun addProduct(productId: Int) {
         viewModelScope.launch {
             val cid = _state.value.selectedCustomerId
-            if (_state.value.products.none { it.id == productId }) {
+            val product = _state.value.products.find { it.id == productId }
+            if (product == null) {
                 _state.value = _state.value.copy(addItemError = "Product not found: ID $productId")
+                return@launch
+            }
+            if (!product.inStock) {
+                val stockMsg = product.quantityOnHand?.let { qty -> " (qty $qty)" }.orEmpty()
+                _state.value = _state.value.copy(addItemError = "${product.name} is out of stock$stockMsg")
                 return@launch
             }
             runCatching { repository.addProduct(productId, cid) }
@@ -989,15 +997,29 @@ class PosViewModel(
         // Scan field adds products when the ID matches a product (even if the same number is a customer ID).
         // Link customers via Find customer when IDs overlap (e.g. product 2 and customer 2).
         if (treatAsId) {
-            val hasProduct = _state.value.products.any { it.id == asId }
+            val product = _state.value.products.find { it.id == asId }
             val hasCustomer = _state.value.customers.any { it.id == asId }
-            if (!hasProduct && hasCustomer) {
+            if (product == null && hasCustomer) {
                 linkCustomerById(asId)
                 _state.value = _state.value.copy(barcodeInput = "")
                 return
             }
-            if (!hasProduct) {
+            if (product == null) {
                 _state.value = _state.value.copy(addItemError = "Product not found: ID $cleaned")
+                return
+            }
+            if (!product.inStock) {
+                val stockMsg = product.quantityOnHand?.let { qty -> " (qty $qty)" }.orEmpty()
+                _state.value = _state.value.copy(addItemError = "${product.name} is out of stock$stockMsg")
+                return
+            }
+        }
+
+        if (!treatAsId) {
+            val product = _state.value.products.find { it.barcode == cleaned }
+            if (product != null && !product.inStock) {
+                val stockMsg = product.quantityOnHand?.let { qty -> " (qty $qty)" }.orEmpty()
+                _state.value = _state.value.copy(addItemError = "${product.name} is out of stock$stockMsg")
                 return
             }
         }

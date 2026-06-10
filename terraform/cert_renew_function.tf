@@ -73,3 +73,35 @@ resource "oci_identity_policy" "cert_renew_fn" {
     "Allow dynamic-group ${oci_identity_dynamic_group.cert_renew_fn[0].name} to manage objects in compartment id ${oci_identity_compartment.main.id} where target.bucket.name='${var.certbot_state_bucket_name}'",
   ]
 }
+
+# Weekly detached invoke of cert-renew (normal renew; no-op until ~30d before LE expiry).
+resource "oci_resource_scheduler_schedule" "cert_renew" {
+  count = var.enable_cert_renew_function && var.enable_cert_renew_schedule ? 1 : 0
+
+  compartment_id     = oci_identity_compartment.main.id
+  display_name       = var.cert_renew_schedule_display_name
+  description        = "Weekly Let's Encrypt renewal check for ${var.lb_public_hostname}"
+  # Console/docs use START_RESOURCE for Functions (not RUN_FUNCTION; provider 6.x enum).
+  action             = "START_RESOURCE"
+  recurrence_type    = "CRON"
+  recurrence_details = var.cert_renew_schedule_cron
+
+  resources {
+    id = oci_functions_function.cert_renew[0].id
+  }
+
+  freeform_tags = { project = var.project_name }
+}
+
+# Let this schedule invoke the cert-renew function (detached).
+resource "oci_identity_policy" "cert_renew_schedule_invoke" {
+  count = var.enable_cert_renew_function && var.enable_cert_renew_schedule ? 1 : 0
+
+  compartment_id = oci_identity_compartment.main.id
+  name           = "${var.project_name}-cert-renew-schedule"
+  description    = "Allow Resource Scheduler to invoke cert-renew function"
+
+  statements = [
+    "Allow any-user to manage functions-family in compartment id ${oci_identity_compartment.main.id} where all {request.principal.type='resourceschedule', request.principal.id='${oci_resource_scheduler_schedule.cert_renew[0].id}'}",
+  ]
+}

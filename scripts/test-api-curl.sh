@@ -14,6 +14,10 @@
 
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/http-test-lib.sh
+source "$SCRIPT_DIR/lib/http-test-lib.sh"
+
 BASE_URL="${BASE_URL:-http://127.0.0.1:3000}"
 BASE_URL="${BASE_URL%/}"
 CASHIER_PIN="${CASHIER_PIN:-8930}"
@@ -24,9 +28,11 @@ trap 'rm -f "$BODY" "$COOKIE"' EXIT
 
 pass=0
 fail=0
+skip=0
 
-log_ok()  { echo "  OK   $*"; pass=$((pass + 1)); }
-log_bad() { echo "  FAIL $*"; fail=$((fail + 1)); }
+log_ok()   { echo "  OK   $*"; pass=$((pass + 1)); }
+log_bad()  { echo "  FAIL $*"; fail=$((fail + 1)); }
+log_skip() { echo "  SKIP $*"; skip=$((skip + 1)); }
 
 # curl_json METHOD URL [curl-args...]  -> sets HTTP_CODE, writes body to $BODY
 curl_json() {
@@ -114,9 +120,29 @@ expect_code 200 "GET /api/products"
 PRODUCT_ID=$(py -c "import json;d=open('$BODY').read();a=json.loads(d) if d.strip() else [];print(a[0]['id'] if isinstance(a,list)and a else '')" 2>/dev/null || true)
 PRODUCT_BARCODE=$(py -c "import json;d=open('$BODY').read();a=json.loads(d) if d.strip() else [];p=a[0] if isinstance(a,list)and a else {};print(p.get('barcode') or '')" 2>/dev/null || true)
 
-# ── POST /api/cashier/unlock (session cookie for protected APIs) ─────────
-curl_json POST "$BASE_URL/api/cashier/unlock" -d "{\"pin\":\"$CASHIER_PIN\"}"
-expect_code 200 "POST /api/cashier/unlock"
+# ── Cashier session (PIN unlock or skip when Model B) ─────────────────────
+CASHIER_SESSION_READY=0
+if http_test_unlock_cashier "$BASE_URL" "$COOKIE" "$BODY" "$CASHIER_PIN"; then
+  log_ok "cashier session ready (PIN unlock or existing session)"
+  CASHIER_SESSION_READY=1
+elif [[ "${SESSION_SUPERVISOR_REQUIRED:-false}" == "true" ]]; then
+  log_skip "protected POS routes (Model B — PIN unlock blocked)"
+else
+  curl_json POST "$BASE_URL/api/cashier/unlock" -d "{\"pin\":\"$CASHIER_PIN\"}"
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    log_ok "POST /api/cashier/unlock (HTTP 200)"
+    CASHIER_SESSION_READY=1
+  else
+    log_bad "POST /api/cashier/unlock (want HTTP 200, got $HTTP_CODE)"
+  fi
+fi
+
+if [[ "$CASHIER_SESSION_READY" != "1" ]]; then
+  echo ""
+  echo "== done (api): $pass passed, $fail failed, $skip skipped =="
+  [[ "$fail" -eq 0 ]]
+  exit $?
+fi
 
 # ── GET /api/customers ────────────────────────────────────────────────────
 curl_json GET "$BASE_URL/api/customers"
@@ -230,5 +256,5 @@ curl_json GET "$BASE_URL/api/sales/recent"
 expect_code 200 "GET /api/sales/recent"
 
 echo ""
-echo "== done (api): $pass passed, $fail failed =="
+echo "== done (api): $pass passed, $fail failed, $skip skipped =="
 [[ "$fail" -eq 0 ]]

@@ -9,6 +9,8 @@ data class Product(
     @Json(name = "regularPrice") val regularPrice: Double,
     @Json(name = "salePrice") val salePrice: Double? = null,
     @Json(name = "onSale") val onSale: Boolean = false,
+    @Json(name = "inStock") val inStock: Boolean = true,
+    @Json(name = "quantityOnHand") val quantityOnHand: Int? = null,
 )
 
 data class StoreCustomer(
