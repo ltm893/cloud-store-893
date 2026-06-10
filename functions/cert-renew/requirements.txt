@@ -1,0 +1,5 @@
+fdk>=0.1.96
+oci>=2.100.0
+# certbot and acme must match; dns-oci plugin is vendored in Dockerfile
+certbot==5.4.0
+acme==5.4.0

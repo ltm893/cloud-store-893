@@ -1,6 +1,6 @@
 # Cloud Store 893 — session handoff
 
-Last updated: 2026-06-07
+Last updated: 2026-06-10
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
 
@@ -23,11 +23,11 @@ Use this file to resume work in a new session. Canonical setup details live in [
 
 ---
 
-## HTTPS / TLS (OCI) — where we stopped (2026-06-07)
+## HTTPS / TLS (OCI)
 
 Full guide: [docs/oci-load-balancer-https.md](docs/oci-load-balancer-https.md) (Let's Encrypt, certbot, OCI Certificates, diagrams).
 
-### Done
+### Done (production path)
 
 | Step | Detail |
 |------|--------|
@@ -35,8 +35,8 @@ Full guide: [docs/oci-load-balancer-https.md](docs/oci-load-balancer-https.md) (
 | DNS delegation | Route 53 `oci` NS → OCI DNS zone `oci.cloudstore893.com` |
 | Let's Encrypt cert | Issued via **certbot + dns-oci** (DNS-01); expires **2026-09-05** |
 | OCI Certificates | Imported as **`oci-cloudstore893-com`** (ACTIVE) |
-| LB listener | **`https`** listener uses **Certificates service OCID** (not inline self-signed PEM) |
-| Tablet | Debug APK: `https://oci.cloudstore893.com/`; `PocSelfSignedTls` only needed for self-signed (legacy) |
+| LB listener | **`https`** listener uses **Certificates service OCID** (`lb_certificate_ocid` in Terraform) |
+| Tablet | Debug APK: `https://oci.cloudstore893.com/`; `PocSelfSignedTls` only for legacy self-signed |
 
 **Live resources (us-ashburn-1 / compartment `cloud-store`):**
 
@@ -56,29 +56,99 @@ curl -s -o /dev/null -w "%{http_code}\n" https://oci.cloudstore893.com/api/build
 ./scripts/oci/verify-certbot-dns-oci.sh   # DNS + plugin pre-checks
 ```
 
-### Not done yet (pick up next session)
+---
 
-1. **Terraform drift** — `terraform/loadbalancer.tf` still manages inline PEM via `lb_tls.auto.tfvars` / `oci_load_balancer_certificate`. A future `terraform apply` may **revert** the listener to the old self-signed cert. **Fix:** switch listener to `certificate_ids = [cert_ocid]` in Terraform, or `lifecycle { ignore_changes }` on cert/listener until IaC is updated.
-2. **Renewal automation** — certbot renew (~day 60) + deploy hook → `oci certs-mgmt certificate update-certificate-by-importing-config-details` (LB picks up new version automatically). Candidate: OCI Function + Resource Scheduler + `certbot-dns-oci` (see doc).
-3. **Optional:** script `import-le-cert-to-oci-certs.sh` (inline PEM import; `file://` fails on Mac OCI CLI).
-4. **IdP** — confirm POS app redirect URIs are all `https://oci.cloudstore893.com/...` (admin was fixed earlier).
+## Cert-renew OCI Function — status (2026-06-10)
+
+Automated renewal: **Resource Scheduler → OCI Function → certbot DNS-01 → deploy hook → OCI Certificates → LB picks up new version**.
+
+### Deployed in OCI (Terraform `enable_cert_renew_function = true`)
+
+| Resource | Value |
+|----------|--------|
+| Function OCID | `ocid1.fnfunc.oc1.iad.amaaaaaa36usv6qahg6ivfpb7znrd2mafn7tqe6yfv7vqfyx3n2ackgus7dq` |
+| Application | `cert-renew-cloud-store` |
+| Image | `iad.ocir.io/ideccm0ly8vq/cloud-store:cert-renew` |
+| State bucket | `cloud-store-certbot-state` / object `certbot-state.tar.gz` |
+| Function timeout | **300 s max** (OCI limit; 600 is rejected) |
+| Memory | 512 MB |
+
+**Validate (fast — recommended):**
+
+```bash
+./scripts/oci/invoke-cert-renew-function.sh --smoke-test   # ✅ green 2026-06-10
+```
+
+Smoke test restores state from Object Storage, rewrites Mac paths → `/tmp/certbot`, runs `certbot certificates`, confirms `dns-oci` plugin loads.
+
+**Full staging simulation (slow, rate-limited):**
+
+```bash
+./scripts/oci/invoke-cert-renew-function.sh --dry-run
+```
+
+Certbot 5 **`renew --dry-run` always simulates a full DNS-01 challenge** (even when prod cert has 87 days left). Expect **~5–9 min** (120 s DNS propagation + ACME). After many test runs, staging may return `rateLimited: Service busy; retry later` — that still proves DNS/OCI IAM works; wait before retrying.
+
+**Production renew** (no flags) is a no-op until ~30 days before expiry (~**Aug 2026**).
+
+**Repo layout:**
+
+| Path | Purpose |
+|------|---------|
+| `functions/cert-renew/` | Docker image: `func.py`, `renew.sh`, `deploy-oci-cert.sh`, `oci_rp.py`, `vendor/dns_oci.py` |
+| `terraform/cert_renew_function.tf` | Function, bucket, dynamic group, IAM policies |
+| `scripts/oci/deploy-cert-renew-function.sh` | Build (linux/amd64), push OCIR, `oci fn function update --force` |
+| `scripts/oci/seed-certbot-state.sh` | Upload Mac `certs/certbot/` tarball to Object Storage |
+| `scripts/oci/invoke-cert-renew-function.sh` | `--smoke-test`, `--dry-run`, `--force-renew` |
+
+### Fixes applied 2026-06-09/10
+
+| Issue | Fix |
+|-------|-----|
+| certbot/acme import errors | Pin `certbot==5.4.0` + `acme==5.4.0`; vendored `dns-oci` plugin |
+| `oci` CLI in Functions | `oci_rp.py` (Python SDK + resource principal) |
+| No `gzip` / `tar` in image | Python `tarfile`; skip `._*` / `.DS_Store` |
+| Mac paths in renewal conf | `fix_renewal_paths()` after state restore |
+| `renew` + `-d` invalid in certbot 5 | Separate `renew --cert-name` vs `certonly -d` |
+| Deploy hooks on dry-run | Omit `--deploy-hook` when `DRY_RUN=1` |
+| Staging pollution in bucket | Re-seed: `./scripts/oci/seed-certbot-state.sh` |
+
+### Pick up next
+
+1. **Resource Scheduler** — weekly invoke (normal renew; no-op until Aug 2026).
+2. Optional: `--force-renew` after staging rate limit cools off (POC only).
+3. **IdP** — confirm redirect URIs use `https://oci.cloudstore893.com/...`.
 
 ### Cert flow (summary)
 
 ```text
-Resource Scheduler (future) ──► OCI Function (future)
-                                      │
-Certbot (Mac today) ──► Let's Encrypt ◄── DNS-01 TXT ──► OCI DNS (oci.cloudstore893.com)
-        │
-        ▼ import / update PEM
+Resource Scheduler ──► OCI Function (cert-renew)   [deployed; smoke-test green]
+                           │
+         restore/save ◄──► Object Storage (certbot-state.tar.gz)
+                           │
+Certbot ◄── DNS-01 TXT ──► OCI DNS (oci.cloudstore893.com)
+     │
+     ▼ deploy hook (deploy-oci-cert.sh → oci_rp.py cert-import)
 OCI Certificates (oci-cloudstore893-com)
-        │
-        ▼ listener ssl_certificate_ids (cert OCID)
+     │
+     ▼ listener certificate_ids (cert OCID)
 OCI Load Balancer :443
-        │
-        ▼ HTTP :3000 (VCN)
+     │
+     ▼ HTTP :3000 (VCN)
 Node container
 ```
+
+### Docker image notes (for maintainers)
+
+- Base: `fnproject/python:3.11`; deps via `pip install --target /python/`.
+- Entrypoint: `/python/bin/fdk /function/func.py handler`.
+- **Do not** add `oci-cli` or unpinned `certbot`/`certbot-dns-oci` to `requirements.txt`.
+- Rebuild always `--platform linux/amd64`.
+
+### Not done yet (broader HTTPS)
+
+1. **Resource Scheduler** — weekly trigger after dry-run passes.
+2. **IdP** — confirm POS app redirect URIs are all `https://oci.cloudstore893.com/...`.
 
 ---
 
@@ -374,10 +444,16 @@ Then manually: cashier signs in (web `/` or tablet **Sign in with Oracle**) → 
 
 ---
 
+## Git state (2026-06-10)
+
+Branch **`dev`**. Cert-renew function committed; smoke-test verified green in OCI.
+
+---
+
 ## Known issues / follow-ups
 
 - Admin + cashier use **shared PIN in env** — HTTPS is live on OCI; stronger auth still TBD.
-- **Terraform vs live LB cert** — listener updated via CLI to OCI Certificates OCID; IaC not yet aligned (see HTTPS section above).
+- **Cert-renew function** — deployed; **`--smoke-test` green**; full `--dry-run` works but is slow and may hit LE staging rate limits after repeated tests.
 - Web POS has cashier gate + Model B waiting screen when supervisor approval is enabled.
 - Android `build/` artifacts can dirty `git status` — keep `.gitignore` tight.
 - Optional: discard-queue button, cart snapshot in offline queue, receipt printing.

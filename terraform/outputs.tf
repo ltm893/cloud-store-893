@@ -53,3 +53,18 @@ output "vcn_ocid" {
   description = "OCID of the VCN"
   value       = oci_core_vcn.main.id
 }
+
+output "cert_renew_function_ocid" {
+  description = "OCID of the cert-renew OCI Function (empty when enable_cert_renew_function is false)"
+  value       = var.enable_cert_renew_function ? oci_functions_function.cert_renew[0].id : null
+}
+
+output "cert_renew_function_image" {
+  description = "OCIR image for cert-renew function — build and push before first apply"
+  value       = local.cert_renew_image
+}
+
+output "certbot_state_bucket" {
+  description = "Object Storage bucket for certbot state between function invocations"
+  value       = var.enable_cert_renew_function ? var.certbot_state_bucket_name : null
+}

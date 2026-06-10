@@ -268,7 +268,7 @@ Issuer should be **Let's Encrypt**.
 
 ---
 
-## 6. Renewal (manual today; automate later)
+## 6. Renewal (manual on Mac)
 
 Let's Encrypt certs expire in **90 days**; renew around **day 60**.
 
@@ -281,11 +281,11 @@ certbot renew \
   --dns-oci-propagation-seconds 120
 ```
 
-Deploy hook — update **same** certificate OCID in OCI Certificates:
+Deploy hook — update **same** certificate OCID in OCI Certificates (inline PEM):
 
 ```bash
-CERT_DIR="${RENEWED_LINEAGE}"   # set in deploy-hook script
 CERT_OCID="ocid1.certificate.oc1.iad...."
+CERT_DIR="certs/certbot/config/live/oci.cloudstore893.com"
 
 oci certs-mgmt certificate update-certificate-by-importing-config-details \
   --certificate-id "$CERT_OCID" \
@@ -296,7 +296,108 @@ oci certs-mgmt certificate update-certificate-by-importing-config-details \
 
 The LB listener **does not** need updating — it consumes the current version automatically.
 
-**Future:** OCI Function + Resource Scheduler running certbot + deploy hook (see [CONTENTS.md](../CONTENTS.md)).
+---
+
+## 7. Function-driven renewal (automated)
+
+Code lives in `functions/cert-renew/` (Docker image + Terraform opt-in).
+
+### Flow
+
+```text
+  OCI Resource Scheduler (cron, e.g. weekly)
+           │
+           ▼
+  ┌─────────────────────┐
+  │  OCI Function       │
+  │  cert-renew         │
+  └─────────┬───────────┘
+            │
+    ┌───────┴────────┐
+    ▼                ▼
+ Object Storage   certbot renew
+ (certbot state)   dns-oci + resource principal
+    ▲                │
+    │                ▼
+    └────────  deploy hook → OCI Certificates (CERT_OCID)
+                              │
+                              ▼
+                    LB listener (unchanged; new cert version)
+```
+
+### 7a. Enable in Terraform (vars only first)
+
+In `terraform/terraform.tfvars`:
+
+```hcl
+enable_cert_renew_function = true
+lb_certificate_ocid        = "ocid1.certificate.oc1.iad...."   # same as listener
+cert_renew_email           = "you@example.com"
+```
+
+### 7b. Push the function image **before** first `terraform apply`
+
+OCI **rejects** `CreateFunction` if the image is not already in OCIR. Functions use **linux/amd64** (not arm64 like the app container):
+
+```bash
+./scripts/oci/deploy-cert-renew-function.sh --bootstrap
+```
+
+Image: `iad.ocir.io/<namespace>/cloud-store:cert-renew` (`terraform output -raw cert_renew_function_image` after apply).
+
+### 7c. `terraform apply`
+
+```bash
+cd terraform && terraform apply
+```
+
+Creates: Object Storage bucket `cloud-store-certbot-state`, Functions application + function, dynamic group + IAM policies.
+
+After code changes, rebuild with `./scripts/oci/deploy-cert-renew-function.sh` (updates the running function).
+
+### 7d. Seed certbot state (once)
+
+Copy your Mac certbot tree (account key + renewal config) to Object Storage:
+
+```bash
+./scripts/oci/seed-certbot-state.sh
+```
+
+Source defaults to `certs/certbot/` (config, work, logs from section 3).
+
+### 7e. Test invoke
+
+```bash
+# Staging ACME — safe anytime
+./scripts/oci/invoke-cert-renew-function.sh --dry-run
+
+# Real renew (no-op until ~30 days before expiry)
+./scripts/oci/invoke-cert-renew-function.sh
+
+# POC only — forces new LE cert (rate limits apply)
+./scripts/oci/invoke-cert-renew-function.sh --force-renew
+```
+
+### 7f. Schedule (Console)
+
+1. **Governance → Resource Scheduler → Create schedule**
+2. Resource type: **Functions → Function** → select `cert-renew`
+3. Cron example: `0 3 * * 0` (Sundays 03:00 UTC)
+4. IAM: dynamic group must include the schedule if OCI prompts (see [scheduling functions](https://docs.oracle.com/en-us/iaas/Content/Functions/Tasks/functionsscheduling.htm))
+
+### Function config (set by Terraform)
+
+| Key | Purpose |
+|-----|---------|
+| `CERT_HOSTNAME` | `oci.cloudstore893.com` |
+| `CERT_OCID` | OCI Certificates resource to update |
+| `CERTBOT_STATE_BUCKET` | Persist certbot between runs |
+| `CERTBOT_EMAIL` | Let's Encrypt account email |
+
+### When will it actually renew?
+
+- `certbot renew` **skips** until ~**30 days** before expiry (unless `--force-renew`).
+- Deploy the function **now**; schedule weekly — most runs log “not yet due” until ~**August 2026** for the current cert.
 
 ---
 
