@@ -12,13 +12,20 @@ enum AppConfigLogic {
         return URL(string: normalized) ?? URL(string: fallback)!
     }
 
-    static func adminURL(base: URL, portraitClient: Bool) -> URL {
+    static func adminURL(base: URL, embeddedIosClient: Bool, cacheBust: String? = nil) -> URL {
         var components = URLComponents(
             url: base.appendingPathComponent("admin/"),
             resolvingAgainstBaseURL: false
         )!
-        if portraitClient {
-            components.queryItems = [URLQueryItem(name: "client_kind", value: "ios")]
+        var queryItems: [URLQueryItem] = []
+        if embeddedIosClient {
+            queryItems.append(URLQueryItem(name: "client_kind", value: "ios"))
+        }
+        if let cacheBust, !cacheBust.isEmpty {
+            queryItems.append(URLQueryItem(name: "_cb", value: cacheBust))
+        }
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
         }
         return components.url!
     }

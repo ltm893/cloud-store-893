@@ -4,7 +4,7 @@
 
 **Model B:** Cashier signs in with **Oracle Identity Domains (OIDC)**. The app creates a **pending login** and waits for a **supervisor** (admin IdP user in `store-supervisors`) to approve before issuing `cashier_session`.
 
-Related: [idp-setup.md](idp-setup.md) (Phase 2 IdP), [CONTENTS.md](../CONTENTS.md) (session handoff).
+Related: [idp-setup.md](idp-setup.md) (Phase 2 IdP), [CONTENTS.md](../CONTENTS.md) (session handoff), [cash-till-opening-and-close.md](cash-till-opening-and-close.md) (opening float + EOD balance — extends Model B).
 
 ---
 

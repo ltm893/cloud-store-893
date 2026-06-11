@@ -21,6 +21,12 @@ class MemoryCookieJar : CookieJar {
             field = value?.trim()?.takeIf { it.isNotEmpty() }
         }
 
+    /** Opening-till token from cashier_awaiting_till cookie after OIDC. */
+    var pinnedAwaitingTillToken: String? = null
+        set(value) {
+            field = value?.trim()?.takeIf { it.isNotEmpty() }
+        }
+
     var manualSessionId: String? = null
         set(value) {
             field = value?.trim()?.takeIf { it.isNotEmpty() }
@@ -40,12 +46,20 @@ class MemoryCookieJar : CookieJar {
                         pinnedPendingToken = cookie.value
                     }
                 }
+                "cashier_awaiting_till" -> {
+                    if (cookie.expiresAt != 0L && cookie.expiresAt <= now) {
+                        if (pinnedAwaitingTillToken == cookie.value) pinnedAwaitingTillToken = null
+                    } else if (pinnedAwaitingTillToken == null) {
+                        pinnedAwaitingTillToken = cookie.value
+                    }
+                }
                 "cashier_session" -> {
                     if (cookie.expiresAt != 0L && cookie.expiresAt <= now) {
                         manualSessionId = null
                     } else {
                         manualSessionId = cookie.value
                         pinnedPendingToken = null
+                        pinnedAwaitingTillToken = null
                     }
                 }
             }
@@ -58,12 +72,14 @@ class MemoryCookieJar : CookieJar {
     fun clearHost(host: String) {
         store.remove(host)
         pinnedPendingToken = null
+        pinnedAwaitingTillToken = null
         manualSessionId = null
     }
 
     fun clearAll() {
         store.clear()
         pinnedPendingToken = null
+        pinnedAwaitingTillToken = null
         manualSessionId = null
     }
 
@@ -75,9 +91,12 @@ class MemoryCookieJar : CookieJar {
         store[hostKey] = valid.toMutableList()
 
         val merged = valid.toMutableList()
-        merged.removeAll { it.name == "cashier_pending" }
+        merged.removeAll { it.name == "cashier_pending" || it.name == "cashier_awaiting_till" }
         pinnedPendingToken?.let { token ->
             merged.add(buildCookie(url, "cashier_pending", token))
+        }
+        pinnedAwaitingTillToken?.let { token ->
+            merged.add(buildCookie(url, "cashier_awaiting_till", token))
         }
         manualSessionId?.let { sessionId ->
             if (merged.none { it.name == "cashier_session" }) {

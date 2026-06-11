@@ -129,10 +129,18 @@ fun CashierOidcWebScreen(
     }
 }
 
-/** OIDC finished only on supervisor-approval redirect (includes request_token). */
+/** OIDC finished when the app redirects to till count or supervisor approval. */
 private fun isCashierOidcComplete(url: String, base: String): Boolean {
     if (!url.startsWith(base)) return false
-    return url.contains("approval=pending")
+    val uri = Uri.parse(url)
+    if (uri.getQueryParameter("awaiting_till") != null) return true
+    if (uri.getQueryParameter("approval") == "pending") return true
+    return false
+}
+
+fun isAwaitingTillRedirect(completionUrl: String): Boolean {
+    val value = Uri.parse(completionUrl).getQueryParameter("awaiting_till") ?: return false
+    return value == "1" || value.equals("true", ignoreCase = true)
 }
 
 fun parsePendingRequestToken(completionUrl: String): String? {

@@ -134,9 +134,15 @@ body.nav-open .side-nav {
 }
 
 .approvals-list {
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.approval-mode-badge--unknown {
+  background: #e8dcc8;
+  color: #5c4a32;
 }
 
 .approval-card {
@@ -145,15 +151,55 @@ body.nav-open .side-nav {
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .approval-card-main {
-  flex: 1 1 200px;
   min-width: 0;
+}
+
+.approval-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.approval-card-who strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.approval-card-mode {
+  flex-shrink: 0;
+}
+
+.approval-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0 0 4px;
+}
+
+.approval-fact {
+  min-width: 0;
+}
+
+.approval-fact dt {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.approval-fact dd {
+  margin: 2px 0 0;
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 
 .approval-card-main strong {
@@ -169,6 +215,78 @@ body.nav-open .side-nav {
   line-height: 1.45;
 }
 
+.approval-till-summary {
+  margin: 10px 0 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fafbfc;
+}
+
+.approval-till-summary--cash {
+  border-color: #b8dfd8;
+  background: #f3fbf9;
+}
+
+.approval-till-summary--credit {
+  border-color: #d4dceb;
+  background: #f6f8fc;
+}
+
+.approval-till-summary--unknown {
+  border-color: #e8dcc8;
+  background: #fffaf2;
+}
+
+.approval-mode-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.approval-mode-badge--cash {
+  background: #0d7a6f;
+  color: #fff;
+}
+
+.approval-mode-badge--credit {
+  background: #4a5d8c;
+  color: #fff;
+}
+
+.approval-summary-lead {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.approval-summary-amount {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.approval-summary-amount strong {
+  font-size: 1.15rem;
+}
+
+.approval-variance-warn {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.approval-denom-list {
+  margin: 8px 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .approval-actions {
   display: flex;
   flex-wrap: wrap;
@@ -176,14 +294,29 @@ body.nav-open .side-nav {
   align-items: center;
 }
 
+.approval-actions--stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
 .approval-actions button {
-  font-size: 0.85rem;
-  padding: 8px 14px;
+  font-size: 0.95rem;
+  padding: 12px 14px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: #fff;
   cursor: pointer;
   font-weight: 600;
+}
+
+.approval-actions--stacked button {
+  width: 100%;
+}
+
+@media (max-width: 520px) {
+  .approval-facts {
+    grid-template-columns: 1fr;
+  }
 }
 
 .approval-actions button.approve-btn {
@@ -199,6 +332,27 @@ body.nav-open .side-nav {
 
 .approvals-empty {
   margin-top: 8px;
+}
+
+.approvals-last-action {
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  border: 1px solid var(--border);
+  background: #f3fbf9;
+}
+
+.approvals-last-action--deny {
+  background: #fff5f5;
+  border-color: #f5c2c0;
+}
+
+.approvals-last-action strong {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 4px;
 }
 
 .admin-main {
@@ -413,19 +567,21 @@ td.low-stock {
 }
 
 @media (orientation: portrait) {
-  .portrait-blocker {
-    display: flex;
-  }
-
-  body.admin-landscape > :not(.portrait-blocker) {
-    visibility: hidden;
-  }
-
+  html.admin-fine-pointer .portrait-blocker,
   html.admin-portrait-ok .portrait-blocker {
     display: none !important;
   }
 
+  html.admin-fine-pointer body.admin-landscape > :not(.portrait-blocker),
   html.admin-portrait-ok body.admin-landscape > :not(.portrait-blocker) {
     visibility: visible !important;
+  }
+
+  html:not(.admin-fine-pointer):not(.admin-portrait-ok) .portrait-blocker {
+    display: flex;
+  }
+
+  html:not(.admin-fine-pointer):not(.admin-portrait-ok) body.admin-landscape > :not(.portrait-blocker) {
+    visibility: hidden;
   }
 }

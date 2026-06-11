@@ -102,6 +102,7 @@ fun CheckoutPaymentPanel(
     balanceDue: Double,
     payments: List<CheckoutPayment>,
     backEnabled: Boolean,
+    cashEnabled: Boolean = true,
     showCardOnFileButton: Boolean,
     amountInput: String,
     onAmountChange: (String) -> Unit,
@@ -113,8 +114,9 @@ fun CheckoutPaymentPanel(
 ) {
     val changeTotal = checkoutChangeTotal(payments)
     val nextAmount = parseCashTendered(amountInput)
-    val canPayCash = balanceDue > 0.005 && nextAmount != null && nextAmount > 0.0
-    val canPayCard = canPayCash && nextAmount <= balanceDue + 0.005
+    val canPayCash = cashEnabled && balanceDue > 0.005 && nextAmount != null && nextAmount > 0.0
+    val canPayCard = balanceDue > 0.005 && nextAmount != null && nextAmount > 0.0 &&
+        nextAmount <= balanceDue + 0.005
     val quickBills = cashQuickDenominations(balanceDue)
 
     Column(
@@ -257,20 +259,22 @@ fun CheckoutPaymentPanel(
                     ),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Button(
-                    onClick = { onApplyPayment("cash") },
-                    enabled = canPayCash,
-                    colors = PosButtonDefaults.teal(),
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(vertical = 6.dp),
-                ) {
-                    Text("Cash", style = MaterialTheme.typography.labelMedium)
+                if (cashEnabled) {
+                    Button(
+                        onClick = { onApplyPayment("cash") },
+                        enabled = canPayCash,
+                        colors = PosButtonDefaults.teal(),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 6.dp),
+                    ) {
+                        Text("Cash", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
                 Button(
                     onClick = { onApplyPayment("card") },
                     enabled = canPayCard,
                     colors = PosButtonDefaults.teal(),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(if (cashEnabled) 1f else 2f),
                     contentPadding = PaddingValues(vertical = 6.dp),
                 ) {
                     Text("Card", style = MaterialTheme.typography.labelMedium)

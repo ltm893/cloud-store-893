@@ -72,6 +72,15 @@ interface PosApi {
     @POST("api/cashier/approval/cancel")
     suspend fun cancelApproval(): OkResponse
 
+    @GET("api/cashier/till/config")
+    suspend fun tillConfig(): TillConfigResponse
+
+    @POST("api/cashier/approval/till")
+    suspend fun submitOpeningTill(@Body body: SubmitOpeningTillRequest): SubmitOpeningTillResponse
+
+    @POST("api/cashier/approval/till/cancel")
+    suspend fun cancelOpeningTill(): OkResponse
+
     @POST("api/cashier/logout")
     suspend fun logoutCashier(): OkResponse
 }
@@ -154,6 +163,12 @@ class PosRepository(baseUrl: String) {
 
     suspend fun cancelApproval() = api.cancelApproval()
 
+    suspend fun tillConfig() = api.tillConfig()
+
+    suspend fun submitOpeningTill(body: SubmitOpeningTillRequest) = api.submitOpeningTill(body)
+
+    suspend fun cancelOpeningTill() = api.cancelOpeningTill()
+
     fun syncWebViewCookies() {
         WebViewCookieSync.sync(normalizedBaseUrl, cookieJar)
     }
@@ -192,13 +207,14 @@ class PosRepository(baseUrl: String) {
         normalizedBaseUrl.toHttpUrlOrNull()?.host?.let { cookieJar.clearHost(it) }
     }
 
-    suspend fun unlockCashier(pin: String) {
+    suspend fun unlockCashier(pin: String): CashierSessionResponse {
         val res = api.unlockCashier(mapOf("pin" to pin))
         if (!res.ok) throw IllegalStateException("Unlock failed")
         val session = api.cashierSession()
-        if (!session.ok) {
+        if (!session.ok && !session.awaitingTill) {
             throw IllegalStateException("Sign-in did not persist — rebuild APK with correct LAN_IP")
         }
+        return session
     }
 
     suspend fun logoutCashier() {

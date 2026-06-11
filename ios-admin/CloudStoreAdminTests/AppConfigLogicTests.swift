@@ -16,19 +16,20 @@ final class AppConfigLogicTests: XCTestCase {
         )
     }
 
-    func testAdminURLAddsIosClientKindForPortraitClient() throws {
+    func testAdminURLAddsIosClientKindForEmbeddedApp() throws {
         let base = URL(string: "https://oci.cloudstore893.com/")!
-        let url = AppConfigLogic.adminURL(base: base, portraitClient: true)
+        let url = AppConfigLogic.adminURL(base: base, embeddedIosClient: true, cacheBust: "42")
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
 
         XCTAssertEqual(components.path, "/admin/")
-        XCTAssertEqual(components.queryItems?.first?.name, "client_kind")
-        XCTAssertEqual(components.queryItems?.first?.value, "ios")
+        XCTAssertEqual(query["client_kind"], "ios")
+        XCTAssertEqual(query["_cb"], "42")
     }
 
-    func testAdminURLOmitsClientKindForTabletClient() throws {
+    func testAdminURLOmitsClientKindForBrowser() throws {
         let base = URL(string: "https://oci.cloudstore893.com/")!
-        let url = AppConfigLogic.adminURL(base: base, portraitClient: false)
+        let url = AppConfigLogic.adminURL(base: base, embeddedIosClient: false)
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
 
         XCTAssertEqual(components.path, "/admin/")

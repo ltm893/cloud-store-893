@@ -13,3 +13,9 @@ internal val PosNumpadInnerPadding = 9.dp
 
 /** Gap between numpad keys (75% of original 8dp). */
 internal val PosNumpadKeyGap = 6.dp
+
+/** Up/down denomination keys beside till-count numpad. */
+internal val PosNumpadNavKeyWidth = 40.dp
+
+/** Till numpad card width including nav arrow column. */
+internal val TillNumpadCardWidth = PosNumpadColumnWidth + PosNumpadNavKeyWidth + PosNumpadKeyGap

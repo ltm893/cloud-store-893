@@ -161,6 +161,27 @@ fun PosScreen(viewModel: PosViewModel) {
                     )
                 }
             }
+            is CashierAuthGate.OpeningTill -> {
+                val countedTotal = sumTillCounts(gate.denominations, gate.counts)
+                OpeningTillScreen(
+                    expectedOpeningFloat = gate.expectedOpeningFloat,
+                    denominations = gate.denominations,
+                    counts = gate.counts,
+                    selectedDenominationId = gate.selectedDenominationId,
+                    countedTotal = countedTotal,
+                    status = state.status,
+                    submitting = gate.submitting,
+                    onSelectDenomination = viewModel::selectTillDenomination,
+                    onDigit = viewModel::appendTillDigit,
+                    onClearCount = viewModel::clearTillCount,
+                    onBackspaceCount = viewModel::backspaceTillCount,
+                    onPreviousDenomination = viewModel::selectPreviousTillDenomination,
+                    onNextDenomination = viewModel::selectNextTillDenomination,
+                    onSubmit = viewModel::submitOpeningTill,
+                    onNoCashToday = viewModel::submitNoCashToday,
+                    onCancel = viewModel::cancelOpeningTill,
+                )
+            }
             is CashierAuthGate.WaitingApproval -> {
                 LaunchedEffect(gate.email) {
                     viewModel.noteCashierIdentity(gate.email)
@@ -168,6 +189,10 @@ fun PosScreen(viewModel: PosViewModel) {
                 ApprovalWaitingScreen(
                     email = gate.email,
                     secondsRemaining = gate.secondsRemaining,
+                    cashMode = gate.cashMode,
+                    expectedOpeningFloat = gate.expectedOpeningFloat,
+                    openingCountedFloat = gate.openingCountedFloat,
+                    openingVariance = gate.openingVariance,
                     status = state.status,
                     onCancel = viewModel::cancelApprovalWait,
                 )
@@ -668,6 +693,7 @@ fun PosScreen(viewModel: PosViewModel) {
                             balanceDue = remainingAmount,
                             payments = checkout.payments,
                             backEnabled = allowPaymentBack,
+                            cashEnabled = state.cashEnabled,
                             showCardOnFileButton = linkedCustomer?.hasCardOnFile == true,
                             amountInput = checkout.amountInput,
                             onAmountChange = { amount ->
@@ -1130,6 +1156,10 @@ private fun CashierAuthLoading(status: String) {
 private fun ApprovalWaitingScreen(
     email: String?,
     secondsRemaining: Int?,
+    cashMode: String?,
+    expectedOpeningFloat: Double?,
+    openingCountedFloat: Double?,
+    openingVariance: Double?,
     status: String,
     onCancel: () -> Unit,
 ) {
@@ -1161,6 +1191,13 @@ private fun ApprovalWaitingScreen(
             text = "Your login request was sent. A supervisor must approve before you can use the register.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
+        )
+        TillApprovalSummaryCard(
+            cashMode = cashMode,
+            expectedOpeningFloat = expectedOpeningFloat,
+            openingCountedFloat = openingCountedFloat,
+            openingVariance = openingVariance,
+            modifier = Modifier.padding(top = 16.dp),
         )
         if (!email.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(8.dp))
@@ -1269,13 +1306,6 @@ private fun CashierLogin(
                     ) {
                         Text("Done", style = MaterialTheme.typography.titleMedium)
                     }
-                } else {
-                    Text(
-                        text = "Sign in with your store account to open the register.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 12.dp),
-                    )
                 }
                 if (!idpLoginUrl.isNullOrBlank()) {
                     Button(
@@ -1287,7 +1317,7 @@ private fun CashierLogin(
                             .height(52.dp),
                         contentPadding = PaddingValues(vertical = 4.dp),
                     ) {
-                        Text("Sign in with Oracle", style = MaterialTheme.typography.titleMedium)
+                        Text("Sign in", style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }

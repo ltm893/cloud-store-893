@@ -9,10 +9,20 @@ enum AppConfig {
         return AppConfigLogic.apiBaseURL(fromRaw: raw)
     }
 
+    static var appBuild: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
     static var adminURL: URL {
+        // Native WKWebView — always tag client_kind=ios (skips landscape-only overlay).
         AppConfigLogic.adminURL(
             base: apiBaseURL,
-            portraitClient: UIDevice.current.userInterfaceIdiom == .phone
+            embeddedIosClient: true,
+            cacheBust: appBuild
         )
+    }
+
+    static var apiHostLabel: String {
+        apiBaseURL.host ?? apiBaseURL.absoluteString
     }
 }

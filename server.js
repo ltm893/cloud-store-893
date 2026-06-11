@@ -48,13 +48,33 @@ const loginApprovalStore = createLoginApprovalStore({
   ordsTimestamp,
 });
 
-const { registerCashierAuth, requireCashierForPosApi } = require('./lib/cashier-auth');
+const { createRegisterShiftStore } = require('./lib/register-shifts');
+const registerShiftStore = createRegisterShiftStore({
+  ordsGet,
+  ordsPost,
+  ordsTimestamp,
+});
+
+const {
+  registerCashierAuth,
+  requireCashierForPosApi,
+  getActiveCashierSession,
+  sessionAllowsCashPayments,
+} = require('./lib/cashier-auth');
 const { registerAdminAuth, requireAdminSession, protectAdminPages } = require('./lib/admin-auth');
-registerCashierAuth(app, { loginApprovalStore });
+registerCashierAuth(app, { loginApprovalStore, registerShiftStore });
 registerAdminAuth(app);
 app.use('/admin', protectAdminPages);
 app.use('/api/admin', requireAdminSession);
 app.use(requireCashierForPosApi);
+
+app.use('/admin', (req, res, next) => {
+  if (/\.(?:js|css|html)$/.test(req.path)) {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+  }
+  next();
+});
 
 app.use(express.static('public'));
 
@@ -523,6 +543,14 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
   if (paymentResult?.error) {
     return res.status(400).json({ error: paymentResult.error });
   }
+
+  const cashierSession = getActiveCashierSession(req);
+  const cashAllowed = sessionAllowsCashPayments(cashierSession);
+  const cashPayments = (paymentResult?.payments || []).filter((p) => p.method === 'cash');
+  const singleCash = paymentMethod === 'cash';
+  if (!cashAllowed && (cashPayments.length > 0 || singleCash)) {
+    return res.status(403).json({ error: 'Cash payments are not enabled for this shift' });
+  }
   const payments = paymentResult?.payments || null;
   const persistedPayments = payments || [{
     method: paymentMethod,
@@ -638,4 +666,16 @@ const { server, scheme } = startServer(app, PORT);
 server.on('listening', () => {
   console.log(`✅ Cart app running on ${scheme}://localhost:${PORT}`);
   console.log(`🗄  ORDS base: ${ORDS_BASE}`);
+  if (loginApprovalStore?.probeTillColumns) {
+    loginApprovalStore
+      .probeTillColumns()
+      .then((result) => {
+        if (!result.ok) {
+          console.warn(`⚠️  ${result.message}`);
+        }
+      })
+      .catch((err) => {
+        console.warn(`⚠️  login approval till column check failed: ${err.message}`);
+      });
+  }
 });

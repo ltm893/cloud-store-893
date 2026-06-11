@@ -14,6 +14,15 @@ object PosButtonDefaults {
         disabledContentColor = PosMuted,
     )
 
+    /** Wine brand actions — PosPrimary (#872434). */
+    @Composable
+    fun primary() = ButtonDefaults.buttonColors(
+        containerColor = PosPrimary,
+        contentColor = Color.White,
+        disabledContainerColor = PosHighlight,
+        disabledContentColor = PosMuted,
+    )
+
     @Composable
     fun numpadKey() = ButtonDefaults.buttonColors(
         containerColor = PosHighlight,

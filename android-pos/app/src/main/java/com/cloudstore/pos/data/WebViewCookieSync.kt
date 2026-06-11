@@ -12,6 +12,7 @@ object WebViewCookieSync {
         val urls = listOf(
             "$root/",
             "$root/?approval=pending",
+            "$root/?awaiting_till=1",
             "$root/oauth/callback",
         )
         for (url in urls) {

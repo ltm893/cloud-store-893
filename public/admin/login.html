@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="screen-orientation" content="landscape">
   <title>Admin sign in — Cloud Store 893</title>
-  <script src="/admin/admin-orientation.js"></script>
+  <script src="/admin/admin-orientation.js?v=20260611b"></script>
   <style>
     :root {
       --bg: #faf3df;
@@ -102,10 +102,12 @@
     .portrait-blocker p { margin: 0; max-width: 280px; font-size: 1.1rem; }
     .portrait-blocker span { font-size: 2.5rem; }
     @media (orientation: portrait) {
-      .portrait-blocker { display: flex; }
-      body.admin-landscape > :not(.portrait-blocker) { visibility: hidden; }
+      html.admin-fine-pointer .portrait-blocker,
       html.admin-portrait-ok .portrait-blocker { display: none !important; }
+      html.admin-fine-pointer body.admin-landscape > :not(.portrait-blocker),
       html.admin-portrait-ok body.admin-landscape > :not(.portrait-blocker) { visibility: visible !important; }
+      html:not(.admin-fine-pointer):not(.admin-portrait-ok) .portrait-blocker { display: flex; }
+      html:not(.admin-fine-pointer):not(.admin-portrait-ok) body.admin-landscape > :not(.portrait-blocker) { visibility: hidden; }
     }
   </style>
 </head>

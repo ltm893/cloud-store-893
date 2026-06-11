@@ -33,8 +33,29 @@ function setStatus(message, isError = false) {
   statusEl.classList.toggle('error', isError);
 }
 
-function formatCell(value) {
-  if (value === null || value === undefined) return '';
+function columnHeaderLabel(meta, col) {
+  return meta.columnLabels?.[col] || col;
+}
+
+function formatCell(value, col, tableName) {
+  if (value === null || value === undefined || value === '') {
+    if (tableName === 'login_approval_requests' && col === 'cash_mode') return '—';
+    return '';
+  }
+  if (tableName === 'login_approval_requests') {
+    if (col === 'cash_mode') {
+      if (value === 'credit_only') return 'Credit cards only';
+      if (value === 'cash_and_credit') return 'Cash + card';
+    }
+    if (
+      col === 'opening_counted_float' ||
+      col === 'expected_opening_float' ||
+      col === 'opening_variance'
+    ) {
+      const n = Number(value);
+      if (Number.isFinite(n)) return `$${n.toFixed(2)}`;
+    }
+  }
   if (typeof value === 'object') return escapeHtml(JSON.stringify(value));
   return escapeHtml(value);
 }
@@ -196,6 +217,9 @@ async function loadTable(name) {
   } else if (activeMeta.name === 'inventory_consumption_rules') {
     tableHintEl.textContent =
       'Oz (or unit) consumed per POS unit sold by product_type. Example: made coffee → 1.5 oz kitchen beans per drink.';
+  } else if (activeMeta.name === 'login_approval_requests') {
+    tableHintEl.textContent =
+      'Read-only audit log. Use Login approvals (menu) to approve pending sign-ins. Shift mode shows cash drawer vs credit-only.';
   } else if (activeMeta.readOnly) {
     tableHintEl.textContent = 'Read-only view.';
   } else {
@@ -212,7 +236,9 @@ async function loadTable(name) {
     if (!res.ok) throw new Error(rows.error || res.statusText);
 
     const cols = activeMeta.columns;
-    dataHeadEl.innerHTML = `<tr>${cols.map((c) => `<th>${escapeHtml(c)}</th>`).join('')}<th>Actions</th></tr>`;
+    dataHeadEl.innerHTML = `<tr>${cols
+      .map((c) => `<th>${escapeHtml(columnHeaderLabel(activeMeta, c))}</th>`)
+      .join('')}<th>Actions</th></tr>`;
 
     dataBodyEl.innerHTML = rows
       .map((row) => {
@@ -220,7 +246,7 @@ async function loadTable(name) {
         const cells = cols
           .map((c) => {
             const cls = lowStock && c === 'quantity_on_hand' ? ' class="low-stock"' : '';
-            return `<td${cls}>${formatCell(row[c])}</td>`;
+            return `<td${cls}>${formatCell(row[c], c, activeMeta.name)}</td>`;
           })
           .join('');
         const actions = activeMeta.readOnly

@@ -36,6 +36,8 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE cart_items'; EXCEPTION WHEN OTHERS THEN NULL
 /
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE products';   EXCEPTION WHEN OTHERS THEN NULL; END;
 /
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE register_shift_closes'; EXCEPTION WHEN OTHERS THEN NULL; END;
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE register_shifts'; EXCEPTION WHEN OTHERS THEN NULL; END;
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE login_approval_requests'; EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE customers';  EXCEPTION WHEN OTHERS THEN NULL; END;
@@ -179,24 +181,52 @@ CREATE TABLE sale_payments (
 -- ── 7. LOGIN_APPROVAL_REQUESTS (Model B: IdP cashier + supervisor approval) ───
 
 CREATE TABLE login_approval_requests (
-  id                NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  request_token     VARCHAR2(64)   NOT NULL UNIQUE,
-  status            VARCHAR2(20)   NOT NULL,
-  cashier_sub       VARCHAR2(256)  NOT NULL,
-  cashier_email     VARCHAR2(256),
-  cashier_name      VARCHAR2(200),
-  register_id       VARCHAR2(64),
-  client_kind       VARCHAR2(20),
-  requested_at      TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL,
-  expires_at        TIMESTAMP      NOT NULL,
-  resolved_at       TIMESTAMP,
-  resolved_by_sub   VARCHAR2(256),
-  resolved_by_email VARCHAR2(256),
-  deny_reason       VARCHAR2(500)
+  id                     NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  request_token          VARCHAR2(64)   NOT NULL UNIQUE,
+  status                 VARCHAR2(20)   NOT NULL,
+  cashier_sub            VARCHAR2(256)  NOT NULL,
+  cashier_email          VARCHAR2(256),
+  cashier_name           VARCHAR2(200),
+  register_id            VARCHAR2(64),
+  client_kind            VARCHAR2(20),
+  requested_at           TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL,
+  expires_at             TIMESTAMP      NOT NULL,
+  resolved_at            TIMESTAMP,
+  resolved_by_sub        VARCHAR2(256),
+  resolved_by_email      VARCHAR2(256),
+  deny_reason            VARCHAR2(500),
+  cash_mode              VARCHAR2(20),
+  expected_opening_float NUMBER(10, 2),
+  opening_counted_float  NUMBER(10, 2),
+  opening_variance       NUMBER(10, 2),
+  opening_denominations  CLOB,
+  till_submitted_at      TIMESTAMP
 );
 
 CREATE INDEX login_approval_requests_status_idx
   ON login_approval_requests (status, expires_at);
+
+
+-- ── 7b. REGISTER_SHIFTS (cash drawer shift open/close) ───────────────────────
+
+CREATE TABLE register_shifts (
+  id                     NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  register_id            VARCHAR2(64),
+  cashier_sub            VARCHAR2(256)  NOT NULL,
+  cashier_email          VARCHAR2(256),
+  cash_mode              VARCHAR2(20)   NOT NULL,
+  expected_opening_float NUMBER(10, 2),
+  opening_counted_float  NUMBER(10, 2),
+  opening_denominations  CLOB,
+  opening_variance       NUMBER(10, 2),
+  approval_request_token VARCHAR2(64),
+  opened_at              TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL,
+  closed_at              TIMESTAMP,
+  status                 VARCHAR2(20)   NOT NULL
+);
+
+CREATE INDEX register_shifts_cashier_idx
+  ON register_shifts (cashier_sub, status, opened_at);
 
 
 -- ── 8. CART_VIEW ──────────────────────────────────────────────────────────────
@@ -452,6 +482,22 @@ END;
 /
 
 
+-- ── 22b. Enable ORDS on REGISTER_SHIFTS table ────────────────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'REGISTER_SHIFTS',
+    p_object_type   => 'TABLE',
+    p_object_alias  => 'register_shifts',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
 -- ── 23. Sample products — Java Rocks (coffee store) ───────────────────────────
 
 -- Made coffee (bar)
@@ -580,6 +626,8 @@ SELECT 'sale_items', COUNT(*) FROM sale_items
 UNION ALL
 SELECT 'sale_payments', COUNT(*) FROM sale_payments
 UNION ALL
-SELECT 'login_approval_requests', COUNT(*) FROM login_approval_requests;
+SELECT 'login_approval_requests', COUNT(*) FROM login_approval_requests
+UNION ALL
+SELECT 'register_shifts', COUNT(*) FROM register_shifts;
 
 exit

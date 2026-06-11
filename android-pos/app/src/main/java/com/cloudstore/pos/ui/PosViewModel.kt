@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.CartResponse
 import com.cloudstore.pos.data.CashierSessionResponse
+import com.cloudstore.pos.data.SubmitOpeningTillRequest
+import com.cloudstore.pos.data.TillConfigResponse
+import com.cloudstore.pos.data.TillDenomination
 import com.cloudstore.pos.data.CashierUserStore
 import com.cloudstore.pos.data.CheckoutPayment
 import com.cloudstore.pos.data.OfflineQueueStore
@@ -43,6 +46,17 @@ sealed class CashierAuthGate {
     data class WaitingApproval(
         val email: String? = null,
         val secondsRemaining: Int? = null,
+        val cashMode: String? = null,
+        val expectedOpeningFloat: Double? = null,
+        val openingCountedFloat: Double? = null,
+        val openingVariance: Double? = null,
+    ) : CashierAuthGate()
+    data class OpeningTill(
+        val expectedOpeningFloat: Double? = null,
+        val denominations: List<TillDenomination> = emptyList(),
+        val counts: Map<String, String> = emptyMap(),
+        val selectedDenominationId: String? = null,
+        val submitting: Boolean = false,
     ) : CashierAuthGate()
 }
 
@@ -70,9 +84,12 @@ data class PosUiState(
     val authGate: CashierAuthGate = CashierAuthGate.Checking,
     val idpLoginUrl: String? = null,
     val pinAllowed: Boolean = true,
+    val supervisorApprovalRequired: Boolean = false,
+    val idpEnabled: Boolean = false,
     val pinInput: String = "",
     val queuedCheckoutCount: Int = 0,
     val queueSyncing: Boolean = false,
+    val cashEnabled: Boolean = true,
     val receipt: SaleReceipt? = null,
     val receiptPrintMessage: String? = null,
     val receiptPrintProgress: Float = 0f,
@@ -392,11 +409,7 @@ class PosViewModel(
                 val authLost = err is HttpException && err.code() == 401
                 if (authLost) {
                     repository.clearCashierCookies()
-                    showSignInGate(
-                        pinAllowed = _state.value.pinAllowed,
-                        idpLoginUrl = _state.value.idpLoginUrl,
-                        status = "Session expired — sign in again",
-                    )
+                    showSignInGateFromCachedAuth("Session expired — sign in again")
                 } else {
                     _state.value = _state.value.copy(
                         loading = false,
@@ -473,13 +486,19 @@ class PosViewModel(
     }
 
     fun openOidcSignIn() {
-        _state.update { it.copy(authGate = CashierAuthGate.OidcSignIn) }
+        _state.update {
+            it.copy(
+                authGate = CashierAuthGate.OidcSignIn,
+                status = "Signing in…",
+            )
+        }
     }
 
     fun cancelOidcSignIn() {
         _state.update {
+            val pinOk = it.pinAllowed && !it.supervisorApprovalRequired
             it.copy(
-                authGate = CashierAuthGate.PinSignIn(pinAllowed = it.pinAllowed),
+                authGate = CashierAuthGate.PinSignIn(pinAllowed = pinOk),
                 status = "Ready",
             )
         }
@@ -492,19 +511,14 @@ class PosViewModel(
         if (!pendingToken.isNullOrBlank()) {
             repository.rememberPendingRequestToken(pendingToken)
         }
-        // Dismiss WebView immediately — show native waiting screen, not server web POS.
         _state.update {
             it.copy(
                 isAuthenticated = false,
-                authGate = CashierAuthGate.WaitingApproval(
-                    email = null,
-                    secondsRemaining = null,
-                ),
+                authGate = CashierAuthGate.Checking,
                 idpLoginUrl = resolveIdpLoginUrl("/oauth/login"),
                 status = "Completing sign-in…",
             )
         }
-        startApprovalPoll()
         viewModelScope.launch {
             try {
                 syncWebViewCookiesWithRetry()
@@ -512,31 +526,9 @@ class PosViewModel(
                     repository.rememberPendingRequestToken(pendingToken)
                 }
                 runCatching { repository.cashierSession() }
-                    .onSuccess { session ->
-                        when {
-                            session.ok -> applySessionProbe(session)
-                            session.pending -> applySessionProbe(session)
-                            pendingToken.isNullOrBlank() && !repository.hasPendingRequestCookie() ->
-                                showSignInGate(
-                                    pinAllowed = session.pinAllowed,
-                                    idpLoginUrl = if (session.idpEnabled) {
-                                        resolveIdpLoginUrl(session.idpLoginUrl)
-                                    } else {
-                                        null
-                                    },
-                                    status = "Sign-in incomplete — tap Oracle sign-in again",
-                                )
-                        }
-                    }
+                    .onSuccess { session -> applySessionProbe(session) }
                     .onFailure { err ->
-                        if (pendingToken.isNullOrBlank() && !repository.hasPendingRequestCookie()) {
-                            stopApprovalPoll()
-                            showSignInGate(
-                                pinAllowed = _state.value.pinAllowed,
-                                idpLoginUrl = _state.value.idpLoginUrl,
-                                status = connectivityMessage(err),
-                            )
-                        }
+                        showSignInGateFromCachedAuth(connectivityMessage(err))
                     }
             } finally {
                 oidcCompleting = false
@@ -546,11 +538,7 @@ class PosViewModel(
 
     private fun enterWaitingApprovalFromToken(pendingToken: String?) {
         if (pendingToken.isNullOrBlank() && !repository.hasPendingRequestCookie()) {
-            showSignInGate(
-                pinAllowed = _state.value.pinAllowed,
-                idpLoginUrl = resolveIdpLoginUrl("/oauth/login"),
-                status = "Sign-in incomplete — tap Oracle sign-in again",
-            )
+            showSignInGateFromCachedAuth("Sign-in incomplete — tap Oracle sign-in again")
             return
         }
         _state.update {
@@ -573,11 +561,7 @@ class PosViewModel(
             _state.update { it.copy(status = "Cancelling…") }
             runCatching { repository.cancelApproval() }
             repository.clearCashierCookies()
-            showSignInGate(
-                pinAllowed = _state.value.pinAllowed,
-                idpLoginUrl = _state.value.idpLoginUrl,
-                status = "Login request cancelled",
-            )
+            showSignInGateFromCachedAuth("Login request cancelled")
         }
     }
 
@@ -602,11 +586,7 @@ class PosViewModel(
                 }
                 .onFailure { err ->
                     PosIdentityLog.d("probeCashierSession failed: ${err.message}")
-                    showSignInGate(
-                        pinAllowed = true,
-                        idpLoginUrl = null,
-                        status = connectivityMessage(err),
-                    )
+                    showSignInGateFromCachedAuth(connectivityMessage(err))
                 }
         }
     }
@@ -647,9 +627,234 @@ class PosViewModel(
         rememberCashierUserFromApproval(email, name)
     }
 
+    private fun resolveCashEnabled(session: CashierSessionResponse): Boolean =
+        session.cashEnabled ?: !session.cashTillEnabled
+
+    private fun waitingApprovalFromSession(session: CashierSessionResponse): CashierAuthGate.WaitingApproval {
+        val approval = session.approval
+        return CashierAuthGate.WaitingApproval(
+            email = approval?.cashierEmail,
+            secondsRemaining = approval?.secondsRemaining,
+            cashMode = approval?.cashMode,
+            expectedOpeningFloat = approval?.expectedOpeningFloat,
+            openingCountedFloat = approval?.openingCountedFloat,
+            openingVariance = approval?.openingVariance,
+        )
+    }
+
+    private fun waitingApprovalFromPoll(
+        current: CashierAuthGate.WaitingApproval,
+        status: com.cloudstore.pos.data.ApprovalStatusResponse,
+    ): CashierAuthGate.WaitingApproval = current.copy(
+        email = status.email ?: status.cashierEmail ?: current.email,
+        secondsRemaining = status.secondsRemaining ?: current.secondsRemaining,
+        cashMode = status.cashMode ?: current.cashMode,
+        expectedOpeningFloat = status.expectedOpeningFloat ?: current.expectedOpeningFloat,
+        openingCountedFloat = status.openingCountedFloat ?: current.openingCountedFloat,
+        openingVariance = status.openingVariance ?: current.openingVariance,
+    )
+
+    private fun enterOpeningTill(config: TillConfigResponse) {
+        stopApprovalPoll()
+        _state.update {
+            it.copy(
+                isAuthenticated = false,
+                authGate = CashierAuthGate.OpeningTill(
+                    expectedOpeningFloat = config.expectedOpeningFloat,
+                    denominations = config.denominations,
+                    selectedDenominationId = config.denominations.firstOrNull()?.id,
+                ),
+                idpLoginUrl = if (it.idpLoginUrl != null) it.idpLoginUrl else resolveIdpLoginUrl("/oauth/login"),
+                status = "Count opening till",
+            )
+        }
+    }
+
+    private fun openingTillGate(): CashierAuthGate.OpeningTill? =
+        _state.value.authGate as? CashierAuthGate.OpeningTill
+
+    fun selectTillDenomination(denominationId: String) {
+        _state.update { state ->
+            val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@update state
+            state.copy(authGate = gate.copy(selectedDenominationId = denominationId))
+        }
+    }
+
+    fun appendTillDigit(digit: Char) {
+        val gate = openingTillGate() ?: return
+        val id = gate.selectedDenominationId ?: return
+        val current = gate.counts[id].orEmpty()
+        if (current.length >= 4) return
+        val next = if (current == "0") digit.toString() else current + digit
+        updateTillCount(id, next)
+    }
+
+    fun confirmTillCount() {
+        selectNextTillDenomination()
+    }
+
+    fun selectNextTillDenomination() {
+        advanceTillDenomination()
+    }
+
+    fun selectPreviousTillDenomination() {
+        _state.update { state ->
+            val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@update state
+            val denoms = gate.denominations
+            if (denoms.isEmpty()) return@update state
+            val currentIdx = denoms.indexOfFirst { it.id == gate.selectedDenominationId }
+            val prevIdx = if (currentIdx <= 0) denoms.lastIndex else currentIdx - 1
+            state.copy(authGate = gate.copy(selectedDenominationId = denoms[prevIdx].id))
+        }
+    }
+
+    private fun advanceTillDenomination() {
+        _state.update { state ->
+            val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@update state
+            val denoms = gate.denominations
+            if (denoms.isEmpty()) return@update state
+            val currentIdx = denoms.indexOfFirst { it.id == gate.selectedDenominationId }
+            val nextIdx = if (currentIdx < 0) 0 else (currentIdx + 1) % denoms.size
+            state.copy(authGate = gate.copy(selectedDenominationId = denoms[nextIdx].id))
+        }
+    }
+
+    fun clearTillCount() {
+        val id = openingTillGate()?.selectedDenominationId ?: return
+        updateTillCount(id, "")
+    }
+
+    fun backspaceTillCount() {
+        val gate = openingTillGate() ?: return
+        val id = gate.selectedDenominationId ?: return
+        updateTillCount(id, gate.counts[id].orEmpty().dropLast(1))
+    }
+
+    private fun loadOpeningTillGate() {
+        viewModelScope.launch {
+            runCatching { repository.tillConfig() }
+                .onSuccess { enterOpeningTill(it) }
+                .onFailure { err ->
+                    showSignInGateFromCachedAuth(connectivityMessage(err))
+                }
+        }
+    }
+
+    fun updateTillCount(denominationId: String, value: String) {
+        _state.update { state ->
+            val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@update state
+            state.copy(
+                authGate = gate.copy(counts = gate.counts + (denominationId to value)),
+            )
+        }
+    }
+
+    fun submitOpeningTill() {
+        val gate = _state.value.authGate as? CashierAuthGate.OpeningTill ?: return
+        val nonEmptyCounts = gate.counts
+            .mapNotNull { (id, raw) ->
+                val count = raw.toIntOrNull() ?: 0
+                if (count > 0) id to count else null
+            }
+            .toMap()
+        val countedTotal = sumTillCounts(gate.denominations, gate.counts)
+        submitTillRequest(
+            cashMode = "cash_and_credit",
+            denominations = nonEmptyCounts,
+            countedTotal = countedTotal,
+        )
+    }
+
+    fun submitNoCashToday() {
+        submitTillRequest(cashMode = "credit_only")
+    }
+
+    fun cancelOpeningTill() {
+        viewModelScope.launch {
+            stopApprovalPoll()
+            runCatching { repository.cancelOpeningTill() }
+            repository.clearCashierCookies()
+            showSignInGateFromCachedAuth("Sign-in cancelled")
+        }
+    }
+
+    private fun submitTillRequest(
+        cashMode: String,
+        denominations: Map<String, Int>? = null,
+        countedTotal: Double? = null,
+    ) {
+        viewModelScope.launch {
+            _state.update { state ->
+                val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@launch
+                state.copy(authGate = gate.copy(submitting = true), status = "Submitting till count…")
+            }
+            runCatching {
+                repository.submitOpeningTill(
+                    SubmitOpeningTillRequest(
+                        cashMode = cashMode,
+                        denominations = denominations,
+                        countedTotal = countedTotal,
+                    ),
+                )
+            }.onSuccess { response ->
+                if (response.pending) {
+                    val gate = openingTillGate()
+                    val counted = gate?.let { sumTillCounts(it.denominations, it.counts) }
+                    _state.update {
+                        it.copy(
+                            isAuthenticated = false,
+                            authGate = CashierAuthGate.WaitingApproval(
+                                email = null,
+                                secondsRemaining = null,
+                                cashMode = response.cashMode ?: cashMode,
+                                expectedOpeningFloat = gate?.expectedOpeningFloat,
+                                openingCountedFloat = counted,
+                                openingVariance = response.openingVariance
+                                    ?: gate?.expectedOpeningFloat?.let { expected ->
+                                        counted?.let { value -> value - expected }
+                                    },
+                            ),
+                            status = "Waiting for supervisor approval",
+                        )
+                    }
+                    startApprovalPoll()
+                    return@onSuccess
+                }
+                if (response.ok) {
+                    runCatching { repository.cashierSession() }
+                        .onSuccess { session -> applySessionProbe(session) }
+                } else {
+                    _state.update { state ->
+                        val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@onSuccess
+                        state.copy(
+                            authGate = gate.copy(submitting = false),
+                            status = response.error ?: "Till submit failed",
+                        )
+                    }
+                }
+            }.onFailure { err ->
+                if (err is HttpException && err.code() == 401) {
+                    repository.clearCashierCookies()
+                    showSignInGateFromCachedAuth("Sign-in expired — sign in with Oracle again")
+                    return@onFailure
+                }
+                _state.update { state ->
+                    val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@onFailure
+                    state.copy(
+                        authGate = gate.copy(submitting = false),
+                        status = connectivityMessage(err),
+                    )
+                }
+            }
+        }
+    }
+
     private fun applySessionProbe(session: CashierSessionResponse) {
         val idpUrl = if (session.idpEnabled) resolveIdpLoginUrl(session.idpLoginUrl) else null
         when {
+            session.awaitingTill -> {
+                loadOpeningTillGate()
+            }
             session.ok -> {
                 stopApprovalPoll()
                 val resolvedUser = rememberCashierUserFromSession(session, _state.value)
@@ -667,8 +872,11 @@ class PosViewModel(
                         loggedInUser = resolvedUser,
                         authGate = CashierAuthGate.SignedIn,
                         idpLoginUrl = idpUrl,
-                        pinAllowed = session.pinAllowed,
+                        pinAllowed = effectivePinAllowed(session),
+                        supervisorApprovalRequired = session.supervisorApprovalRequired,
+                        idpEnabled = session.idpEnabled,
                         pinInput = "",
+                        cashEnabled = resolveCashEnabled(session),
                         status = "Signed in",
                     )
                 }
@@ -684,41 +892,84 @@ class PosViewModel(
                 _state.update {
                     it.copy(
                         isAuthenticated = false,
-                        authGate = CashierAuthGate.WaitingApproval(
-                            email = session.approval?.cashierEmail,
-                            secondsRemaining = session.approval?.secondsRemaining,
-                        ),
+                        authGate = waitingApprovalFromSession(session),
                         idpLoginUrl = idpUrl,
-                        pinAllowed = session.pinAllowed,
+                        pinAllowed = effectivePinAllowed(session),
+                        supervisorApprovalRequired = session.supervisorApprovalRequired,
+                        idpEnabled = session.idpEnabled,
                         status = "Waiting for supervisor approval",
                     )
                 }
                 startApprovalPoll()
             }
             else -> {
-                showSignInGate(
-                    pinAllowed = session.pinAllowed,
-                    idpLoginUrl = idpUrl,
-                    status = "Ready",
-                )
+                val baseStatus = when (_state.value.status) {
+                    "Signed out" ->
+                        if (session.supervisorApprovalRequired) {
+                            "Signed out — sign in with Oracle"
+                        } else {
+                            "Signed out"
+                        }
+                    else -> "Ready"
+                }
+                configureSignInGateFromSession(session, baseStatus)
             }
         }
+    }
+
+    private fun effectivePinAllowed(session: CashierSessionResponse): Boolean =
+        session.pinAllowed && !session.supervisorApprovalRequired
+
+    private fun configureSignInGateFromSession(session: CashierSessionResponse, status: String) {
+        val idpUrl = if (session.idpEnabled) resolveIdpLoginUrl(session.idpLoginUrl) else null
+        showSignInGate(
+            pinAllowed = effectivePinAllowed(session),
+            idpLoginUrl = idpUrl,
+            status = status,
+            supervisorApprovalRequired = session.supervisorApprovalRequired,
+            idpEnabled = session.idpEnabled,
+        )
+    }
+
+    private fun showSignInGateFromCachedAuth(status: String) {
+        val current = _state.value
+        val pinOk = current.pinAllowed && !current.supervisorApprovalRequired
+        val idpUrl = when {
+            current.idpLoginUrl != null -> current.idpLoginUrl
+            current.idpEnabled || current.supervisorApprovalRequired ->
+                resolveIdpLoginUrl("/oauth/login")
+            else -> null
+        }
+        showSignInGate(
+            pinAllowed = pinOk,
+            idpLoginUrl = idpUrl,
+            status = status,
+            supervisorApprovalRequired = current.supervisorApprovalRequired,
+            idpEnabled = current.idpEnabled || idpUrl != null,
+        )
     }
 
     private fun showSignInGate(
         pinAllowed: Boolean,
         idpLoginUrl: String?,
         status: String,
+        supervisorApprovalRequired: Boolean = _state.value.supervisorApprovalRequired,
+        idpEnabled: Boolean = _state.value.idpEnabled,
+        clearStoredUser: Boolean = true,
     ) {
         stopApprovalPoll()
-        userStore.clear()
+        if (clearStoredUser) {
+            userStore.clear()
+        }
         _state.update {
             it.copy(
                 isAuthenticated = false,
-                loggedInUser = null,
+                loggedInUser = if (clearStoredUser) null else it.loggedInUser,
                 authGate = CashierAuthGate.PinSignIn(pinAllowed = pinAllowed),
                 idpLoginUrl = idpLoginUrl,
                 pinAllowed = pinAllowed,
+                supervisorApprovalRequired = supervisorApprovalRequired,
+                idpEnabled = idpEnabled,
                 pinInput = "",
                 status = status,
             )
@@ -789,9 +1040,12 @@ class PosViewModel(
                     val gate = it.authGate
                     it.copy(
                         authGate = if (gate is CashierAuthGate.WaitingApproval) {
-                            gate.copy(
-                                email = approvalEmail ?: gate.email,
-                                secondsRemaining = status.secondsRemaining,
+                            waitingApprovalFromPoll(
+                                gate.copy(
+                                    email = approvalEmail ?: gate.email,
+                                    secondsRemaining = status.secondsRemaining,
+                                ),
+                                status,
                             )
                         } else {
                             gate
@@ -808,11 +1062,7 @@ class PosViewModel(
                     "expired" -> "Login request expired — sign in again"
                     else -> "Login request cancelled"
                 }
-                showSignInGate(
-                    pinAllowed = _state.value.pinAllowed,
-                    idpLoginUrl = _state.value.idpLoginUrl,
-                    status = msg,
-                )
+                showSignInGateFromCachedAuth(msg)
             }
             else -> {
                 if (status.error != null) {
@@ -827,11 +1077,7 @@ class PosViewModel(
         when {
             err is HttpException && err.code() == 401 -> {
                 stopApprovalPoll()
-                showSignInGate(
-                    pinAllowed = _state.value.pinAllowed,
-                    idpLoginUrl = _state.value.idpLoginUrl,
-                    status = "No pending login request — sign in again",
-                )
+                showSignInGateFromCachedAuth("No pending login request — sign in again")
             }
             else -> {
                 _state.update {
@@ -856,20 +1102,12 @@ class PosViewModel(
                 if (session.ok) {
                     applySessionProbe(session)
                 } else {
-                    showSignInGate(
-                        pinAllowed = _state.value.pinAllowed,
-                        idpLoginUrl = _state.value.idpLoginUrl,
-                        status = "Approved but session did not persist — sign in again",
-                    )
+                    showSignInGateFromCachedAuth("Approved but session did not persist — sign in again")
                 }
             }
             .onFailure { err ->
                 if (err is CancellationException) return@onFailure
-                showSignInGate(
-                    pinAllowed = _state.value.pinAllowed,
-                    idpLoginUrl = _state.value.idpLoginUrl,
-                    status = connectivityMessage(err),
-                )
+                showSignInGateFromCachedAuth(connectivityMessage(err))
             }
     }
 
@@ -890,18 +1128,12 @@ class PosViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(status = "Signing in...")
             runCatching { repository.unlockCashier(entered) }
-                .onSuccess {
-                    val session = runCatching { repository.cashierSession() }.getOrNull()
-                    val loggedInUser = session?.let { rememberCashierUserFromSession(it, _state.value) }
-                        ?: "Cashier".also { userStore.save(it) }
-                    _state.value = _state.value.copy(
-                        isAuthenticated = true,
-                        loggedInUser = loggedInUser,
-                        pinInput = "",
-                        status = "Signed in",
-                    )
-                    refresh()
-                    flushOfflineQueue()
+                .onSuccess { session ->
+                    if (session.awaitingTill) {
+                        loadOpeningTillGate()
+                    } else {
+                        applySessionProbe(session)
+                    }
                 }
                 .onFailure { err ->
                     val msg = when (err) {
@@ -930,11 +1162,14 @@ class PosViewModel(
             stopApprovalPoll()
             runCatching { repository.logoutCashier() }
             userStore.clear()
+            val authHints = _state.value
             _state.value = PosUiState(
                 isAuthenticated = false,
-                authGate = CashierAuthGate.PinSignIn(pinAllowed = _state.value.pinAllowed),
-                idpLoginUrl = _state.value.idpLoginUrl,
-                pinAllowed = _state.value.pinAllowed,
+                authGate = CashierAuthGate.Checking,
+                supervisorApprovalRequired = authHints.supervisorApprovalRequired,
+                idpEnabled = authHints.idpEnabled,
+                idpLoginUrl = authHints.idpLoginUrl,
+                pinAllowed = authHints.pinAllowed && !authHints.supervisorApprovalRequired,
                 pinInput = "",
                 barcodeInput = "",
                 queuedCheckoutCount = queueStore.all().size,

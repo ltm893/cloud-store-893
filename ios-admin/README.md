@@ -36,6 +36,8 @@ open ios-admin/CloudStoreAdmin.xcodeproj
 
 Select a simulator or device, set your **Team**, then Run. Sign in with `ADMIN_PIN` (default `8930`) or Oracle when IdP is configured on the server.
 
+**Refresh admin after server updates:** open **Login approvals**, scroll the list slightly, then pull down and release. The spinner should stop within a second or two. If it keeps spinning, force-quit and reopen the app (rebuild from Xcode after pulling latest `AdminWebView.swift`).
+
 ## Project layout
 
 | Path | Purpose |

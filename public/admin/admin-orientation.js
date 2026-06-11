@@ -1,9 +1,24 @@
 /** Prefer landscape on tablets; show rotate hint in portrait when lock API is unavailable. */
 /** Logic mirrors lib/admin-orientation.js (see test/admin-orientation.test.js). */
 (function lockAdminLandscape() {
+  function parseClientKind() {
+    return new URLSearchParams(window.location.search).get('client_kind');
+  }
+
   function isPortraitOkClient() {
     if (document.documentElement.classList.contains('admin-portrait-ok')) return true;
-    return new URLSearchParams(window.location.search).get('client_kind') === 'ios';
+    const kind = parseClientKind();
+    return kind === 'ios' || kind === 'ios_admin';
+  }
+
+  function isDesktopFinePointer() {
+    return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  }
+
+  function shouldShowPortraitBlocker() {
+    if (isPortraitOkClient()) return false;
+    if (isDesktopFinePointer()) return false;
+    return true;
   }
 
   function tryLock() {
@@ -23,7 +38,10 @@
   }
 
   function init() {
-    if (isPortraitOkClient()) {
+    if (isDesktopFinePointer()) {
+      document.documentElement.classList.add('admin-fine-pointer');
+    }
+    if (!shouldShowPortraitBlocker()) {
       document.documentElement.classList.add('admin-portrait-ok');
       return;
     }

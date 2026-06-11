@@ -6,6 +6,7 @@ const {
   isPortraitOkClient,
   parseClientKind,
   shouldUseLandscapeLock,
+  shouldShowPortraitBlocker,
 } = require('../lib/admin-orientation');
 
 test('isPortraitOkClient is true when admin-portrait-ok class is set', () => {
@@ -50,5 +51,20 @@ test('shouldUseLandscapeLock is inverse of portrait-ok clients', () => {
   assert.equal(
     shouldUseLandscapeLock({ hasPortraitOkClass: false, clientKind: 'ios' }),
     false,
+  );
+});
+
+test('shouldShowPortraitBlocker is false for ios and desktop fine pointer', () => {
+  assert.equal(
+    shouldShowPortraitBlocker({ hasPortraitOkClass: false, clientKind: 'ios', finePointer: false }),
+    false,
+  );
+  assert.equal(
+    shouldShowPortraitBlocker({ hasPortraitOkClass: false, clientKind: null, finePointer: true }),
+    false,
+  );
+  assert.equal(
+    shouldShowPortraitBlocker({ hasPortraitOkClass: false, clientKind: null, finePointer: false }),
+    true,
   );
 });
