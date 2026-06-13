@@ -14,6 +14,7 @@ object PosIdentityLog {
             TAG,
             "$label ok=${session.ok} auth=${session.auth} sub=${session.sub} user=${session.user} " +
                 "email=${session.email} name=${session.name} cashierEmail=${session.cashierEmail} " +
+                "tillId=${session.tillId} posSessionId=${session.posSessionId} " +
                 "approvalEmail=${session.approval?.cashierEmail} approvalName=${session.approval?.cashierName}",
         )
     }

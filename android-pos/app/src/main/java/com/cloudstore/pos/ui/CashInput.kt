@@ -28,3 +28,12 @@ internal fun appendCashDigit(current: String, digit: Char): String {
     }
     return current + digit
 }
+
+/** When [maxAmount] is set (credit-only card), reject digits that would exceed the balance due. */
+internal fun appendCashDigitLimited(current: String, digit: Char, maxAmount: Double?): String {
+    val next = appendCashDigit(current, digit)
+    if (maxAmount == null || maxAmount <= 0.005) return next
+    val parsed = parseCashTendered(next) ?: return next
+    if (parsed > maxAmount + 0.005) return current
+    return next
+}

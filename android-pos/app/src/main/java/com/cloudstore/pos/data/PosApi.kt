@@ -83,6 +83,21 @@ interface PosApi {
 
     @POST("api/cashier/logout")
     suspend fun logoutCashier(): OkResponse
+
+    @POST("api/cashier/sign-off")
+    suspend fun signOffCashier(@Body body: Map<String, String>): OkResponse
+
+    @GET("api/cashier/shift/close/preview")
+    suspend fun closeTillPreview(): CloseTillPreviewResponse
+
+    @POST("api/cashier/shift/close/till")
+    suspend fun submitCloseTill(@Body body: SubmitCloseTillRequest): SubmitCloseTillResponse
+
+    @GET("api/cashier/shift/close/status")
+    suspend fun closeTillStatus(@Query("closeToken") closeToken: String? = null): CloseTillStatusResponse
+
+    @POST("api/cashier/shift/close/cancel")
+    suspend fun cancelCloseTill(): OkResponse
 }
 
 class PosRepository(baseUrl: String) {
@@ -220,5 +235,23 @@ class PosRepository(baseUrl: String) {
     suspend fun logoutCashier() {
         runCatching { api.logoutCashier() }
         clearCashierCookies()
+    }
+
+    suspend fun signOffCashier(registerId: String) {
+        runCatching { api.signOffCashier(mapOf("registerId" to registerId)) }
+        clearCashierCookies()
+        clearWebViewIdpSession()
+    }
+
+    suspend fun closeTillPreview() = api.closeTillPreview()
+
+    suspend fun submitCloseTill(body: SubmitCloseTillRequest) = api.submitCloseTill(body)
+
+    suspend fun closeTillStatus(closeToken: String? = null) = api.closeTillStatus(closeToken)
+
+    suspend fun cancelCloseTill() = api.cancelCloseTill()
+
+    fun clearWebViewIdpSession() {
+        clearIdpWebViewCookies()
     }
 }

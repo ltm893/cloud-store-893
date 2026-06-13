@@ -64,10 +64,7 @@ fun CashierOidcWebScreen(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
                 WebView(context).apply {
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.loadWithOverviewMode = true
-                    settings.useWideViewPort = true
+                    settings.configureForPosWebView()
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     var finished = false
@@ -135,11 +132,17 @@ private fun isCashierOidcComplete(url: String, base: String): Boolean {
     val uri = Uri.parse(url)
     if (uri.getQueryParameter("awaiting_till") != null) return true
     if (uri.getQueryParameter("approval") == "pending") return true
+    if (uri.getQueryParameter("cashier_resume") != null) return true
     return false
 }
 
 fun isAwaitingTillRedirect(completionUrl: String): Boolean {
     val value = Uri.parse(completionUrl).getQueryParameter("awaiting_till") ?: return false
+    return value == "1" || value.equals("true", ignoreCase = true)
+}
+
+fun isCashierResumeRedirect(completionUrl: String): Boolean {
+    val value = Uri.parse(completionUrl).getQueryParameter("cashier_resume") ?: return false
     return value == "1" || value.equals("true", ignoreCase = true)
 }
 

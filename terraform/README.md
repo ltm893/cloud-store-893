@@ -81,6 +81,8 @@ Use `terraform output ocir_image_path` for `<ocir_image_path>` after the first a
 
 That ordering avoids the container failing immediately on a missing image.
 
+**Day-to-day deploy:** [docs/oci-deploy.md](../docs/oci-deploy.md) (decision table, env, DB, IdP, tablet).
+
 **App code only (keeps IP):** [`../scripts/oci/redeploy-app-code.sh`](../scripts/oci/redeploy-app-code.sh) — build, push, restart, verify. For a new tag via apply: [`../scripts/oci/deploy-app-oci.sh`](../scripts/oci/deploy-app-oci.sh).
 
 ---

@@ -39,17 +39,51 @@ function columnHeaderLabel(meta, col) {
 
 function formatCell(value, col, tableName) {
   if (value === null || value === undefined || value === '') {
-    if (tableName === 'login_approval_requests' && col === 'cash_mode') return '—';
+    if (tableName === 'till_open_approvals' && col === 'till_type') return '—';
     return '';
   }
-  if (tableName === 'login_approval_requests') {
-    if (col === 'cash_mode') {
-      if (value === 'credit_only') return 'Credit cards only';
-      if (value === 'cash_and_credit') return 'Cash + card';
+  if (tableName === 'till_open_approvals') {
+    if (col === 'till_type') {
+      if (value === 'credit_only') return 'Card only';
+      if (value === 'cash_and_card') return 'Cash + card';
     }
     if (
       col === 'opening_counted_float' ||
       col === 'expected_opening_float' ||
+      col === 'opening_variance'
+    ) {
+      const n = Number(value);
+      if (Number.isFinite(n)) return `$${n.toFixed(2)}`;
+    }
+  }
+  if (tableName === 'till_close_approvals') {
+    if (col === 'till_type') {
+      if (value === 'credit_only') return 'Card only';
+      if (value === 'cash_and_card') return 'Cash + card';
+    }
+    if (
+      col === 'expected_close_float' ||
+      col === 'counted_close_float' ||
+      col === 'close_variance' ||
+      col === 'cash_sales_total' ||
+      col === 'change_given_total' ||
+      col === 'opening_counted_float'
+    ) {
+      const n = Number(value);
+      if (Number.isFinite(n)) return `$${n.toFixed(2)}`;
+    }
+  }
+  if (tableName === 'tills') {
+    if (col === 'till_type') {
+      if (value === 'credit_only') return 'Credit cards only';
+      if (value === 'cash_and_card') return 'Cash + card';
+    }
+    if (
+      col === 'sales_total' ||
+      col === 'cash_total' ||
+      col === 'credit_total' ||
+      col === 'expected_opening_float' ||
+      col === 'opening_counted_float' ||
       col === 'opening_variance'
     ) {
       const n = Number(value);
@@ -112,6 +146,12 @@ async function loadMeta() {
       if (window.AdminApprovals?.isActive?.()) {
         window.AdminApprovals.hide();
       }
+      if (window.AdminShiftCloses?.isActive?.()) {
+        window.AdminShiftCloses.hide();
+      }
+      if (window.AdminReports?.closePanel) {
+        window.AdminReports.closePanel();
+      }
       activeTable = btn.dataset.table;
       document.body.classList.remove('nav-open');
       renderNav();
@@ -124,6 +164,9 @@ function setNavActive(tableName) {
   tableNavEl.querySelectorAll('button').forEach((btn) => {
     btn.classList.toggle('active', tableName != null && btn.dataset.table === tableName);
   });
+  document.getElementById('approvalsNavBtn')?.classList.remove('active');
+  document.getElementById('shiftClosesNavBtn')?.classList.remove('active');
+  document.getElementById('reportsNavBtn')?.classList.remove('active');
 }
 
 function renderNav() {
@@ -201,6 +244,11 @@ async function deleteRow(id) {
 }
 
 async function loadTable(name) {
+  if (window.AdminReports?.closePanel) window.AdminReports.closePanel();
+  document.getElementById('tablePanel')?.removeAttribute('hidden');
+  const reportsPanel = document.getElementById('reportsPanel');
+  if (reportsPanel) reportsPanel.hidden = true;
+
   activeMeta = tablesMeta.find((t) => t.name === name);
   if (!activeMeta) return;
 
@@ -217,9 +265,15 @@ async function loadTable(name) {
   } else if (activeMeta.name === 'inventory_consumption_rules') {
     tableHintEl.textContent =
       'Oz (or unit) consumed per POS unit sold by product_type. Example: made coffee → 1.5 oz kitchen beans per drink.';
-  } else if (activeMeta.name === 'login_approval_requests') {
+  } else if (activeMeta.name === 'till_open_approvals') {
     tableHintEl.textContent =
-      'Read-only audit log. Use Login approvals (menu) to approve pending sign-ins. Shift mode shows cash drawer vs credit-only.';
+      'Read-only audit log. Use Till open approval (menu) to approve pending till opens.';
+  } else if (activeMeta.name === 'till_close_approvals') {
+    tableHintEl.textContent =
+      'Read-only audit log. Use Till close approval (menu) to approve pending till closes.';
+  } else if (activeMeta.name === 'tills') {
+    tableHintEl.textContent =
+      'Read-only till history. Active tills are highlighted in teal. Sales totals are computed from sales and payments.';
   } else if (activeMeta.readOnly) {
     tableHintEl.textContent = 'Read-only view.';
   } else {
@@ -243,6 +297,8 @@ async function loadTable(name) {
     dataBodyEl.innerHTML = rows
       .map((row) => {
         const lowStock = activeMeta.name === 'inventory_status_view' && Number(row.low_stock) === 1;
+        const tillActive =
+          activeMeta.name === 'tills' && String(row.status || '').toLowerCase() === 'active';
         const cells = cols
           .map((c) => {
             const cls = lowStock && c === 'quantity_on_hand' ? ' class="low-stock"' : '';
@@ -255,7 +311,8 @@ async function loadTable(name) {
               <button type="button" data-edit="${row.id}">Edit</button>
               <button type="button" class="danger" data-del="${row.id}">Delete</button>
             </td>`;
-        return `<tr>${cells}${activeMeta.readOnly ? '' : actions}</tr>`;
+        const rowCls = tillActive ? ' class="till-row-active"' : '';
+        return `<tr${rowCls}>${cells}${activeMeta.readOnly ? '' : actions}</tr>`;
       })
       .join('');
 
@@ -293,6 +350,19 @@ async function loadTable(name) {
         apiFetch,
         setStatus,
         adminSession: session,
+      });
+    }
+    if (window.AdminShiftCloses) {
+      window.AdminShiftCloses.configure({
+        apiFetch,
+        setStatus,
+        adminSession: session,
+      });
+    }
+    if (window.AdminReports) {
+      window.AdminReports.configure({
+        apiFetch,
+        setStatus,
       });
     }
     await loadMeta();

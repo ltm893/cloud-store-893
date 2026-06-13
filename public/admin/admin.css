@@ -7,6 +7,8 @@
   --text: #1f2937;
   --muted: #6b7280;
   --border: #e5e7eb;
+  --table-header-teal: #a8d5d1;
+  --till-active-row-teal: #e3f4f2;
 }
 
 * {
@@ -456,9 +458,17 @@ td {
 }
 
 th {
-  background: #a8d5d1;
+  background: var(--table-header-teal);
   font-weight: 600;
   white-space: nowrap;
+}
+
+tr.till-row-active td {
+  background: var(--till-active-row-teal);
+}
+
+tr.till-row-active td:first-child {
+  box-shadow: inset 3px 0 0 var(--table-header-teal);
 }
 
 td.low-stock {
@@ -484,6 +494,112 @@ td.low-stock {
 .row-actions button.danger {
   color: var(--danger);
   border-color: #f5c2c0;
+}
+
+.reports-panel h2,
+.reports-panel h3,
+.reports-panel h4 {
+  color: var(--accent-2);
+}
+
+.reports-panel h3 {
+  margin: 20px 0 8px;
+  font-size: 1.05rem;
+}
+
+.reports-panel h4 {
+  margin: 14px 0 6px;
+  font-size: 0.95rem;
+}
+
+.reports-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+
+.reports-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.reports-controls select,
+.reports-controls input[type="date"] {
+  min-width: 160px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.reports-controls button {
+  background: var(--accent-2);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reports-range-label {
+  margin-bottom: 8px;
+}
+
+.report-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.report-stat {
+  background: var(--till-active-row-teal, #e3f4f2);
+  border: 1px solid #b8dfd8;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.report-stat dt {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.report-stat dd {
+  margin: 4px 0 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-2);
+}
+
+.report-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.report-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.report-table-wrap th,
+.report-table-wrap td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.report-table-wrap th {
+  background: var(--table-header-teal);
 }
 
 #editDialog {

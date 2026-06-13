@@ -97,17 +97,30 @@ add_redirects_for_app() {
   rm -f "$tmp"
 }
 
+# Optional extra hosts for local dev (space-separated): LAN IP, etc.
+#   EXTRA_REDIRECT_HOSTS="10.0.0.122" ./scripts/oci/idp-update-redirect-uris.sh
+POS_EXTRA=()
+ADMIN_EXTRA=()
+LOCAL_HOSTS=(127.0.0.1 localhost)
+if [[ -n "${EXTRA_REDIRECT_HOSTS:-}" ]]; then
+  read -r -a _extra <<< "${EXTRA_REDIRECT_HOSTS}"
+  LOCAL_HOSTS+=("${_extra[@]}")
+fi
+for host in "${LOCAL_HOSTS[@]}"; do
+  [[ -z "$host" ]] && continue
+  POS_EXTRA+=("http://${host}:${PORT}/" "http://${host}:${PORT}/oauth/callback")
+  ADMIN_EXTRA+=("http://${host}:${PORT}/admin/" "http://${host}:${PORT}/oauth/admin/callback")
+done
+
 add_redirects_for_app "cloud-store-pos" \
   "${BASE}/" \
   "${BASE}/oauth/callback" \
-  "http://127.0.0.1:${PORT}/" \
-  "http://127.0.0.1:${PORT}/oauth/callback"
+  "${POS_EXTRA[@]}"
 
 add_redirects_for_app "cloud-store-admin" \
   "${BASE}/admin/" \
   "${BASE}/oauth/admin/callback" \
-  "http://127.0.0.1:${PORT}/admin/" \
-  "http://127.0.0.1:${PORT}/oauth/admin/callback"
+  "${ADMIN_EXTRA[@]}"
 
 echo ""
 echo "Verify in Console → Integrated applications → OAuth configuration → Redirect URL"

@@ -12,8 +12,9 @@ fun formatMoney(amount: Double): String = "\$${"%.2f".format(amount)}"
 /** Cash: round down to nearest $0.05 (no pennies). e.g. $19.06 → $19.05, $19.08 → $19.05 */
 fun roundToNickel(amount: Double): Double = roundMoney(floor(amount * 20.0) / 20.0)
 
-/** Next up to 3 standard bills that cover [amountDue] (e.g. $4.50 → $5, $10, $20). */
-fun cashQuickDenominations(amountDue: Double): List<Int> {
+/** Next up to 3 standard bills that cover [amountDue] (e.g. $4.50 → $5, $10, $20). Credit-only uses exact amount only. */
+fun cashQuickDenominations(amountDue: Double, cashEnabled: Boolean = true): List<Int> {
+    if (!cashEnabled || amountDue <= 0.005) return emptyList()
     val bills = listOf(5, 10, 20, 50, 100)
     val start = bills.indexOfFirst { it >= amountDue - 0.001 }
     if (start < 0) return listOf(100)

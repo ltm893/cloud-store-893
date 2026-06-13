@@ -176,7 +176,7 @@ LAN_IP=oci.cloudstore893.com ./RebuildReinstall.sh
 
 | Goal | Command | Instance replaced? | Reserved IP risk |
 |------|---------|-------------------|------------------|
-| App code only | `./scripts/oci/redeploy-app-code.sh` | No | None |
+| App code only | `./scripts/oci/redeploy-app-code.sh` | No | None — see [oci-deploy.md](oci-deploy.md) |
 | Tagged image deploy | `./scripts/oci/deploy-app-oci.sh <tag>` | **Often yes** | Reattach may be required |
 | Env / IdP flags via Terraform | `sync-container-env-to-terraform.sh` + `terraform-apply-container.sh` | **Often yes** | Reattach may be required |
 | Full stack + seed | `./scripts/oci/deploy.sh` | First deploy / major | Set up reserved IP once |

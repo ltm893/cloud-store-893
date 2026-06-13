@@ -1,6 +1,5 @@
 package com.cloudstore.pos.ui
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -14,6 +13,65 @@ import androidx.compose.ui.unit.dp
 import com.cloudstore.pos.ui.theme.PosCardDefaults
 import kotlin.math.abs
 
+private const val MONEY_EPSILON = 0.005
+
+enum class TillSummaryContext {
+    Opening,
+    Closing,
+}
+
+fun approvalTimerText(secondsRemaining: Int?): String? {
+    if (secondsRemaining == null || secondsRemaining < 0) return null
+    val mins = secondsRemaining / 60
+    val secs = secondsRemaining % 60
+    return "Expires in %d:%02d".format(mins, secs)
+}
+
+fun buildTillApprovalSummaryLine(
+    cashMode: String?,
+    counted: Double?,
+    expected: Double?,
+    variance: Double?,
+    context: TillSummaryContext = TillSummaryContext.Opening,
+): String? {
+    if (cashMode.isNullOrBlank()) return null
+
+    val isCreditOnly = cashMode == "credit_only"
+    val isClosing = context == TillSummaryContext.Closing
+
+    if (isCreditOnly) {
+        return if (isClosing) {
+            "Card only · Supervisor must approve close"
+        } else {
+            "Card only · Card payments only"
+        }
+    }
+
+    val parts = mutableListOf("Cash + card")
+
+    if (isClosing) {
+        counted?.let { parts.add("${formatMoney(it)} counted") }
+        if (variance != null && abs(variance) > MONEY_EPSILON) {
+            val sign = if (variance >= 0) "+" else ""
+            parts.add("$sign${formatMoney(variance)}")
+        }
+    } else {
+        counted?.let { parts.add("Opening ${formatMoney(it)}") }
+        if (
+            expected != null &&
+                (counted == null || abs(expected - counted) > MONEY_EPSILON)
+        ) {
+            parts.add("(target ${formatMoney(expected)})")
+        }
+        if (variance != null && abs(variance) > MONEY_EPSILON) {
+            val sign = if (variance >= 0) "+" else ""
+            parts.add("$sign${formatMoney(variance)}")
+        }
+    }
+
+    return parts.joinToString(" · ")
+}
+
 @Composable
 fun TillApprovalSummaryCard(
     cashMode: String?,
@@ -21,67 +79,29 @@ fun TillApprovalSummaryCard(
     openingCountedFloat: Double?,
     openingVariance: Double?,
     modifier: Modifier = Modifier,
+    context: TillSummaryContext = TillSummaryContext.Opening,
 ) {
-    if (cashMode.isNullOrBlank()) return
+    val summary = buildTillApprovalSummaryLine(
+        cashMode = cashMode,
+        counted = openingCountedFloat,
+        expected = expectedOpeningFloat,
+        variance = openingVariance,
+        context = context,
+    ) ?: return
 
-    val isCreditOnly = cashMode == "credit_only"
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = PosCardDefaults.contentColors(),
         elevation = PosCardDefaults.elevation(),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text(
-                text = if (isCreditOnly) "Card only" else "Cash + card",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                text = if (isCreditOnly) {
-                    "No cash drawer for this shift — card payments only."
-                } else {
-                    "Supervisor is approving cash drawer opening and card payments."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
-            )
-            if (!isCreditOnly && openingCountedFloat != null) {
-                Text(
-                    text = "Opening counted: ${formatMoney(openingCountedFloat)}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                )
-                if (expectedOpeningFloat != null) {
-                    Text(
-                        text = "Target float: ${formatMoney(expectedOpeningFloat)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                if (openingVariance != null && abs(openingVariance) > 0.005) {
-                    val sign = if (openingVariance >= 0) "+" else ""
-                    Text(
-                        text = "Variance: $sign${formatMoney(openingVariance)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                    )
-                }
-            }
-        }
+        Text(
+            text = summary,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        )
     }
 }

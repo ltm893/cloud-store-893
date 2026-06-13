@@ -96,6 +96,8 @@ if command -v ipconfig &>/dev/null; then
   PORT_VAL="${PORT:-3000}"
   if [[ -n "$LAN_IP" ]]; then
     info "Tablet should target: http://${LAN_IP}:${PORT_VAL}/"
+    warn "Oracle IdP must allow redirect http://${LAN_IP}:${PORT_VAL}/oauth/callback"
+    warn "  Run: ./scripts/dev-update-idp-redirects.sh (once per LAN IP change)"
   else
     warn "Could not detect LAN IP — verify Wi-Fi is on if you intend to use the tablet."
   fi

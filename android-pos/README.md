@@ -97,7 +97,8 @@ pre-tax line totals.
 
 ## Login screen
 
-- PIN entered via **number pad** (not soft keyboard).
+- PIN entered via **number pad** (not soft keyboard). Size: `PosLayoutMetrics.kt` (`PosNumpadColumnWidth`, `PosNumpadCardHeight`, …).
+- **Oracle sign-in** uses a WebView; Samsung **keyboard size** in Settings often has no effect in **landscape**. Page zoom: `PosWebViewTextZoomPercent` in `ui/PosWebView.kt` (default 140%).
 - **Done** submits unlock to the server.
 - Status line shows **Invalid PIN**, **Cannot reach server**, or **Server needs update (404)**.
 

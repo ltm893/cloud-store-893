@@ -103,6 +103,7 @@ fun CheckoutPaymentPanel(
     payments: List<CheckoutPayment>,
     backEnabled: Boolean,
     cashEnabled: Boolean = true,
+    creditOnlyPayments: Boolean = false,
     showCardOnFileButton: Boolean,
     amountInput: String,
     onAmountChange: (String) -> Unit,
@@ -117,7 +118,8 @@ fun CheckoutPaymentPanel(
     val canPayCash = cashEnabled && balanceDue > 0.005 && nextAmount != null && nextAmount > 0.0
     val canPayCard = balanceDue > 0.005 && nextAmount != null && nextAmount > 0.0 &&
         nextAmount <= balanceDue + 0.005
-    val quickBills = cashQuickDenominations(balanceDue)
+    val quickBills = cashQuickDenominations(balanceDue, cashEnabled = !creditOnlyPayments)
+    val maxCardEntry = if (creditOnlyPayments && balanceDue > 0.005) balanceDue else null
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -239,10 +241,14 @@ fun CheckoutPaymentPanel(
                     .height(PosNumpadCardHeight),
             ) {
                 NumberPad(
-                    onDigit = { d -> onAmountChange(appendCashDigit(amountInput, d)) },
+                    onDigit = { d ->
+                        onAmountChange(appendCashDigitLimited(amountInput, d, maxCardEntry))
+                    },
                     onClear = { onAmountChange("") },
                     onBackspace = { onAmountChange(amountInput.dropLast(1)) },
-                    onDecimal = { onAmountChange(appendCashDigit(amountInput, '.')) },
+                    onDecimal = {
+                        onAmountChange(appendCashDigitLimited(amountInput, '.', maxCardEntry))
+                    },
                     showClear = false,
                     modifier = Modifier
                         .fillMaxSize()
@@ -277,7 +283,7 @@ fun CheckoutPaymentPanel(
                     modifier = Modifier.weight(if (cashEnabled) 1f else 2f),
                     contentPadding = PaddingValues(vertical = 6.dp),
                 ) {
-                    Text("Card", style = MaterialTheme.typography.labelMedium)
+                    Text("Charge Card", style = MaterialTheme.typography.labelMedium)
                 }
                 if (showCardOnFileButton) {
                     Button(

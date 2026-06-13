@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="screen-orientation" content="landscape">
   <title>Cloud Store 893 — Admin</title>
-  <link rel="stylesheet" href="/admin/admin.css?v=20260611c">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260613b">
   <script src="/admin/admin-orientation.js?v=20260611c"></script>
 </head>
 <body class="admin-landscape">
@@ -22,22 +22,69 @@
 
   <nav id="sideNav" class="side-nav" aria-label="Tables">
     <div id="approvalsNav" class="table-nav approvals-nav" hidden>
-      <button type="button" id="approvalsNavBtn" data-view="approvals">Login approvals</button>
+      <button type="button" id="approvalsNavBtn" data-view="approvals">Till open approval</button>
+    </div>
+    <div id="shiftClosesNav" class="table-nav approvals-nav" hidden>
+      <button type="button" id="shiftClosesNavBtn" data-view="shift-closes">Till close approval</button>
+    </div>
+    <div id="reportsNav" class="table-nav approvals-nav" hidden>
+      <button type="button" id="reportsNavBtn" data-view="reports">Reports</button>
     </div>
     <div id="tableNav" class="table-nav"></div>
   </nav>
 
   <main class="admin-main">
     <div id="status" class="status" role="status"></div>
+    <section id="shiftClosesPanel" class="approvals-panel" hidden>
+      <h2>Pending till closes</h2>
+      <p class="hint">Approve or deny end-of-till closes. Cash tills show counted vs expected drawer totals.</p>
+      <div id="shiftClosesForbidden" class="approvals-forbidden" hidden>
+        <p>Your account does not have supervisor privileges.</p>
+      </div>
+      <div id="shiftClosesList" class="approvals-list"></div>
+      <p id="shiftClosesEmpty" class="hint approvals-empty" hidden>No pending till closes.</p>
+    </section>
+    <section id="reportsPanel" class="reports-panel" hidden>
+      <h2>Store reports</h2>
+      <p class="hint">On-demand totals from live sales and inventory. Ranges use UTC calendar dates.</p>
+      <div class="reports-controls">
+        <label>
+          Period
+          <select id="reportsPeriod">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </label>
+        <label>
+          Anchor date
+          <input id="reportsAnchor" type="date">
+        </label>
+        <button type="button" id="reportsLoadBtn">Refresh</button>
+      </div>
+      <p id="reportsRangeLabel" class="reports-range-label hint"></p>
+      <h3>Sales</h3>
+      <div id="reportsSalesSummary" class="report-stats"></div>
+      <h4>Daily breakdown</h4>
+      <div id="reportsSalesByDay" class="report-table-wrap"></div>
+      <h4>Top products</h4>
+      <div id="reportsTopProducts" class="report-table-wrap"></div>
+      <h3>Inventory</h3>
+      <div id="reportsInventorySummary" class="report-stats"></div>
+      <h4>Low stock now</h4>
+      <div id="reportsLowStock" class="report-table-wrap"></div>
+      <h4>Movements in period</h4>
+      <div id="reportsMovements" class="report-table-wrap"></div>
+    </section>
     <section id="approvalsPanel" class="approvals-panel" hidden>
-      <h2>Pending cashier logins</h2>
-      <p id="approvalsHint" class="hint">Approve or deny register sign-in requests. <strong>Shift mode</strong> shows cash drawer vs credit-only before you approve.</p>
+      <h2>Pending till opens</h2>
+      <p id="approvalsHint" class="hint">Approve or deny till open requests. <strong>Till type</strong> shows cash drawer vs card-only before you approve.</p>
       <div id="approvalsLastAction" class="approvals-last-action" hidden role="status"></div>
       <div id="approvalsForbidden" class="approvals-forbidden" hidden>
         <p>Your account does not have supervisor privileges. Sign in with an IdP user in the <code>store-supervisors</code> group, or enable local PIN fallback for development.</p>
       </div>
       <div id="approvalsList" class="approvals-list"></div>
-      <p id="approvalsEmpty" class="hint approvals-empty" hidden>No pending login requests.</p>
+      <p id="approvalsEmpty" class="hint approvals-empty" hidden>No pending till open requests.</p>
     </section>
     <section id="tablePanel" class="table-panel">
       <h2 id="tableTitle">—</h2>
@@ -65,6 +112,8 @@
 
   <script src="/shared/dom-utils.js?v=20260611c"></script>
   <script src="/admin/admin-approvals.js?v=20260611c"></script>
-  <script src="/admin/admin.js?v=20260611c"></script>
+  <script src="/admin/admin-shift-closes.js?v=20260611c"></script>
+  <script src="/admin/admin-reports.js?v=20260613b"></script>
+  <script src="/admin/admin.js?v=20260613b"></script>
 </body>
 </html>

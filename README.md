@@ -245,7 +245,8 @@ Copy `.env.example` → `.env`. Never commit `.env`.
 |---------|----------------------|---------------|
 | `ORDS_BASE_URL` | `.env` | Terraform → container env |
 | `CASHIER_PIN`, `ADMIN_PIN` | `.env` | `cashier_pin`, `admin_pin` in `terraform.tfvars` → `terraform apply` |
-| `IDP_*`, `APP_PUBLIC_URL` | `.env` | Not deployed by default — add to container env or extend `terraform/container.tf` |
+| `IDP_*`, Model B flags | `.env` | `sync-container-env-to-terraform.sh` → `terraform apply` — see [docs/oci-deploy.md](docs/oci-deploy.md) |
+| `OPENING_CASH_FLOAT` | `.env` | `sync-container-env-to-terraform.sh` → `terraform apply` |
 
 After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && terraform apply` (no image rebuild required).
 
@@ -285,28 +286,33 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 
 ## Update the OCI container (after code changes)
 
-The tablet and browser talk to **whatever image is running** on the container instance. After changing `server.js`, `lib/`, or admin UI:
+**Full guide:** [docs/oci-deploy.md](docs/oci-deploy.md) — decision table (code vs env vs DB vs IdP vs tablet), verify steps, troubleshooting.
+
+**App code only** (preferred — keeps public IP):
 
 ```bash
 ./scripts/oci/redeploy-app-code.sh
 # optional BUILD_ID: ./scripts/oci/redeploy-app-code.sh my-change-20260606
 ```
 
-This builds for `linux/arm64`, pushes to the image tag in Terraform state, restarts the **same** container instance (keeps the public IP), and prints `/api/build-info`.
-
-Verify cashier login API (expect **200**, not **404**):
+Quick verify (expect **200**, not **404** on unlock):
 
 ```bash
 APP=$(./scripts/oci/confirm-public-url.sh)
+curl -s "$APP/api/build-info"
 curl -s -o /dev/null -w "%{http_code}\n" \
   -X POST "$APP/api/cashier/unlock" \
-  -H 'Content-Type: application/json' \
-  -d '{"pin":"8930"}'
+  -H 'Content-Type: application/json' -d '{"pin":"8930"}'
 ```
 
-**Env var changes** replace the instance (may detach reserved IP): `./scripts/oci/sync-container-env-to-terraform.sh` then `./scripts/oci/terraform-apply-container.sh` — see [docs/oci-network-recovery.md](docs/oci-network-recovery.md).
+| What changed | Command |
+|--------------|---------|
+| Server / admin UI | `redeploy-app-code.sh` |
+| `.env` / IdP / Model B flags | `sync-container-env-to-terraform.sh` → `terraform-apply-container.sh` |
+| DB schema | `reset-db.sh` or manual SQL — see [oci-deploy.md](docs/oci-deploy.md#3-database-schema) |
+| Tablet APK | `android-pos/RebuildReinstall.sh` |
 
-**New image tag via Terraform** (also may replace instance): `./scripts/oci/deploy-app-oci.sh <tag>`.
+**Env apply** may replace the instance (detach reserved IP): [docs/oci-network-recovery.md](docs/oci-network-recovery.md). **New image tag via Terraform:** `./scripts/oci/deploy-app-oci.sh <tag>`.
 
 ---
 

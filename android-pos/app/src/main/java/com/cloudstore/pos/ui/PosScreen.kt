@@ -143,6 +143,64 @@ fun PosScreen(viewModel: PosViewModel) {
         }
     }
 
+    when (val closeGate = state.authGate) {
+        is CashierAuthGate.ClosingTill -> {
+            val countedTotal = sumTillCounts(closeGate.denominations, closeGate.counts)
+            val headerHint = buildString {
+                append("Opening ${formatTillMoney(closeGate.openingCountedFloat)}")
+                append(" · Cash sales ${formatTillMoney(closeGate.cashSalesTotal)}")
+                append(" · Change ${formatTillMoney(closeGate.changeGivenTotal)}")
+            }
+            OpeningTillScreen(
+                expectedOpeningFloat = closeGate.expectedCloseFloat,
+                denominations = closeGate.denominations,
+                counts = closeGate.counts,
+                selectedDenominationId = closeGate.selectedDenominationId,
+                countedTotal = countedTotal,
+                status = state.status,
+                submitting = closeGate.submitting,
+                onSelectDenomination = viewModel::selectClosingDenomination,
+                onDigit = viewModel::appendClosingTillDigit,
+                onClearCount = viewModel::clearClosingTillCount,
+                onBackspaceCount = viewModel::backspaceClosingTillCount,
+                onPreviousDenomination = viewModel::selectPreviousClosingDenomination,
+                onNextDenomination = viewModel::selectNextClosingDenomination,
+                onSubmit = viewModel::submitClosingTill,
+                onNoCashToday = {},
+                onCancel = viewModel::cancelCloseTill,
+                screenTitle = "Close till",
+                referenceLabel = "Expected",
+                defaultStatus = "Count closing till",
+                submitButtonText = "Submit for approval",
+                showSecondaryButton = false,
+                headerHint = headerHint,
+                requireExactMatch = false,
+            )
+            return
+        }
+        is CashierAuthGate.ClosingCreditOnly -> {
+            ClosingCreditOnlyScreen(
+                status = state.status,
+                submitting = closeGate.submitting,
+                onSubmit = viewModel::submitClosingCreditOnly,
+                onCancel = viewModel::cancelCloseTill,
+            )
+            return
+        }
+        is CashierAuthGate.WaitingCloseApproval -> {
+            CloseApprovalWaitingScreen(
+                secondsRemaining = closeGate.secondsRemaining,
+                cashMode = closeGate.cashMode,
+                expectedCloseFloat = closeGate.expectedCloseFloat,
+                countedCloseFloat = closeGate.countedCloseFloat,
+                closeVariance = closeGate.closeVariance,
+                onCancel = viewModel::cancelCloseTill,
+            )
+            return
+        }
+        else -> Unit
+    }
+
     if (!state.isAuthenticated) {
         when (val gate = state.authGate) {
             CashierAuthGate.Checking -> {
@@ -187,13 +245,11 @@ fun PosScreen(viewModel: PosViewModel) {
                     viewModel.noteCashierIdentity(gate.email)
                 }
                 ApprovalWaitingScreen(
-                    email = gate.email,
                     secondsRemaining = gate.secondsRemaining,
                     cashMode = gate.cashMode,
                     expectedOpeningFloat = gate.expectedOpeningFloat,
                     openingCountedFloat = gate.openingCountedFloat,
                     openingVariance = gate.openingVariance,
-                    status = state.status,
                     onCancel = viewModel::cancelApprovalWait,
                 )
             }
@@ -208,6 +264,9 @@ fun PosScreen(viewModel: PosViewModel) {
                     onIdpSignIn = viewModel::openOidcSignIn,
                 )
             }
+            is CashierAuthGate.ClosingTill,
+            is CashierAuthGate.ClosingCreditOnly,
+            is CashierAuthGate.WaitingCloseApproval,
             CashierAuthGate.SignedIn -> Unit
         }
         if (!state.isAuthenticated) return
@@ -286,9 +345,16 @@ fun PosScreen(viewModel: PosViewModel) {
                         },
                     )
                     DrawerMenuButton(
-                        text = "Sign Out",
+                        text = "Sign out",
                         onClick = {
-                            viewModel.lock()
+                            viewModel.signOutForBreak()
+                            scope.launch { drawerState.close() }
+                        },
+                    )
+                    DrawerMenuButton(
+                        text = "Close till",
+                        onClick = {
+                            viewModel.beginCloseTill()
                             scope.launch { drawerState.close() }
                         },
                     )
@@ -694,6 +760,7 @@ fun PosScreen(viewModel: PosViewModel) {
                             payments = checkout.payments,
                             backEnabled = allowPaymentBack,
                             cashEnabled = state.cashEnabled,
+                            creditOnlyPayments = state.creditOnlyPayments(),
                             showCardOnFileButton = linkedCustomer?.hasCardOnFile == true,
                             amountInput = checkout.amountInput,
                             onAmountChange = { amount ->
@@ -1154,23 +1221,14 @@ private fun CashierAuthLoading(status: String) {
 
 @Composable
 private fun ApprovalWaitingScreen(
-    email: String?,
     secondsRemaining: Int?,
     cashMode: String?,
     expectedOpeningFloat: Double?,
     openingCountedFloat: Double?,
     openingVariance: Double?,
-    status: String,
     onCancel: () -> Unit,
 ) {
-    val timerText = when {
-        secondsRemaining != null && secondsRemaining >= 0 -> {
-            val mins = secondsRemaining / 60
-            val secs = secondsRemaining % 60
-            "Expires in %d:%02d".format(mins, secs)
-        }
-        else -> null
-    }
+    val timerText = approvalTimerText(secondsRemaining)
 
     Column(
         modifier = Modifier
@@ -1180,18 +1238,21 @@ private fun ApprovalWaitingScreen(
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "Waiting for supervisor",
+            text = "Till open — waiting for supervisor",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
             textAlign = TextAlign.Center,
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "Your login request was sent. A supervisor must approve before you can use the register.",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-        )
+        if (timerText != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = timerText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
         TillApprovalSummaryCard(
             cashMode = cashMode,
             expectedOpeningFloat = expectedOpeningFloat,
@@ -1199,30 +1260,6 @@ private fun ApprovalWaitingScreen(
             openingVariance = openingVariance,
             modifier = Modifier.padding(top = 16.dp),
         )
-        if (!email.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = email,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (timerText != null) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = timerText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (status.isNotBlank() && status != "Ready") {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = status,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-            )
-        }
         Spacer(modifier = Modifier.height(20.dp))
         OutlinedButton(
             onClick = onCancel,
@@ -1230,7 +1267,119 @@ private fun ApprovalWaitingScreen(
                 .width(PosNumpadColumnWidth)
                 .height(52.dp),
         ) {
-            Text("Cancel request")
+            Text("Cancel")
+        }
+    }
+}
+
+private fun formatTillMoney(value: Double?): String =
+    if (value == null) "—" else formatMoney(value)
+
+@Composable
+private fun ClosingCreditOnlyScreen(
+    status: String,
+    submitting: Boolean,
+    onSubmit: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 28.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "Close till",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Credit cards only shift. A supervisor must approve before this till closes and the next cashier can sign in.",
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+        )
+        if (status.isNotBlank() && status != "Ready") {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(text = status, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        Button(
+            onClick = onSubmit,
+            enabled = !submitting,
+            colors = PosButtonDefaults.teal(),
+            modifier = Modifier
+                .width(PosNumpadColumnWidth)
+                .height(52.dp),
+        ) {
+            Text(if (submitting) "Submitting…" else "Submit for approval")
+        }
+        OutlinedButton(
+            onClick = onCancel,
+            enabled = !submitting,
+            modifier = Modifier
+                .width(PosNumpadColumnWidth)
+                .height(52.dp)
+                .padding(top = 8.dp),
+        ) {
+            Text("Cancel")
+        }
+    }
+}
+
+@Composable
+private fun CloseApprovalWaitingScreen(
+    secondsRemaining: Int?,
+    cashMode: String?,
+    expectedCloseFloat: Double?,
+    countedCloseFloat: Double?,
+    closeVariance: Double?,
+    onCancel: () -> Unit,
+) {
+    val timerText = approvalTimerText(secondsRemaining)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 28.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "Till close — waiting for supervisor",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+        )
+        if (timerText != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = timerText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+        TillApprovalSummaryCard(
+            cashMode = cashMode,
+            expectedOpeningFloat = expectedCloseFloat,
+            openingCountedFloat = countedCloseFloat,
+            openingVariance = closeVariance,
+            modifier = Modifier.padding(top = 16.dp),
+            context = TillSummaryContext.Closing,
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        OutlinedButton(
+            onClick = onCancel,
+            modifier = Modifier
+                .width(PosNumpadColumnWidth)
+                .height(52.dp),
+        ) {
+            Text("Cancel")
         }
     }
 }

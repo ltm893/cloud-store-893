@@ -94,6 +94,53 @@ data class SubmitOpeningTillRequest(
     @Json(name = "countedTotal") val countedTotal: Double? = null,
 )
 
+data class CloseTillPreviewResponse(
+    val ok: Boolean = false,
+    @Json(name = "tillId") val tillId: Int? = null,
+    @Json(name = "posSessionId") val posSessionId: Int? = null,
+    @Json(name = "cashMode") val cashMode: String? = null,
+    @Json(name = "creditOnly") val creditOnly: Boolean = false,
+    @Json(name = "cartBlocked") val cartBlocked: Boolean = false,
+    @Json(name = "openingCountedFloat") val openingCountedFloat: Double? = null,
+    @Json(name = "expectedCloseFloat") val expectedCloseFloat: Double? = null,
+    @Json(name = "cashSalesTotal") val cashSalesTotal: Double? = null,
+    @Json(name = "changeGivenTotal") val changeGivenTotal: Double? = null,
+    val denominations: List<TillDenomination> = emptyList(),
+    @Json(name = "supervisorApprovalRequired") val supervisorApprovalRequired: Boolean = true,
+    val error: String? = null,
+)
+
+data class SubmitCloseTillRequest(
+    @Json(name = "cashMode") val cashMode: String,
+    val denominations: Map<String, Int>? = null,
+    @Json(name = "countedTotal") val countedTotal: Double? = null,
+)
+
+data class SubmitCloseTillResponse(
+    val ok: Boolean = false,
+    val pending: Boolean = false,
+    val approved: Boolean = false,
+    @Json(name = "closeToken") val closeToken: String? = null,
+    @Json(name = "cashMode") val cashMode: String? = null,
+    @Json(name = "closeVariance") val closeVariance: Double? = null,
+    @Json(name = "expectedCloseFloat") val expectedCloseFloat: Double? = null,
+    @Json(name = "countedCloseFloat") val countedCloseFloat: Double? = null,
+    val error: String? = null,
+)
+
+data class CloseTillStatusResponse(
+    val status: String? = null,
+    val ok: Boolean = false,
+    val pending: Boolean = false,
+    @Json(name = "closeToken") val closeToken: String? = null,
+    @Json(name = "secondsRemaining") val secondsRemaining: Int? = null,
+    @Json(name = "cashMode") val cashMode: String? = null,
+    @Json(name = "expectedCloseFloat") val expectedCloseFloat: Double? = null,
+    @Json(name = "countedCloseFloat") val countedCloseFloat: Double? = null,
+    @Json(name = "closeVariance") val closeVariance: Double? = null,
+    val reason: String? = null,
+)
+
 data class SubmitOpeningTillResponse(
     val ok: Boolean = false,
     val pending: Boolean = false,
@@ -121,8 +168,10 @@ data class CashierSessionResponse(
     @Json(name = "awaitingTill") val awaitingTill: Boolean = false,
     @Json(name = "cashTillEnabled") val cashTillEnabled: Boolean = false,
     @Json(name = "cashEnabled") val cashEnabled: Boolean? = null,
+    @Json(name = "cashMode") val cashMode: String? = null,
     @Json(name = "expectedOpeningFloat") val expectedOpeningFloat: Double? = null,
-    @Json(name = "shiftId") val shiftId: Int? = null,
+    @Json(name = "tillId") val tillId: Int? = null,
+    @Json(name = "posSessionId") val posSessionId: Int? = null,
     val approval: PendingApprovalInfo? = null,
     val error: String? = null,
 ) {

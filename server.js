@@ -48,11 +48,32 @@ const loginApprovalStore = createLoginApprovalStore({
   ordsTimestamp,
 });
 
-const { createRegisterShiftStore } = require('./lib/register-shifts');
-const registerShiftStore = createRegisterShiftStore({
+const { createTillStore } = require('./lib/tills');
+const tillStore = createTillStore({
   ordsGet,
   ordsPost,
+  ordsPut,
   ordsTimestamp,
+});
+
+const { createPosSessionStore } = require('./lib/pos-sessions');
+const posSessionStore = createPosSessionStore({
+  ordsGet,
+  ordsPost,
+  ordsPut,
+  ordsTimestamp,
+});
+
+const { createShiftCloseCash } = require('./lib/shift-close-cash');
+const shiftCloseCash = createShiftCloseCash({ ordsGet });
+const { createTillCloseStore } = require('./lib/shift-close-store');
+const shiftCloseStore = createTillCloseStore({
+  ordsGet,
+  ordsPost,
+  ordsPut,
+  ordsTimestamp,
+  shiftCloseCash,
+  tillStore,
 });
 
 const {
@@ -62,7 +83,7 @@ const {
   sessionAllowsCashPayments,
 } = require('./lib/cashier-auth');
 const { registerAdminAuth, requireAdminSession, protectAdminPages } = require('./lib/admin-auth');
-registerCashierAuth(app, { loginApprovalStore, registerShiftStore });
+registerCashierAuth(app, { loginApprovalStore, tillStore, posSessionStore, shiftCloseStore, ordsGet });
 registerAdminAuth(app);
 app.use('/admin', protectAdminPages);
 app.use('/api/admin', requireAdminSession);
@@ -569,6 +590,7 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
     subtotal_pre_member: summary.subtotalPreMember,
     member_discount_pre_tax: summary.memberDiscountPreTax,
     linked_893: linked893 ? 1 : 0,
+    till_id: cashierSession?.tillId ?? cashierSession?.shiftId ?? null,
     created_at: ordsTimestamp(),
   });
 
@@ -643,7 +665,7 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
 const { registerAdminRoutes } = require('./lib/admin-routes');
 const { registerSupervisorRoutes } = require('./lib/supervisor-routes');
 
-registerSupervisorRoutes(app, { loginApprovalStore });
+registerSupervisorRoutes(app, { loginApprovalStore, shiftCloseStore });
 registerAdminRoutes(app, { ordsGet, ordsPost, ordsPut, ordsDelete, ordsTimestamp });
 
 app.get('/api/sales/recent', asyncHandler(async (req, res) => {

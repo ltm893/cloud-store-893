@@ -29,6 +29,7 @@ locals {
       IDP_SUPERVISOR_GROUP                 = var.idp_supervisor_group
       IDP_POS_CASHIER_GROUP                = var.idp_pos_cashier_group
       CASHIER_APPROVAL_TTL_SEC             = var.cashier_supervisor_approval ? tostring(var.cashier_approval_ttl_sec) : ""
+      OPENING_CASH_FLOAT                   = var.opening_cash_float
     } : k => v if v != null && v != ""
   }
 

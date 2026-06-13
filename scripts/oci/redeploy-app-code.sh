@@ -82,7 +82,7 @@ echo ""
 echo "==> Verify build on running app:"
 APP="$("$OCI_SCRIPTS/confirm-public-url.sh" 2>/dev/null || true)"
 if [[ -n "$APP" ]]; then
-  curl -sS "${APP}/api/build-info" || true
+  curl -sS "${APP%/}/api/build-info" || true
   echo ""
 else
   echo "    APP=\$($OCI_SCRIPTS/confirm-public-url.sh)"

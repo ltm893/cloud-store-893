@@ -304,7 +304,7 @@ Integration CI does **not** run the destructive cart/checkout phase.
 
 ## OCI deploy verification (manual)
 
-Not part of `npm test`. After `./scripts/oci/redeploy-app-code.sh`:
+Not part of `npm test`. **Deploy steps:** [oci-deploy.md](oci-deploy.md). After `./scripts/oci/redeploy-app-code.sh`:
 
 ```bash
 APP=$(./scripts/oci/confirm-public-url.sh)
@@ -320,7 +320,7 @@ Optional API smoke against the live server (read-only; needs cashier unlock in s
 BASE_URL="$APP" SKIP_DESTRUCTIVE=yes ./scripts/test-api-curl.sh
 ```
 
-See [README.md](../README.md#update-the-oci-container-after-code-changes) and [oci-network-recovery.md](oci-network-recovery.md).
+See also [README.md](../README.md#update-the-oci-container-after-code-changes) and [oci-network-recovery.md](oci-network-recovery.md).
 
 ---
 
@@ -342,7 +342,7 @@ Integration tests do **not** cover Android UI (e.g. add-item error display); val
 
 - **Android POS** (`android-pos/`) — no JVM/instrumented tests yet
 - **Web POS / admin UI** — integration tests hit APIs and static admin pages, not browser JS
-- **OCI deploy / Terraform** — use `./scripts/oci/redeploy-app-code.sh` + curl checks above; not in `npm test`
+- **OCI deploy / Terraform** — [oci-deploy.md](oci-deploy.md); not in `npm test`
 - **IdP OAuth redirect flows** — auth tests only check redirect status codes, not full Oracle login
 - **Production OCI** — run integration against local ephemeral server + dev ADB, not `oci.cloudstore893.com`, unless you point `BASE_URL` there deliberately
 
@@ -370,7 +370,7 @@ Integration tests do **not** cover Android UI (e.g. add-item error display); val
 1. **Pure functions in `lib/`** → add `test/<module>.test.js`, run `npm test`.
 2. **New HTTP route** → extend `scripts/test-auth-protection.sh` and/or `scripts/test-api-curl.sh` (prefer non-destructive checks in the read-only section). Inventory/stock behavior → `scripts/test-inventory-api.sh`.
 3. **Model B behavior** → extend the opt-in scripts under `scripts/test-cashier-approval-*.sh`.
-4. **OCI deploy** → document curl/`redeploy-app-code.sh` steps in this file; optional read-only `test-api-curl.sh` against live URL.
+4. **OCI deploy** → [oci-deploy.md](oci-deploy.md); verify with curl / optional `test-api-curl.sh` against live URL.
 5. **CI** → unit tests run automatically; integration picks up changes to curl scripts when secrets are configured.
 
 Keep destructive DB writes out of the default `npm run test:all` path so daily runs stay safe against shared dev ADB.

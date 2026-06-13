@@ -340,6 +340,12 @@ variable "cashier_supervisor_pin_is_supervisor" {
   default     = false
 }
 
+variable "opening_cash_float" {
+  description = "Target opening drawer float (OPENING_CASH_FLOAT). Empty = credit-only till open by default."
+  type        = string
+  default     = ""
+}
+
 # ── Autonomous Database ───────────────────────────────────────────────────────
 
 variable "adb_db_name" {

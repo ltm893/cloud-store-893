@@ -218,6 +218,9 @@
   }
 
   function showApprovalsView() {
+    if (window.AdminShiftCloses?.isActive?.()) {
+      window.AdminShiftCloses.hide();
+    }
     active = true;
     approvalsPanelEl.hidden = false;
     tablePanelEl.hidden = true;

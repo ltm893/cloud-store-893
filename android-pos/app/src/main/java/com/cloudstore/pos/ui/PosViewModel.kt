@@ -1,11 +1,14 @@
 package com.cloudstore.pos.ui
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.CartResponse
 import com.cloudstore.pos.data.CashierSessionResponse
+import com.cloudstore.pos.data.CloseTillPreviewResponse
+import com.cloudstore.pos.data.SubmitCloseTillRequest
 import com.cloudstore.pos.data.SubmitOpeningTillRequest
 import com.cloudstore.pos.data.TillConfigResponse
 import com.cloudstore.pos.data.TillDenomination
@@ -58,6 +61,27 @@ sealed class CashierAuthGate {
         val selectedDenominationId: String? = null,
         val submitting: Boolean = false,
     ) : CashierAuthGate()
+    data class ClosingTill(
+        val expectedCloseFloat: Double? = null,
+        val openingCountedFloat: Double? = null,
+        val cashSalesTotal: Double? = null,
+        val changeGivenTotal: Double? = null,
+        val denominations: List<TillDenomination> = emptyList(),
+        val counts: Map<String, String> = emptyMap(),
+        val selectedDenominationId: String? = null,
+        val submitting: Boolean = false,
+    ) : CashierAuthGate()
+    data class ClosingCreditOnly(
+        val submitting: Boolean = false,
+    ) : CashierAuthGate()
+    data class WaitingCloseApproval(
+        val closeToken: String? = null,
+        val secondsRemaining: Int? = null,
+        val cashMode: String? = null,
+        val expectedCloseFloat: Double? = null,
+        val countedCloseFloat: Double? = null,
+        val closeVariance: Double? = null,
+    ) : CashierAuthGate()
 }
 
 data class PosUiState(
@@ -90,6 +114,7 @@ data class PosUiState(
     val queuedCheckoutCount: Int = 0,
     val queueSyncing: Boolean = false,
     val cashEnabled: Boolean = true,
+    val cashMode: String? = null,
     val receipt: SaleReceipt? = null,
     val receiptPrintMessage: String? = null,
     val receiptPrintProgress: Float = 0f,
@@ -101,12 +126,16 @@ data class PosUiState(
     fun customerDiscountActive(): Boolean = selectedCustomerId != null
 
     fun customerLinked(): Boolean = selectedCustomerId != null
+
+    /** Credit-only shift: exact balance payments only (no cash, no round-up quick amounts). */
+    fun creditOnlyPayments(): Boolean = cashMode == "credit_only" || !cashEnabled
 }
 
 class PosViewModel(
     private val repository: PosRepository,
     private val queueStore: OfflineQueueStore,
     private val userStore: CashierUserStore,
+    private val registerId: String,
 ) : ViewModel() {
     private data class FreshPos(
         val products: List<Product>,
@@ -117,6 +146,7 @@ class PosViewModel(
 
     private val _state = MutableStateFlow(PosUiState())
     val state: StateFlow<PosUiState> = _state.asStateFlow()
+    private var requireFreshIdpLogin = false
 
     private val _checkoutState = MutableStateFlow(CheckoutUiState())
     val checkoutState: StateFlow<CheckoutUiState> = _checkoutState.asStateFlow()
@@ -129,6 +159,7 @@ class PosViewModel(
     private var finalizeJob: Job? = null
     private var printReceiptJob: Job? = null
     private var approvalPollJob: Job? = null
+    private var closePollJob: Job? = null
     private var oidcCompleting = false
 
     init {
@@ -376,7 +407,13 @@ class PosViewModel(
                     )
                     if (!user.isNullOrBlank()) {
                         userStore.save(user)
-                        _state.update { it.copy(loggedInUser = user) }
+                    }
+                    _state.update {
+                        it.copy(
+                            loggedInUser = user?.takeIf { name -> !name.isBlank() } ?: it.loggedInUser,
+                            cashEnabled = resolveCashEnabled(session),
+                            cashMode = session.cashMode,
+                        )
                     }
                 }
                 .onFailure { err ->
@@ -486,9 +523,13 @@ class PosViewModel(
     }
 
     fun openOidcSignIn() {
+        if (requireFreshIdpLogin) {
+            repository.clearWebViewIdpSession()
+        }
         _state.update {
             it.copy(
                 authGate = CashierAuthGate.OidcSignIn,
+                idpLoginUrl = resolveIdpLoginUrl("/oauth/login"),
                 status = "Signing in…",
             )
         }
@@ -507,7 +548,8 @@ class PosViewModel(
     fun onOidcWebViewComplete(completionUrl: String) {
         if (oidcCompleting) return
         oidcCompleting = true
-        val pendingToken = parsePendingRequestToken(completionUrl)
+        val isResume = isCashierResumeRedirect(completionUrl)
+        val pendingToken = if (isResume) null else parsePendingRequestToken(completionUrl)
         if (!pendingToken.isNullOrBlank()) {
             repository.rememberPendingRequestToken(pendingToken)
         }
@@ -627,8 +669,14 @@ class PosViewModel(
         rememberCashierUserFromApproval(email, name)
     }
 
-    private fun resolveCashEnabled(session: CashierSessionResponse): Boolean =
-        session.cashEnabled ?: !session.cashTillEnabled
+    private fun resolveCashEnabled(session: CashierSessionResponse): Boolean {
+        when (session.cashMode) {
+            "credit_only" -> return false
+            "cash_and_credit" -> return true
+        }
+        session.cashEnabled?.let { return it }
+        return !session.cashTillEnabled
+    }
 
     private fun waitingApprovalFromSession(session: CashierSessionResponse): CashierAuthGate.WaitingApproval {
         val approval = session.approval
@@ -838,6 +886,11 @@ class PosViewModel(
                     showSignInGateFromCachedAuth("Sign-in expired — sign in with Oracle again")
                     return@onFailure
                 }
+                if (err is HttpException && err.code() == 409) {
+                    repository.clearCashierCookies()
+                    showSignInGateFromCachedAuth(registerInUseMessage(err))
+                    return@onFailure
+                }
                 _state.update { state ->
                     val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@onFailure
                     state.copy(
@@ -856,6 +909,7 @@ class PosViewModel(
                 loadOpeningTillGate()
             }
             session.ok -> {
+                requireFreshIdpLogin = false
                 stopApprovalPoll()
                 val resolvedUser = rememberCashierUserFromSession(session, _state.value)
                     ?: _state.value.loggedInUser
@@ -877,6 +931,7 @@ class PosViewModel(
                         idpEnabled = session.idpEnabled,
                         pinInput = "",
                         cashEnabled = resolveCashEnabled(session),
+                        cashMode = session.cashMode,
                         status = "Signed in",
                     )
                 }
@@ -903,12 +958,13 @@ class PosViewModel(
                 startApprovalPoll()
             }
             else -> {
-                val baseStatus = when (_state.value.status) {
-                    "Signed out" ->
+                val baseStatus = when {
+                    _state.value.status.startsWith("Signed off") -> _state.value.status
+                    _state.value.status == "Signed out" ->
                         if (session.supervisorApprovalRequired) {
-                            "Signed out — sign in with Oracle"
+                            "Signed off — sign in with your credentials"
                         } else {
-                            "Signed out"
+                            "Signed off"
                         }
                     else -> "Ready"
                 }
@@ -985,9 +1041,19 @@ class PosViewModel(
             val path = if (relative.startsWith("/")) relative else "/$relative"
             "$base$path"
         }
-        if (url.contains("client_kind=")) return url
+        val params = mutableListOf<String>()
+        if (!url.contains("client_kind=")) {
+            params.add("client_kind=tablet")
+        }
+        if (!url.contains("register_id=") && registerId.isNotBlank()) {
+            params.add("register_id=${Uri.encode(registerId)}")
+        }
+        if (requireFreshIdpLogin && !url.contains("prompt=")) {
+            params.add("prompt=login")
+        }
+        if (params.isEmpty()) return url
         val sep = if (url.contains('?')) '&' else '?'
-        return "$url${sep}client_kind=tablet"
+        return url + sep + params.joinToString("&")
     }
 
     private fun startApprovalPoll() {
@@ -1114,10 +1180,20 @@ class PosViewModel(
     private fun connectivityMessage(err: Throwable): String =
         when (err) {
             is CancellationException -> "Connection failed"
-            is HttpException -> "Server error (${err.code()})"
+            is HttpException -> when (err.code()) {
+                409 -> registerInUseMessage(err)
+                else -> "Server error (${err.code()})"
+            }
             is IOException -> "Cannot reach server — check Wi‑Fi and API URL (${BuildConfig.API_BASE_URL})"
             else -> err.message ?: "Connection failed"
         }
+
+    private fun registerInUseMessage(err: HttpException): String {
+        val body = err.response()?.errorBody()?.string().orEmpty()
+        val match = Regex(""""error"\s*:\s*"([^"]+)"""").find(body)
+        return match?.groupValues?.getOrNull(1)
+            ?: "This tablet is in use — the current cashier must sign off first"
+    }
 
     fun unlock() {
         val entered = _state.value.pinInput
@@ -1157,10 +1233,13 @@ class PosViewModel(
         }
     }
 
-    fun lock() {
+    fun signOutForBreak() {
         viewModelScope.launch {
             stopApprovalPoll()
+            stopClosePoll()
             runCatching { repository.logoutCashier() }
+            repository.clearWebViewIdpSession()
+            requireFreshIdpLogin = true
             userStore.clear()
             val authHints = _state.value
             _state.value = PosUiState(
@@ -1168,14 +1247,295 @@ class PosViewModel(
                 authGate = CashierAuthGate.Checking,
                 supervisorApprovalRequired = authHints.supervisorApprovalRequired,
                 idpEnabled = authHints.idpEnabled,
-                idpLoginUrl = authHints.idpLoginUrl,
+                idpLoginUrl = resolveIdpLoginUrl("/oauth/login"),
                 pinAllowed = authHints.pinAllowed && !authHints.supervisorApprovalRequired,
                 pinInput = "",
                 barcodeInput = "",
                 queuedCheckoutCount = queueStore.all().size,
-                status = "Signed out",
+                status = "Signed out — sign in with your credentials",
             )
             probeCashierSession()
+        }
+    }
+
+    fun beginCloseTill() {
+        viewModelScope.launch {
+            _state.update { it.copy(status = "Loading close till…") }
+            runCatching { repository.closeTillPreview() }
+                .onSuccess { preview ->
+                    if (!preview.ok) {
+                        _state.update { it.copy(status = preview.error ?: "Cannot close till") }
+                        return@onSuccess
+                    }
+                    if (preview.cartBlocked) {
+                        _state.update { it.copy(status = "Clear the cart before closing the till") }
+                        return@onSuccess
+                    }
+                    if (preview.creditOnly) {
+                        enterClosingCreditOnly()
+                    } else {
+                        enterClosingTill(preview)
+                    }
+                }
+                .onFailure { err ->
+                    _state.update { it.copy(status = connectivityMessage(err)) }
+                }
+        }
+    }
+
+    private fun enterClosingCreditOnly() {
+        stopClosePoll()
+        _state.update {
+            it.copy(
+                authGate = CashierAuthGate.ClosingCreditOnly(),
+                status = "Close credit-only shift",
+            )
+        }
+    }
+
+    private fun enterClosingTill(preview: CloseTillPreviewResponse) {
+        stopClosePoll()
+        _state.update {
+            it.copy(
+                authGate = CashierAuthGate.ClosingTill(
+                    expectedCloseFloat = preview.expectedCloseFloat,
+                    openingCountedFloat = preview.openingCountedFloat,
+                    cashSalesTotal = preview.cashSalesTotal,
+                    changeGivenTotal = preview.changeGivenTotal,
+                    denominations = preview.denominations,
+                    selectedDenominationId = preview.denominations.firstOrNull()?.id,
+                ),
+                status = "Count closing till",
+            )
+        }
+    }
+
+    fun submitClosingCreditOnly() {
+        submitCloseTillRequest(cashMode = "credit_only")
+    }
+
+    fun submitClosingTill() {
+        val gate = _state.value.authGate as? CashierAuthGate.ClosingTill ?: return
+        val nonEmptyCounts = gate.counts
+            .mapNotNull { (id, raw) ->
+                val count = raw.toIntOrNull() ?: 0
+                if (count > 0) id to count else null
+            }
+            .toMap()
+        val countedTotal = sumTillCounts(gate.denominations, gate.counts)
+        submitCloseTillRequest(
+            cashMode = "cash_and_credit",
+            denominations = nonEmptyCounts,
+            countedTotal = countedTotal,
+        )
+    }
+
+    fun cancelCloseTill() {
+        viewModelScope.launch {
+            stopClosePoll()
+            runCatching { repository.cancelCloseTill() }
+            _state.update {
+                it.copy(
+                    isAuthenticated = true,
+                    authGate = CashierAuthGate.SignedIn,
+                    status = "Close till cancelled",
+                )
+            }
+        }
+    }
+
+    private fun submitCloseTillRequest(
+        cashMode: String,
+        denominations: Map<String, Int>? = null,
+        countedTotal: Double? = null,
+    ) {
+        viewModelScope.launch {
+            _state.update { state ->
+                when (val gate = state.authGate) {
+                    is CashierAuthGate.ClosingTill ->
+                        state.copy(authGate = gate.copy(submitting = true), status = "Submitting close…")
+                    is CashierAuthGate.ClosingCreditOnly ->
+                        state.copy(authGate = gate.copy(submitting = true), status = "Submitting close…")
+                    else -> return@launch
+                }
+            }
+            runCatching {
+                repository.submitCloseTill(
+                    SubmitCloseTillRequest(
+                        cashMode = cashMode,
+                        denominations = denominations,
+                        countedTotal = countedTotal,
+                    ),
+                )
+            }.onSuccess { response ->
+                if (response.approved) {
+                    finishCloseTillSignedOff()
+                    return@onSuccess
+                }
+                if (response.pending) {
+                    _state.update {
+                        it.copy(
+                            isAuthenticated = false,
+                            authGate = CashierAuthGate.WaitingCloseApproval(
+                                closeToken = response.closeToken,
+                                cashMode = response.cashMode,
+                                expectedCloseFloat = response.expectedCloseFloat,
+                                countedCloseFloat = response.countedCloseFloat,
+                                closeVariance = response.closeVariance,
+                            ),
+                            status = "Waiting for supervisor to approve close",
+                        )
+                    }
+                    startClosePoll()
+                    return@onSuccess
+                }
+                resetCloseSubmitting(response.error ?: "Close till failed")
+            }.onFailure { err ->
+                resetCloseSubmitting(connectivityMessage(err))
+            }
+        }
+    }
+
+    private fun resetCloseSubmitting(message: String) {
+        _state.update { state ->
+            when (val gate = state.authGate) {
+                is CashierAuthGate.ClosingTill ->
+                    state.copy(authGate = gate.copy(submitting = false), status = message)
+                is CashierAuthGate.ClosingCreditOnly ->
+                    state.copy(authGate = gate.copy(submitting = false), status = message)
+                else -> state.copy(status = message)
+            }
+        }
+    }
+
+    private fun finishCloseTillSignedOff() {
+        stopClosePoll()
+        requireFreshIdpLogin = true
+        userStore.clear()
+        repository.clearWebViewIdpSession()
+        val authHints = _state.value
+        _state.value = PosUiState(
+            isAuthenticated = false,
+            authGate = CashierAuthGate.Checking,
+            supervisorApprovalRequired = authHints.supervisorApprovalRequired,
+            idpEnabled = authHints.idpEnabled,
+            idpLoginUrl = resolveIdpLoginUrl("/oauth/login"),
+            pinAllowed = authHints.pinAllowed && !authHints.supervisorApprovalRequired,
+            queuedCheckoutCount = queueStore.all().size,
+            status = "Till closed — sign in with your credentials",
+        )
+        viewModelScope.launch {
+            repository.clearCashierCookies()
+            probeCashierSession()
+        }
+    }
+
+    private fun startClosePoll() {
+        closePollJob?.cancel()
+        closePollJob = viewModelScope.launch {
+            pollCloseOnce()
+            while (true) {
+                delay(APPROVAL_POLL_MS)
+                pollCloseOnce()
+            }
+        }
+    }
+
+    private fun stopClosePoll() {
+        closePollJob?.cancel()
+        closePollJob = null
+    }
+
+    private suspend fun pollCloseOnce() {
+        val gate = _state.value.authGate as? CashierAuthGate.WaitingCloseApproval ?: return
+        val statusResult = runCatching { repository.closeTillStatus(gate.closeToken) }
+        if (statusResult.isFailure) return
+        val status = statusResult.getOrThrow()
+        when (status.status) {
+            "approved" -> finishCloseTillSignedOff()
+            "denied" -> {
+                stopClosePoll()
+                _state.update {
+                    it.copy(
+                        isAuthenticated = true,
+                        authGate = CashierAuthGate.SignedIn,
+                        status = status.reason?.let { r -> "Close denied: $r" } ?: "Supervisor denied close",
+                    )
+                }
+            }
+            "pending" -> {
+                _state.update { state ->
+                    val gate = state.authGate as? CashierAuthGate.WaitingCloseApproval ?: return@update state
+                    state.copy(
+                        authGate = gate.copy(
+                            secondsRemaining = status.secondsRemaining,
+                            expectedCloseFloat = status.expectedCloseFloat ?: gate.expectedCloseFloat,
+                            countedCloseFloat = status.countedCloseFloat ?: gate.countedCloseFloat,
+                            closeVariance = status.closeVariance ?: gate.closeVariance,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun closingTillGate(): CashierAuthGate.ClosingTill? =
+        _state.value.authGate as? CashierAuthGate.ClosingTill
+
+    fun selectClosingDenomination(denominationId: String) {
+        _state.update { state ->
+            val gate = state.authGate as? CashierAuthGate.ClosingTill ?: return@update state
+            state.copy(authGate = gate.copy(selectedDenominationId = denominationId))
+        }
+    }
+
+    fun appendClosingTillDigit(digit: Char) {
+        val gate = closingTillGate() ?: return
+        val id = gate.selectedDenominationId ?: return
+        val current = gate.counts[id].orEmpty()
+        if (current.length >= 4) return
+        val next = if (current == "0") digit.toString() else current + digit
+        updateClosingTillCount(id, next)
+    }
+
+    fun clearClosingTillCount() {
+        val id = closingTillGate()?.selectedDenominationId ?: return
+        updateClosingTillCount(id, "")
+    }
+
+    fun backspaceClosingTillCount() {
+        val gate = closingTillGate() ?: return
+        val id = gate.selectedDenominationId ?: return
+        val current = gate.counts[id].orEmpty()
+        updateClosingTillCount(id, current.dropLast(1))
+    }
+
+    fun selectPreviousClosingDenomination() {
+        _state.update { state ->
+            val gate = state.authGate as? CashierAuthGate.ClosingTill ?: return@update state
+            val denoms = gate.denominations
+            if (denoms.isEmpty()) return@update state
+            val currentIdx = denoms.indexOfFirst { it.id == gate.selectedDenominationId }
+            val prevIdx = if (currentIdx <= 0) denoms.lastIndex else currentIdx - 1
+            state.copy(authGate = gate.copy(selectedDenominationId = denoms[prevIdx].id))
+        }
+    }
+
+    fun selectNextClosingDenomination() {
+        _state.update { state ->
+            val gate = state.authGate as? CashierAuthGate.ClosingTill ?: return@update state
+            val denoms = gate.denominations
+            if (denoms.isEmpty()) return@update state
+            val currentIdx = denoms.indexOfFirst { it.id == gate.selectedDenominationId }
+            val nextIdx = if (currentIdx < 0 || currentIdx >= denoms.lastIndex) 0 else currentIdx + 1
+            state.copy(authGate = gate.copy(selectedDenominationId = denoms[nextIdx].id))
+        }
+    }
+
+    private fun updateClosingTillCount(id: String, value: String) {
+        _state.update { state ->
+            val gate = state.authGate as? CashierAuthGate.ClosingTill ?: return@update state
+            state.copy(authGate = gate.copy(counts = gate.counts + (id to value)))
         }
     }
 
@@ -1556,6 +1916,7 @@ class PosViewModel(
 
     override fun onCleared() {
         stopApprovalPoll()
+        stopClosePoll()
         super.onCleared()
     }
 
@@ -1565,11 +1926,12 @@ class PosViewModelFactory(
     private val repository: PosRepository,
     private val queueStore: OfflineQueueStore,
     private val userStore: CashierUserStore,
+    private val registerId: String,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(PosViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return PosViewModel(repository, queueStore, userStore) as T
+            return PosViewModel(repository, queueStore, userStore, registerId) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

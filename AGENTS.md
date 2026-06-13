@@ -43,4 +43,4 @@
 - **Admin:** `/admin/` + `lib/admin-*.js`; PIN session cookie.
 - **Tablet builds:** `android-pos` Gradle sets `API_BASE_URL` at configure time;
   override with `LAN_IP=…`. Cashier PIN is server-side (`POST /api/cashier/unlock`).
-- **OCI code updates:** `docker push` then `terraform apply`; 404 on unlock = stale image.
+- **OCI deploy:** [docs/oci-deploy.md](docs/oci-deploy.md) — app code: `./scripts/oci/redeploy-app-code.sh`; 404 on unlock = stale image.

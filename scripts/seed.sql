@@ -36,8 +36,19 @@ BEGIN EXECUTE IMMEDIATE 'DROP TABLE cart_items'; EXCEPTION WHEN OTHERS THEN NULL
 /
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE products';   EXCEPTION WHEN OTHERS THEN NULL; END;
 /
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE till_close_approvals'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE tills'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE pos_sessions'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE till_open_approvals'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+-- Legacy table names (pre pos_sessions / tills rename)
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE register_shift_closes'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE register_shifts'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE login_approval_requests'; EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE customers';  EXCEPTION WHEN OTHERS THEN NULL; END;
@@ -148,6 +159,7 @@ CREATE TABLE sales (
   subtotal_pre_member      NUMBER(10, 2)  NOT NULL,
   member_discount_pre_tax  NUMBER(10, 2)  DEFAULT 0 NOT NULL,
   linked_893               NUMBER(1)      DEFAULT 0 NOT NULL,
+  till_id                  NUMBER,
   created_at               TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL
 );
 
@@ -178,12 +190,32 @@ CREATE TABLE sale_payments (
 );
 
 
--- ── 7. LOGIN_APPROVAL_REQUESTS (Model B: IdP cashier + supervisor approval) ───
+-- ── 7. POS_SESSIONS (tablet OIDC wrapper — parent of till work) ───────────────
 
-CREATE TABLE login_approval_requests (
+CREATE TABLE pos_sessions (
+  id            NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  register_id   VARCHAR2(64),
+  cashier_sub   VARCHAR2(256)  NOT NULL,
+  cashier_email VARCHAR2(256),
+  status        VARCHAR2(20)   NOT NULL,
+  started_at    TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL,
+  ended_at      TIMESTAMP
+);
+
+CREATE INDEX pos_sessions_register_idx
+  ON pos_sessions (register_id, status, started_at);
+
+CREATE INDEX pos_sessions_cashier_idx
+  ON pos_sessions (cashier_sub, status, started_at);
+
+
+-- ── 7b. TILL_OPEN_APPROVALS (supervisor approves till open) ───────────────────
+
+CREATE TABLE till_open_approvals (
   id                     NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   request_token          VARCHAR2(64)   NOT NULL UNIQUE,
   status                 VARCHAR2(20)   NOT NULL,
+  pos_session_id         NUMBER         REFERENCES pos_sessions(id),
   cashier_sub            VARCHAR2(256)  NOT NULL,
   cashier_email          VARCHAR2(256),
   cashier_name           VARCHAR2(200),
@@ -195,7 +227,7 @@ CREATE TABLE login_approval_requests (
   resolved_by_sub        VARCHAR2(256),
   resolved_by_email      VARCHAR2(256),
   deny_reason            VARCHAR2(500),
-  cash_mode              VARCHAR2(20),
+  till_type              VARCHAR2(20),
   expected_opening_float NUMBER(10, 2),
   opening_counted_float  NUMBER(10, 2),
   opening_variance       NUMBER(10, 2),
@@ -203,30 +235,67 @@ CREATE TABLE login_approval_requests (
   till_submitted_at      TIMESTAMP
 );
 
-CREATE INDEX login_approval_requests_status_idx
-  ON login_approval_requests (status, expires_at);
+CREATE INDEX till_open_approvals_status_idx
+  ON till_open_approvals (status, expires_at);
 
 
--- ── 7b. REGISTER_SHIFTS (cash drawer shift open/close) ───────────────────────
+-- ── 7c. TILLS (supervised drawer session — history per open→close) ───────────
 
-CREATE TABLE register_shifts (
+CREATE TABLE tills (
   id                     NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  pos_session_id         NUMBER         NOT NULL REFERENCES pos_sessions(id),
   register_id            VARCHAR2(64),
   cashier_sub            VARCHAR2(256)  NOT NULL,
   cashier_email          VARCHAR2(256),
-  cash_mode              VARCHAR2(20)   NOT NULL,
+  till_type              VARCHAR2(20)   NOT NULL,
   expected_opening_float NUMBER(10, 2),
   opening_counted_float  NUMBER(10, 2),
   opening_denominations  CLOB,
   opening_variance       NUMBER(10, 2),
-  approval_request_token VARCHAR2(64),
+  open_approval_token    VARCHAR2(64),
+  cash_sales             NUMBER(10, 2)  DEFAULT 0 NOT NULL,
+  credit_sales           NUMBER(10, 2)  DEFAULT 0 NOT NULL,
   opened_at              TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL,
   closed_at              TIMESTAMP,
   status                 VARCHAR2(20)   NOT NULL
 );
 
-CREATE INDEX register_shifts_cashier_idx
-  ON register_shifts (cashier_sub, status, opened_at);
+CREATE INDEX tills_cashier_idx
+  ON tills (cashier_sub, status, opened_at);
+
+CREATE INDEX tills_register_idx
+  ON tills (register_id, status, opened_at);
+
+
+-- ── 7d. TILL_CLOSE_APPROVALS (supervisor approves till close / EOD) ──────────
+
+CREATE TABLE till_close_approvals (
+  id                     NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  close_token            VARCHAR2(64)   NOT NULL UNIQUE,
+  till_id                NUMBER         NOT NULL REFERENCES tills(id),
+  register_id            VARCHAR2(64),
+  cashier_sub            VARCHAR2(256)  NOT NULL,
+  cashier_email          VARCHAR2(256),
+  cashier_name           VARCHAR2(200),
+  till_type              VARCHAR2(20)   NOT NULL,
+  expected_close_float   NUMBER(10, 2),
+  counted_close_float    NUMBER(10, 2),
+  close_variance         NUMBER(10, 2),
+  close_denominations    CLOB,
+  cash_sales_total       NUMBER(10, 2),
+  change_given_total     NUMBER(10, 2),
+  opening_counted_float  NUMBER(10, 2),
+  status                 VARCHAR2(20)   NOT NULL,
+  requested_at           TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL,
+  expires_at             TIMESTAMP      NOT NULL,
+  resolved_at            TIMESTAMP,
+  resolved_by_sub        VARCHAR2(256),
+  resolved_by_email      VARCHAR2(256),
+  deny_reason            VARCHAR2(500)
+);
+
+CREATE INDEX till_close_approvals_status_idx
+  ON till_close_approvals (status, expires_at);
 
 
 -- ── 8. CART_VIEW ──────────────────────────────────────────────────────────────
@@ -466,15 +535,15 @@ END;
 /
 
 
--- ── 22. Enable ORDS on LOGIN_APPROVAL_REQUESTS table ─────────────────────────
+-- ── 22. Enable ORDS on TILL_OPEN_APPROVALS table ─────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
     p_enabled       => TRUE,
     p_schema        => 'ADMIN',
-    p_object        => 'LOGIN_APPROVAL_REQUESTS',
+    p_object        => 'TILL_OPEN_APPROVALS',
     p_object_type   => 'TABLE',
-    p_object_alias  => 'login_approval_requests',
+    p_object_alias  => 'till_open_approvals',
     p_auto_rest_auth => FALSE
   );
   COMMIT;
@@ -482,15 +551,47 @@ END;
 /
 
 
--- ── 22b. Enable ORDS on REGISTER_SHIFTS table ────────────────────────────────
+-- ── 22b. Enable ORDS on POS_SESSIONS table ───────────────────────────────────
 
 BEGIN
   ORDS.ENABLE_OBJECT(
     p_enabled       => TRUE,
     p_schema        => 'ADMIN',
-    p_object        => 'REGISTER_SHIFTS',
+    p_object        => 'POS_SESSIONS',
     p_object_type   => 'TABLE',
-    p_object_alias  => 'register_shifts',
+    p_object_alias  => 'pos_sessions',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
+-- ── 22c. Enable ORDS on TILLS table ──────────────────────────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'TILLS',
+    p_object_type   => 'TABLE',
+    p_object_alias  => 'tills',
+    p_auto_rest_auth => FALSE
+  );
+  COMMIT;
+END;
+/
+
+
+-- ── 22d. Enable ORDS on TILL_CLOSE_APPROVALS table ─────────────────────────────
+
+BEGIN
+  ORDS.ENABLE_OBJECT(
+    p_enabled       => TRUE,
+    p_schema        => 'ADMIN',
+    p_object        => 'TILL_CLOSE_APPROVALS',
+    p_object_type   => 'TABLE',
+    p_object_alias  => 'till_close_approvals',
     p_auto_rest_auth => FALSE
   );
   COMMIT;
@@ -626,8 +727,12 @@ SELECT 'sale_items', COUNT(*) FROM sale_items
 UNION ALL
 SELECT 'sale_payments', COUNT(*) FROM sale_payments
 UNION ALL
-SELECT 'login_approval_requests', COUNT(*) FROM login_approval_requests
+SELECT 'till_open_approvals', COUNT(*) FROM till_open_approvals
 UNION ALL
-SELECT 'register_shifts', COUNT(*) FROM register_shifts;
+SELECT 'pos_sessions', COUNT(*) FROM pos_sessions
+UNION ALL
+SELECT 'tills', COUNT(*) FROM tills
+UNION ALL
+SELECT 'till_close_approvals', COUNT(*) FROM till_close_approvals;
 
 exit

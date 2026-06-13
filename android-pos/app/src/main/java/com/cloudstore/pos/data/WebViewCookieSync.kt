@@ -4,6 +4,13 @@ import android.webkit.CookieManager
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
+/** Clear IdP / WebView cookies so the next sign-in requires credentials. */
+fun clearIdpWebViewCookies() {
+    val manager = CookieManager.getInstance()
+    manager.removeAllCookies(null)
+    manager.flush()
+}
+
 /** Copy cookies set by a WebView OIDC flow into [MemoryCookieJar] for Retrofit API calls. */
 object WebViewCookieSync {
     fun sync(baseUrl: String, cookieJar: MemoryCookieJar) {
@@ -13,6 +20,7 @@ object WebViewCookieSync {
             "$root/",
             "$root/?approval=pending",
             "$root/?awaiting_till=1",
+            "$root/?cashier_resume=1",
             "$root/oauth/callback",
         )
         for (url in urls) {

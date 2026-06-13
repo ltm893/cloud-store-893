@@ -73,6 +73,14 @@ fun OpeningTillScreen(
     onSubmit: () -> Unit,
     onNoCashToday: () -> Unit,
     onCancel: () -> Unit,
+    screenTitle: String = "Count opening till",
+    referenceLabel: String = "Target",
+    defaultStatus: String = "Count opening till",
+    submitButtonText: String = "Submit Till Count",
+    secondaryButtonText: String = "Credit Cards Only",
+    showSecondaryButton: Boolean = true,
+    headerHint: String = "Tap row → count · ↑↓ to move",
+    requireExactMatch: Boolean = true,
 ) {
     val denomScroll = rememberScrollState()
     val selectedBringIntoView = remember { BringIntoViewRequester() }
@@ -81,16 +89,31 @@ fun OpeningTillScreen(
     val targetReached = expectedOpeningFloat?.let { expected ->
         abs(countedTotal - expected) < 0.005
     } == true
+    val variance = expectedOpeningFloat?.let { roundMoney(countedTotal - it) }
+    val hasVariance = variance != null && abs(variance) > 0.005
+    val hasCounts = denominations.any { denom ->
+        (counts[denom.id]?.toIntOrNull() ?: 0) > 0
+    }
+    val canSubmit = targetReached || (!requireExactMatch && hasCounts)
     val summaryLine = buildString {
         if (expectedOpeningFloat != null) {
-            append("Target ${formatMoney(expectedOpeningFloat)}")
+            append("$referenceLabel ${formatMoney(expectedOpeningFloat)}")
         }
         append(" · Total ${formatMoney(countedTotal)}")
+        if (!requireExactMatch && hasVariance && variance != null) {
+            val sign = if (variance >= 0) "+" else ""
+            append(" · Variance $sign${formatMoney(variance)}")
+        }
     }
     val actionStatus = when {
         submitting -> "Submitting till count…"
-        status.isNotBlank() && status != "Ready" && status != "Count opening till" -> status
+        status.isNotBlank() && status != "Ready" && status != defaultStatus -> status
         targetReached -> "Ready to submit"
+        !requireExactMatch && hasCounts && hasVariance && variance != null -> {
+            val sign = if (variance >= 0) "+" else ""
+            "Variance $sign${formatMoney(variance)} — ready to submit"
+        }
+        !requireExactMatch && hasCounts -> "Ready to submit for approval"
         expectedOpeningFloat != null -> {
             val diff = roundMoney(expectedOpeningFloat - countedTotal)
             when {
@@ -134,7 +157,7 @@ fun OpeningTillScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "Count opening till",
+                text = screenTitle,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = PosBackground,
@@ -149,7 +172,7 @@ fun OpeningTillScreen(
                 modifier = Modifier.padding(top = 2.dp),
             )
             Text(
-                text = "Tap row → count · ↑↓ to move",
+                text = headerHint,
                 style = MaterialTheme.typography.labelSmall,
                 color = PosBackground.copy(alpha = 0.82f),
                 textAlign = TextAlign.Center,
@@ -248,29 +271,31 @@ fun OpeningTillScreen(
         ) {
             Button(
                 onClick = onSubmit,
-                enabled = !submitting && targetReached,
+                enabled = !submitting && canSubmit,
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(vertical = 10.dp),
                 colors = PosButtonDefaults.teal(),
             ) {
                 Text(
-                    if (submitting) "Submitting…" else "Submit Till Count",
+                    if (submitting) "Submitting…" else submitButtonText,
                     style = MaterialTheme.typography.labelLarge,
                     textAlign = TextAlign.Center,
                 )
             }
-            Button(
-                onClick = onNoCashToday,
-                enabled = !submitting,
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(vertical = 10.dp),
-                colors = PosButtonDefaults.teal(),
-            ) {
-                Text(
-                    "Credit Cards Only",
-                    style = MaterialTheme.typography.labelLarge,
-                    textAlign = TextAlign.Center,
-                )
+            if (showSecondaryButton) {
+                Button(
+                    onClick = onNoCashToday,
+                    enabled = !submitting,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(vertical = 10.dp),
+                    colors = PosButtonDefaults.teal(),
+                ) {
+                    Text(
+                        secondaryButtonText,
+                        style = MaterialTheme.typography.labelLarge,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
             Button(
                 onClick = onCancel,

@@ -92,13 +92,15 @@ resolve_url() {
 }
 
 APP_URL="$(resolve_url)"
+# No trailing slash — safe for "${APP}/api/..." (avoids //api/... 404s).
+APP_URL="${APP_URL%/}"
 printf '%s\n' "$APP_URL"
 
 if [[ "$PROBE" -eq 1 ]]; then
-  if curl -sk --max-time 8 -o /dev/null -w "%{http_code}" "${APP_URL}api/build-info" | grep -q '^200$'; then
-    echo "ok: GET ${APP_URL}api/build-info → 200" >&2
+  if curl -sk --max-time 8 -o /dev/null -w "%{http_code}" "${APP_URL}/api/build-info" | grep -q '^200$'; then
+    echo "ok: GET ${APP_URL}/api/build-info → 200" >&2
   else
-    echo "warn: GET ${APP_URL}api/build-info did not return 200" >&2
+    echo "warn: GET ${APP_URL}/api/build-info did not return 200" >&2
     exit 1
   fi
 fi

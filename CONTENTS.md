@@ -1,6 +1,6 @@
 # Cloud Store 893 — session handoff
 
-Last updated: 2026-06-10
+Last updated: 2026-06-11
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
 
@@ -174,43 +174,16 @@ npm run dev:up
 
 **Public URL:** `https://oci.cloudstore893.com/` — `./scripts/oci/confirm-public-url.sh` should print `https://…/`.
 
-**App code only** (preferred — does not replace container instance / IP):
+**Deploy guide (canonical):** [docs/oci-deploy.md](docs/oci-deploy.md) — code, env, DB schema, IdP, tablet APK, decision table, troubleshooting.
+
+**Typical code push:**
 
 ```bash
-./scripts/oci/redeploy-app-code.sh              # build, push, restart, verify build-info
-./scripts/oci/redeploy-app-code.sh my-change-id # optional BUILD_ID for /api/build-info
+./scripts/oci/redeploy-app-code.sh
+./scripts/oci/redeploy-app-code.sh my-change-id   # optional BUILD_ID
 ```
 
-Use `./scripts/oci/deploy-app-oci.sh <tag>` only when you need a **new image tag** via Terraform (may replace instance / detach reserved IP).
-
-**Env changes** (replaces container — may detach reserved IP; see recovery doc):
-
-```bash
-./scripts/oci/sync-container-env-to-terraform.sh
-./scripts/oci/terraform-apply-container.sh
-# then: ./scripts/oci/reattach-reserved-ip.sh (or --recover-network on apply scripts)
-```
-
-**Network recovery after replace:** [docs/oci-network-recovery.md](docs/oci-network-recovery.md) — `./scripts/oci/reattach-reserved-ip.sh`, operator env vars (`CLOUD_STORE_OCID`, `CLOUD_STORE_RESERVED_PUBLIC_IP_OCID`).
-
-1. **Live URL** — `./scripts/oci/confirm-public-url.sh` (not `terraform output app_url` after IP drift).
-
-2. **Verify API:**
-
-   ```bash
-   APP=$(./scripts/oci/confirm-public-url.sh)
-   curl -s -o /dev/null -w "%{http_code}\n" \
-     -X POST "$APP/api/cashier/unlock" \
-     -H 'Content-Type: application/json' -d '{"pin":"8930"}'
-   ```
-
-   Must be **200**. **404** = stale image (push + restart or redeploy).
-
-3. **Rebuild tablet APK** when API host changes:
-
-   ```bash
-   cd android-pos && ./RebuildReinstall.sh   # default https://oci.cloudstore893.com/
-   ```
+**Network recovery after container replace:** [docs/oci-network-recovery.md](docs/oci-network-recovery.md).
 
 ---
 

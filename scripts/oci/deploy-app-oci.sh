@@ -75,7 +75,7 @@ terraform apply -var="ocir_image_tag=${TAG}" -var="idp_signin_debug=true" -auto-
 
 echo ""
 echo "==> Verify build on running app:"
-echo "    APP=\$(./scripts/oci/confirm-public-url.sh) && curl -s \"\${APP}api/build-info\""
+echo "    APP=\$(./scripts/oci/confirm-public-url.sh) && curl -s \"\${APP}/api/build-info\""
 echo ""
 
 if [[ "$plan_signal" -eq 1 ]]; then
