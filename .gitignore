@@ -51,5 +51,8 @@ android-pos/.cxx/
 ios-admin/Config/Local.xcconfig
 ios-admin/**/xcuserdata/
 ios-admin/**/DerivedData/
+ios-pos/Config/Local.xcconfig
+ios-pos/**/xcuserdata/
+ios-pos/**/DerivedData/
 
 .venv-certbot/

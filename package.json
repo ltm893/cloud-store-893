@@ -24,6 +24,8 @@
     "test:model-b-session": "./scripts/test-model-b-session.sh",
     "test:model-b-session:ephemeral": "RUN_EPHEMERAL=yes ./scripts/test-model-b-session.sh",
     "test:ios-admin": "./scripts/run-ios-admin-tests.sh",
+    "test:ios-pos": "./scripts/run-ios-pos-tests.sh",
+    "ios-pos:local-config": "./scripts/sync-ios-pos-local-config.sh",
     "migrate-db:till": "./scripts/migrate-login-approval-till.sh",
     "ios:local-config": "./scripts/sync-ios-local-config.sh"
   },

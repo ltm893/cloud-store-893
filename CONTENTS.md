@@ -13,6 +13,7 @@ Use this file to resume work in a new session. Canonical setup details live in [
 | **Web POS** (`/`) | Product grid, cart, checkout |
 | **Admin** (`/admin/`) | CRUD on DB tables; PIN login (`ADMIN_PIN`) |
 | **Tablet POS** | Numpad login; unified Pay panel; split tender cash/card; auto-finalize at zero balance |
+| **iPad POS** (`ios-pos/`) | **Auth + opening till + register selling (P0–P2, P3.1–P3.2):** OIDC, cookie bridge, session probe, supervisor approval, opening till count, scan/Add Id cart, checkout, split tender. **Till close (P3.3) next.** |
 | **Local dev** | `npm run dev:up` + `.env` |
 | **OCI app URL** | **`https://oci.cloudstore893.com/`** (no `:3000`) — LB :443 → container :3000 |
 | **HTTPS / TLS** | **Let's Encrypt** (public CA) via **OCI Certificates** → LB listener by cert OCID (see below) |
@@ -215,6 +216,51 @@ npm run dev:up
 - **Cash pay:** Split tender on **Pay** → amount numpad + **Cash** / **Card** / **CardOnFile** (when linked customer has card); auto-finalize at $0 balance.
 - **`API_BASE_URL`:** Gradle configure time — see build log; override with `LAN_IP=…`.
 - **Theme:** Lister palette in `ui/theme/` — see [AGENTS.md](AGENTS.md).
+
+### iOS iPad POS (`ios-pos/`) — in progress
+
+**Status (2026-06-14):** Phases **P0–P2**, **P3.1 opening till**, and **P3.2 register selling** complete on branch `dev`. Register UI matches Android: scan/Add Id + numpad (no product browse grid). **P3.3 till close** next.
+
+| Done | Not yet |
+|------|---------|
+| Xcode project, `API_BASE_URL` xcconfig | Till close flow |
+| `client_kind=ios`, `register_id=tablet-{uuid}` | PIN numpad (dev) |
+| OIDC WebView + cookie bridge | Camera barcode scan |
+| Session probe + auth gates | Customer / member discount |
+| Supervisor approval poll (2.5s) + Cancel | Admin WebView from POS menu |
+| Break → `POST /api/cashier/logout` | Offline queue |
+| Opening till count UI | Cart quantity edit panel |
+| Scan/Add Id, cart rows, checkout, split tender | |
+| Thread-safe `CookieStore` (parallel cart API) | |
+
+**Docs**
+
+- [docs/ios-pos-port-plan.md](docs/ios-pos-port-plan.md) — master plan (P0–P5)
+- [docs/pos-session-cookies.md](docs/pos-session-cookies.md) — cookie / OIDC state machine
+- [docs/pos-client-identifiers.md](docs/pos-client-identifiers.md) — `client_kind` + `register_id`
+- [ios-pos/README.md](ios-pos/README.md) — open, run, test commands
+
+**Open / unit tests**
+
+```bash
+open ios-pos/CloudStorePos.xcodeproj   # iPad simulator, set signing Team
+npm run test:ios-pos                   # 27 XCTests (last run: pass)
+npm run ios-pos:local-config           # after npm run dev:up, for LAN API
+```
+
+**Manual test checklist (when you catch up)**
+
+1. **OCI Model B (credit-only):** Sign in with Oracle → waiting screen → approve in admin → lands **Signed in** without tapping Check again.
+2. **Cancel:** On waiting screen, **Cancel** → back to sign-in; no stale pending on re-login.
+3. **Break:** Signed in → **Break (logout)** → sign-in gate; re-OIDC with `prompt=login`.
+4. **Resume till:** After break, same cashier + same iPad → `cashier_resume=1` path → signed in (till still active).
+5. **Cash float** (if `OPENING_CASH_FLOAT` set on server): OIDC → opening till count → submit → supervisor approval → signed in.
+6. **Sell:** Sign in → enter product ID or barcode via numpad → **Add** → **Pay** → cash/card split → receipt.
+7. **Register lock:** Second tablet/iPad with same `register_id` while till active → sign-in error (409).
+
+**Next session:** P3.3 till close. See plan doc.
+
+**Reference:** `ios-admin/` — admin WebView pattern (`client_kind=ios`); reuse for POS Admin menu later.
 
 ### Tablet POS UI layout (ASCII)
 

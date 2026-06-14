@@ -1,0 +1,634 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B20000010000000000000001 /* CloudStorePosApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000001 /* CloudStorePosApp.swift */; };
+		B20000010000000000000002 /* PosRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000002 /* PosRootView.swift */; };
+		B20000010000000000000003 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000003 /* AppConfig.swift */; };
+		B20000010000000000000004 /* AppConfigLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000004 /* AppConfigLogic.swift */; };
+		B20000010000000000000005 /* RegisterId.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000005 /* RegisterId.swift */; };
+		B20000010000000000000006 /* RegisterIdLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000006 /* RegisterIdLogic.swift */; };
+		B20000010000000000000007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000007 /* Assets.xcassets */; };
+		B20000010000000000000008 /* AppConfigLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000008 /* AppConfigLogicTests.swift */; };
+		B20000010000000000000009 /* RegisterIdLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000009 /* RegisterIdLogicTests.swift */; };
+		B2000001000000000000000A /* InfoPlistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000000A /* InfoPlistTests.swift */; };
+		B2000001000000000000000B /* OidcRedirectLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000018 /* OidcRedirectLogic.swift */; };
+		B2000001000000000000000C /* CookieStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000019 /* CookieStore.swift */; };
+		B2000001000000000000000D /* WebViewCookieSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000001A /* WebViewCookieSync.swift */; };
+		B2000001000000000000000E /* CashierSessionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000001B /* CashierSessionModels.swift */; };
+		B2000001000000000000000F /* PosAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000001C /* PosAPIClient.swift */; };
+		B20000010000000000000010 /* PosSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000001D /* PosSessionViewModel.swift */; };
+		B20000010000000000000011 /* OidcWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000001E /* OidcWebView.swift */; };
+		B20000010000000000000012 /* OidcRedirectLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000001F /* OidcRedirectLogicTests.swift */; };
+		B20000010000000000000013 /* ApprovalStatusModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000020 /* ApprovalStatusModels.swift */; };
+		B20000010000000000000014 /* TillApprovalSummaryLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000021 /* TillApprovalSummaryLogic.swift */; };
+		B20000010000000000000015 /* TillApprovalSummaryLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000022 /* TillApprovalSummaryLogicTests.swift */; };
+		B20000010000000000000016 /* TillModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000023 /* TillModels.swift */; };
+		B20000010000000000000017 /* TillCountLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000024 /* TillCountLogic.swift */; };
+		B2000001000000000000001B /* PosNumberPad.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000025 /* PosNumberPad.swift */; };
+		B2000001000000000000001C /* OpeningTillScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000026 /* OpeningTillScreen.swift */; };
+		B2000001000000000000001D /* TillCountLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000027 /* TillCountLogicTests.swift */; };
+		B2000001000000000000001E /* SaleModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000028 /* SaleModels.swift */; };
+		B2000001000000000000001F /* CartTotalsLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000029 /* CartTotalsLogic.swift */; };
+		B20000010000000000000020 /* CheckoutPaymentLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000002A /* CheckoutPaymentLogic.swift */; };
+		B20000010000000000000021 /* PosRegisterViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000002B /* PosRegisterViewModel.swift */; };
+		B20000010000000000000022 /* RegisterScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000002C /* RegisterScreen.swift */; };
+		B20000010000000000000023 /* CheckoutPaymentPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000002D /* CheckoutPaymentPanel.swift */; };
+		B20000010000000000000024 /* CartTotalsLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000002E /* CartTotalsLogicTests.swift */; };
+		B20000010000000000000025 /* PosLayoutMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000002F /* PosLayoutMetrics.swift */; };
+		B20000010000000000000026 /* PosPanelStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000030 /* PosPanelStyle.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B20000020000000000000001 /* CloudStorePosApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudStorePosApp.swift; sourceTree = "<group>"; };
+		B20000020000000000000002 /* PosRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosRootView.swift; sourceTree = "<group>"; };
+		B20000020000000000000003 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		B20000020000000000000004 /* AppConfigLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigLogic.swift; sourceTree = "<group>"; };
+		B20000020000000000000005 /* RegisterId.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterId.swift; sourceTree = "<group>"; };
+		B20000020000000000000006 /* RegisterIdLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterIdLogic.swift; sourceTree = "<group>"; };
+		B20000020000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B2000002000000000000000B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B2000002000000000000000C /* CloudStorePos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CloudStorePos.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B2000002000000000000000D /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		B2000002000000000000000E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		B2000002000000000000000F /* CloudStorePosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CloudStorePosTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000020000000000000008 /* AppConfigLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigLogicTests.swift; sourceTree = "<group>"; };
+		B20000020000000000000009 /* RegisterIdLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterIdLogicTests.swift; sourceTree = "<group>"; };
+		B2000002000000000000000A /* InfoPlistTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoPlistTests.swift; sourceTree = "<group>"; };
+		B20000020000000000000018 /* OidcRedirectLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OidcRedirectLogic.swift; sourceTree = "<group>"; };
+		B20000020000000000000019 /* CookieStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieStore.swift; sourceTree = "<group>"; };
+		B2000002000000000000001A /* WebViewCookieSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewCookieSync.swift; sourceTree = "<group>"; };
+		B2000002000000000000001B /* CashierSessionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashierSessionModels.swift; sourceTree = "<group>"; };
+		B2000002000000000000001C /* PosAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosAPIClient.swift; sourceTree = "<group>"; };
+		B2000002000000000000001D /* PosSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosSessionViewModel.swift; sourceTree = "<group>"; };
+		B2000002000000000000001E /* OidcWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OidcWebView.swift; sourceTree = "<group>"; };
+		B2000002000000000000001F /* OidcRedirectLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OidcRedirectLogicTests.swift; sourceTree = "<group>"; };
+		B20000020000000000000020 /* ApprovalStatusModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalStatusModels.swift; sourceTree = "<group>"; };
+		B20000020000000000000021 /* TillApprovalSummaryLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TillApprovalSummaryLogic.swift; sourceTree = "<group>"; };
+		B20000020000000000000022 /* TillApprovalSummaryLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TillApprovalSummaryLogicTests.swift; sourceTree = "<group>"; };
+		B20000020000000000000023 /* TillModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TillModels.swift; sourceTree = "<group>"; };
+		B20000020000000000000024 /* TillCountLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TillCountLogic.swift; sourceTree = "<group>"; };
+		B20000020000000000000025 /* PosNumberPad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosNumberPad.swift; sourceTree = "<group>"; };
+		B20000020000000000000026 /* OpeningTillScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpeningTillScreen.swift; sourceTree = "<group>"; };
+		B20000020000000000000027 /* TillCountLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TillCountLogicTests.swift; sourceTree = "<group>"; };
+		B20000020000000000000028 /* SaleModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaleModels.swift; sourceTree = "<group>"; };
+		B20000020000000000000029 /* CartTotalsLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartTotalsLogic.swift; sourceTree = "<group>"; };
+		B2000002000000000000002A /* CheckoutPaymentLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckoutPaymentLogic.swift; sourceTree = "<group>"; };
+		B2000002000000000000002B /* PosRegisterViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosRegisterViewModel.swift; sourceTree = "<group>"; };
+		B2000002000000000000002C /* RegisterScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterScreen.swift; sourceTree = "<group>"; };
+		B2000002000000000000002D /* CheckoutPaymentPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckoutPaymentPanel.swift; sourceTree = "<group>"; };
+		B2000002000000000000002E /* CartTotalsLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartTotalsLogicTests.swift; sourceTree = "<group>"; };
+		B2000002000000000000002F /* PosLayoutMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosLayoutMetrics.swift; sourceTree = "<group>"; };
+		B20000020000000000000030 /* PosPanelStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosPanelStyle.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXContainerItemProxy section */
+		B20000090000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B20000070000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B20000050000000000000001;
+			remoteInfo = CloudStorePos;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B20000030000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000030000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B20000040000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				B20000040000000000000002 /* CloudStorePos */,
+				B20000040000000000000005 /* CloudStorePosTests */,
+				B20000040000000000000003 /* Config */,
+				B20000040000000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B20000040000000000000002 /* CloudStorePos */ = {
+			isa = PBXGroup;
+			children = (
+				B20000020000000000000001 /* CloudStorePosApp.swift */,
+				B20000020000000000000002 /* PosRootView.swift */,
+				B2000004000000000000000D /* Views */,
+				B20000040000000000000008 /* ViewModels */,
+				B20000040000000000000009 /* WebViews */,
+				B2000004000000000000000A /* API */,
+				B2000004000000000000000B /* Logic */,
+				B20000040000000000000006 /* Config */,
+				B20000040000000000000007 /* Session */,
+				B20000020000000000000007 /* Assets.xcassets */,
+				B2000002000000000000000B /* Info.plist */,
+			);
+			path = CloudStorePos;
+			sourceTree = "<group>";
+		};
+		B20000040000000000000003 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				B2000002000000000000000D /* Debug.xcconfig */,
+				B2000002000000000000000E /* Release.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		B20000040000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B2000002000000000000000C /* CloudStorePos.app */,
+				B2000002000000000000000F /* CloudStorePosTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B20000040000000000000005 /* CloudStorePosTests */ = {
+			isa = PBXGroup;
+			children = (
+				B20000020000000000000008 /* AppConfigLogicTests.swift */,
+				B20000020000000000000009 /* RegisterIdLogicTests.swift */,
+				B2000002000000000000000A /* InfoPlistTests.swift */,
+				B2000002000000000000001F /* OidcRedirectLogicTests.swift */,
+				B20000020000000000000022 /* TillApprovalSummaryLogicTests.swift */,
+				B20000020000000000000027 /* TillCountLogicTests.swift */,
+				B2000002000000000000002E /* CartTotalsLogicTests.swift */,
+			);
+			path = CloudStorePosTests;
+			sourceTree = "<group>";
+		};
+		B20000040000000000000006 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				B20000020000000000000003 /* AppConfig.swift */,
+				B20000020000000000000004 /* AppConfigLogic.swift */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		B20000040000000000000007 /* Session */ = {
+			isa = PBXGroup;
+			children = (
+				B20000020000000000000005 /* RegisterId.swift */,
+				B20000020000000000000006 /* RegisterIdLogic.swift */,
+				B20000020000000000000018 /* OidcRedirectLogic.swift */,
+				B20000020000000000000019 /* CookieStore.swift */,
+				B2000002000000000000001A /* WebViewCookieSync.swift */,
+			);
+			path = Session;
+			sourceTree = "<group>";
+		};
+		B20000040000000000000008 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				B2000002000000000000001D /* PosSessionViewModel.swift */,
+				B2000002000000000000002B /* PosRegisterViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		B20000040000000000000009 /* WebViews */ = {
+			isa = PBXGroup;
+			children = (
+				B2000002000000000000001E /* OidcWebView.swift */,
+			);
+			path = WebViews;
+			sourceTree = "<group>";
+		};
+		B2000004000000000000000A /* API */ = {
+			isa = PBXGroup;
+			children = (
+				B2000002000000000000001B /* CashierSessionModels.swift */,
+				B20000020000000000000020 /* ApprovalStatusModels.swift */,
+				B20000020000000000000023 /* TillModels.swift */,
+				B20000020000000000000028 /* SaleModels.swift */,
+				B2000002000000000000001C /* PosAPIClient.swift */,
+			);
+			path = API;
+			sourceTree = "<group>";
+		};
+		B2000004000000000000000B /* Logic */ = {
+			isa = PBXGroup;
+			children = (
+				B20000020000000000000021 /* TillApprovalSummaryLogic.swift */,
+				B20000020000000000000024 /* TillCountLogic.swift */,
+				B20000020000000000000029 /* CartTotalsLogic.swift */,
+				B2000002000000000000002A /* CheckoutPaymentLogic.swift */,
+			);
+			path = Logic;
+			sourceTree = "<group>";
+		};
+		B2000004000000000000000D /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B2000002000000000000002F /* PosLayoutMetrics.swift */,
+				B20000020000000000000030 /* PosPanelStyle.swift */,
+				B20000020000000000000025 /* PosNumberPad.swift */,
+				B20000020000000000000026 /* OpeningTillScreen.swift */,
+				B2000002000000000000002C /* RegisterScreen.swift */,
+				B2000002000000000000002D /* CheckoutPaymentPanel.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B20000050000000000000001 /* CloudStorePos */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B20000060000000000000003 /* Build configuration list for PBXNativeTarget "CloudStorePos" */;
+			buildPhases = (
+				B20000030000000000000002 /* Sources */,
+				B20000030000000000000001 /* Frameworks */,
+				B20000030000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CloudStorePos;
+			productName = CloudStorePos;
+			productReference = B2000002000000000000000C /* CloudStorePos.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B20000050000000000000002 /* CloudStorePosTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B20000060000000000000004 /* Build configuration list for PBXNativeTarget "CloudStorePosTests" */;
+			buildPhases = (
+				B20000030000000000000005 /* Sources */,
+				B20000030000000000000004 /* Frameworks */,
+				B20000030000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B200000A0000000000000001 /* PBXTargetDependency */,
+			);
+			name = CloudStorePosTests;
+			productName = CloudStorePosTests;
+			productReference = B2000002000000000000000F /* CloudStorePosTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B20000070000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					B20000050000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					B20000050000000000000002 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = B20000050000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = B20000060000000000000001 /* Build configuration list for PBXProject "CloudStorePos" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B20000040000000000000001;
+			productRefGroup = B20000040000000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B20000050000000000000001 /* CloudStorePos */,
+				B20000050000000000000002 /* CloudStorePosTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B20000030000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B20000010000000000000007 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000030000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B20000030000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B20000010000000000000001 /* CloudStorePosApp.swift in Sources */,
+				B20000010000000000000002 /* PosRootView.swift in Sources */,
+				B20000010000000000000003 /* AppConfig.swift in Sources */,
+				B20000010000000000000004 /* AppConfigLogic.swift in Sources */,
+				B20000010000000000000005 /* RegisterId.swift in Sources */,
+				B20000010000000000000006 /* RegisterIdLogic.swift in Sources */,
+				B2000001000000000000000B /* OidcRedirectLogic.swift in Sources */,
+				B2000001000000000000000C /* CookieStore.swift in Sources */,
+				B2000001000000000000000D /* WebViewCookieSync.swift in Sources */,
+				B2000001000000000000000E /* CashierSessionModels.swift in Sources */,
+				B2000001000000000000000F /* PosAPIClient.swift in Sources */,
+				B20000010000000000000010 /* PosSessionViewModel.swift in Sources */,
+				B20000010000000000000011 /* OidcWebView.swift in Sources */,
+				B20000010000000000000013 /* ApprovalStatusModels.swift in Sources */,
+				B20000010000000000000014 /* TillApprovalSummaryLogic.swift in Sources */,
+				B20000010000000000000016 /* TillModels.swift in Sources */,
+				B20000010000000000000017 /* TillCountLogic.swift in Sources */,
+				B2000001000000000000001B /* PosNumberPad.swift in Sources */,
+				B2000001000000000000001C /* OpeningTillScreen.swift in Sources */,
+				B2000001000000000000001E /* SaleModels.swift in Sources */,
+				B2000001000000000000001F /* CartTotalsLogic.swift in Sources */,
+				B20000010000000000000020 /* CheckoutPaymentLogic.swift in Sources */,
+				B20000010000000000000021 /* PosRegisterViewModel.swift in Sources */,
+				B20000010000000000000022 /* RegisterScreen.swift in Sources */,
+				B20000010000000000000023 /* CheckoutPaymentPanel.swift in Sources */,
+				B20000010000000000000025 /* PosLayoutMetrics.swift in Sources */,
+				B20000010000000000000026 /* PosPanelStyle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B20000030000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B20000010000000000000008 /* AppConfigLogicTests.swift in Sources */,
+				B20000010000000000000009 /* RegisterIdLogicTests.swift in Sources */,
+				B2000001000000000000000A /* InfoPlistTests.swift in Sources */,
+				B20000010000000000000012 /* OidcRedirectLogicTests.swift in Sources */,
+				B20000010000000000000015 /* TillApprovalSummaryLogicTests.swift in Sources */,
+				B2000001000000000000001D /* TillCountLogicTests.swift in Sources */,
+				B20000010000000000000024 /* CartTotalsLogicTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B200000A0000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B20000050000000000000001 /* CloudStorePos */;
+			targetProxy = B20000090000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		B20000080000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B2000002000000000000000D /* Debug.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = MTF973MBCB;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B20000080000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B2000002000000000000000E /* Release.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = MTF973MBCB;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B20000080000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CloudStorePos/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cloudstore.pos;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Debug;
+		};
+		B20000080000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CloudStorePos/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cloudstore.pos;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Release;
+		};
+		B20000080000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cloudstore.pos.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CloudStorePos.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CloudStorePos";
+			};
+			name = Debug;
+		};
+		B20000080000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cloudstore.pos.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CloudStorePos.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CloudStorePos";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B20000060000000000000001 /* Build configuration list for PBXProject "CloudStorePos" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B20000080000000000000001 /* Debug */,
+				B20000080000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B20000060000000000000003 /* Build configuration list for PBXNativeTarget "CloudStorePos" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B20000080000000000000003 /* Debug */,
+				B20000080000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B20000060000000000000004 /* Build configuration list for PBXNativeTarget "CloudStorePosTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B20000080000000000000005 /* Debug */,
+				B20000080000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B20000070000000000000001 /* Project object */;
+}
