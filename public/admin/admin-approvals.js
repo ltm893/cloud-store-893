@@ -5,10 +5,7 @@
 (function () {
   const APPROVAL_POLL_MS = 4000;
 
-  const approvalsNavEl = document.getElementById('approvalsNav');
-  const approvalsNavBtn = document.getElementById('approvalsNavBtn');
   const approvalsPanelEl = document.getElementById('approvalsPanel');
-  const tablePanelEl = document.getElementById('tablePanel');
   const approvalsListEl = document.getElementById('approvalsList');
   const approvalsEmptyEl = document.getElementById('approvalsEmpty');
   const approvalsForbiddenEl = document.getElementById('approvalsForbidden');
@@ -211,23 +208,10 @@
     }, APPROVAL_POLL_MS);
   }
 
-  function renderNavActive(isApprovalsView) {
-    if (approvalsNavBtn) {
-      approvalsNavBtn.classList.toggle('active', isApprovalsView);
-    }
-  }
-
-  function showApprovalsView() {
-    if (window.AdminShiftCloses?.isActive?.()) {
-      window.AdminShiftCloses.hide();
-    }
+  function activate() {
+    if (!session?.supervisorApprovalEnabled) return;
     active = true;
     approvalsPanelEl.hidden = false;
-    tablePanelEl.hidden = true;
-    renderNavActive(true);
-    if (window.AdminTables?.setNavActive) {
-      window.AdminTables.setNavActive(null);
-    }
     if (!session?.isSupervisor) {
       approvalsForbiddenEl.hidden = false;
       approvalsListEl.innerHTML = '';
@@ -240,12 +224,22 @@
     startPoll();
   }
 
-  function hideApprovalsView() {
+  function deactivate() {
     active = false;
     approvalsPanelEl.hidden = true;
-    tablePanelEl.hidden = false;
-    renderNavActive(false);
     stopPoll();
+  }
+
+  function showApprovalsView() {
+    window.AdminTabs?.switchAdminTab?.('approvals');
+  }
+
+  function hideApprovalsView() {
+    if (window.AdminTabs?.getActiveTab?.() === 'approvals') {
+      window.AdminTabs?.switchAdminTab?.('tables');
+    } else {
+      deactivate();
+    }
   }
 
   function renderItems(items) {
@@ -390,21 +384,12 @@
     apiFetch = fetchFn;
     setStatus = statusFn;
     session = adminSession;
-
-    if (!session?.supervisorApprovalEnabled) {
-      approvalsNavEl.hidden = true;
-      return;
-    }
-
-    approvalsNavEl.hidden = false;
-    approvalsNavBtn.addEventListener('click', () => {
-      document.body.classList.remove('nav-open');
-      showApprovalsView();
-    });
   }
 
   window.AdminApprovals = {
     configure,
+    activate,
+    deactivate,
     show: showApprovalsView,
     hide: hideApprovalsView,
     isActive: () => active,

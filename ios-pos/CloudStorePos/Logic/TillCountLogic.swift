@@ -93,4 +93,15 @@ enum TillCountLogic {
         }
         return "Enter counts for each denomination"
     }
+
+    static func closingHeaderHint(
+        openingCountedFloat: Double?,
+        cashSalesTotal: Double?,
+        changeGivenTotal: Double?
+    ) -> String {
+        let opening = openingCountedFloat.map { formatMoney($0) } ?? "—"
+        let sales = cashSalesTotal.map { formatMoney($0) } ?? "—"
+        let change = changeGivenTotal.map { formatMoney($0) } ?? "—"
+        return "Opening \(opening) · Cash sales \(sales) · Change \(change)"
+    }
 }

@@ -39,7 +39,16 @@ struct PosRootView: View {
     }
 
     private var hidesChromeHeader: Bool {
-        isOpeningTillGate || isSignedInGate
+        isTillFlowGate || isSignedInGate
+    }
+
+    private var isTillFlowGate: Bool {
+        switch viewModel.authGate {
+        case .openingTill, .closingTill, .closingCreditOnly, .waitingCloseApproval:
+            return true
+        default:
+            return false
+        }
     }
 
     private var isOpeningTillGate: Bool {
@@ -74,7 +83,8 @@ struct PosRootView: View {
             RegisterScreen(
                 user: user,
                 session: viewModel,
-                onBreak: { viewModel.signOutForBreak() }
+                onBreak: { viewModel.signOutForBreak() },
+                onCloseTill: { viewModel.beginCloseTill() }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -120,6 +130,61 @@ struct PosRootView: View {
                 onCancel: { viewModel.cancelOpeningTill() }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        case .closingTill(
+            let expectedCloseFloat,
+            let openingCountedFloat,
+            let cashSalesTotal,
+            let changeGivenTotal,
+            let denominations,
+            let counts,
+            let selectedDenominationId,
+            let submitting
+        ):
+            OpeningTillScreen(
+                expectedOpeningFloat: expectedCloseFloat,
+                denominations: denominations,
+                counts: counts,
+                selectedDenominationId: selectedDenominationId,
+                status: viewModel.status,
+                submitting: submitting,
+                options: TillCountScreenOptions.closing(
+                    headerHint: TillCountLogic.closingHeaderHint(
+                        openingCountedFloat: openingCountedFloat,
+                        cashSalesTotal: cashSalesTotal,
+                        changeGivenTotal: changeGivenTotal
+                    )
+                ),
+                onSelectDenomination: { viewModel.selectClosingDenomination($0) },
+                onDigit: { viewModel.appendClosingTillDigit($0) },
+                onClearCount: { viewModel.clearClosingTillCount() },
+                onBackspaceCount: { viewModel.backspaceClosingTillCount() },
+                onPreviousDenomination: { viewModel.selectPreviousClosingDenomination() },
+                onNextDenomination: { viewModel.selectNextClosingDenomination() },
+                onSubmit: { viewModel.submitClosingTill() },
+                onNoCashToday: {},
+                onCancel: { viewModel.cancelCloseTill() }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        case .closingCreditOnly(let submitting):
+            closingCreditOnlyContent(submitting: submitting)
+
+        case .waitingCloseApproval(
+            _,
+            let secondsRemaining,
+            let cashMode,
+            let expectedCloseFloat,
+            let countedCloseFloat,
+            let closeVariance
+        ):
+            waitingCloseApprovalContent(
+                secondsRemaining: secondsRemaining,
+                cashMode: cashMode,
+                expectedCloseFloat: expectedCloseFloat,
+                countedCloseFloat: countedCloseFloat,
+                closeVariance: closeVariance
+            )
         }
     }
 
@@ -211,9 +276,95 @@ struct PosRootView: View {
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    private func closingCreditOnlyContent(submitting: Bool) -> some View {
+        VStack(spacing: 16) {
+            Text("Close till")
+                .font(.title2.bold())
+                .foregroundStyle(PosColors.burgundy)
+            Text("Credit cards only shift. A supervisor must approve before this till closes and the next cashier can sign in.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 480)
+            if !viewModel.status.isEmpty && viewModel.status != "Ready" {
+                Text(viewModel.status)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            Button(submitting ? "Submitting…" : "Submit for approval") {
+                viewModel.submitClosingCreditOnly()
+            }
+            .buttonStyle(PosPrimaryButtonStyle())
+            .disabled(submitting)
+            Button("Cancel") {
+                viewModel.cancelCloseTill()
+            }
+            .font(.headline)
+            .foregroundStyle(PosColors.burgundy)
+            .disabled(submitting)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func waitingCloseApprovalContent(
+        secondsRemaining: Int?,
+        cashMode: String?,
+        expectedCloseFloat: Double?,
+        countedCloseFloat: Double?,
+        closeVariance: Double?
+    ) -> some View {
+        VStack(spacing: 16) {
+            Text("Till close — waiting for supervisor")
+                .font(.title3.bold())
+                .multilineTextAlignment(.center)
+
+            if let timer = TillApprovalSummaryLogic.approvalTimerText(secondsRemaining: secondsRemaining) {
+                Text(timer)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let summary = TillApprovalSummaryLogic.closingSummaryLine(
+                cashMode: cashMode,
+                counted: countedCloseFloat,
+                expected: expectedCloseFloat,
+                variance: closeVariance
+            ) {
+                Text(summary)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .padding()
+                    .frame(maxWidth: 480)
+                    .background(Color.white.opacity(0.55))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+
+            ProgressView()
+                .padding(.top, 8)
+
+            if !viewModel.status.isEmpty {
+                Text(viewModel.status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button("Cancel") {
+                viewModel.cancelCloseTill()
+            }
+            .font(.headline)
+            .foregroundStyle(PosColors.burgundy)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 }
 
 struct PosPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
@@ -221,7 +372,7 @@ struct PosPrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
             .background(Color(red: 0 / 255, green: 109 / 255, blue: 119 / 255))
-            .opacity(configuration.isPressed ? 0.85 : 1)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.4)
             .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }

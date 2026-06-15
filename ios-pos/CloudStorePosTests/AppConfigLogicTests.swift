@@ -36,4 +36,44 @@ final class AppConfigLogicTests: XCTestCase {
 
         XCTAssertEqual(query["prompt"], "login")
     }
+
+    func testApiRequestURLBuildsQueryItemsSeparatelyFromPath() throws {
+        let base = URL(string: "https://oci.cloudstore893.com/")!
+        let url = try XCTUnwrap(
+            AppConfigLogic.apiRequestURL(
+                base: base,
+                path: "api/cashier/shift/close/status",
+                queryItems: [URLQueryItem(name: "closeToken", value: "abc123")]
+            )
+        )
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
+
+        XCTAssertEqual(components.path, "/api/cashier/shift/close/status")
+        XCTAssertEqual(query["closeToken"], "abc123")
+        XCTAssertFalse(url.absoluteString.contains("%3F"))
+    }
+
+    func testAdminURLAddsIosClientKind() throws {
+        let base = URL(string: "https://oci.cloudstore893.com/")!
+        let url = AppConfigLogic.adminURL(base: base, embeddedIosClient: true, cacheBust: "42")
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
+
+        XCTAssertEqual(components.path, "/admin/")
+        XCTAssertEqual(query["client_kind"], "ios")
+        XCTAssertEqual(query["_cb"], "42")
+    }
+
+    func testShouldLeaveAdminOnSiteRoot() {
+        let base = URL(string: "https://oci.cloudstore893.com/")!
+        XCTAssertTrue(AdminNavigationLogic.shouldLeaveAdmin(
+            url: URL(string: "https://oci.cloudstore893.com/")!,
+            apiBaseURL: base
+        ))
+        XCTAssertFalse(AdminNavigationLogic.shouldLeaveAdmin(
+            url: URL(string: "https://oci.cloudstore893.com/admin/")!,
+            apiBaseURL: base
+        ))
+    }
 }

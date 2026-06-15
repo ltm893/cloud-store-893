@@ -22,11 +22,17 @@ const editForm = document.getElementById('editForm');
 const editFieldsEl = document.getElementById('editFields');
 const editCancelBtn = document.getElementById('editCancel');
 const menuBtn = document.getElementById('menuBtn');
+const approvalsPanelEl = document.getElementById('approvalsPanel');
+const shiftClosesPanelEl = document.getElementById('shiftClosesPanel');
+const reportsPanelEl = document.getElementById('reportsPanel');
+const tablePanelEl = document.getElementById('tablePanel');
+const approvalsTabBtn = document.getElementById('approvalsTabBtn');
 
 let tablesMeta = [];
 let activeTable = 'products';
 let activeMeta = null;
 let editingRow = null;
+let activeAdminTab = 'tables';
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message || '';
@@ -95,8 +101,53 @@ function formatCell(value, col, tableName) {
 }
 
 menuBtn.addEventListener('click', () => {
+  if (activeAdminTab !== 'tables') return;
   document.body.classList.toggle('nav-open');
 });
+
+function setAdminTabButtonActive(tab) {
+  document.querySelectorAll('.admin-tab-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+
+function switchAdminTab(tab) {
+  if (!tab || tab === activeAdminTab) return;
+  activeAdminTab = tab;
+  document.body.classList.remove('tab-approvals', 'tab-reports', 'tab-tables');
+  document.body.classList.add(`tab-${tab}`);
+  setAdminTabButtonActive(tab);
+
+  if (tab !== 'tables') {
+    document.body.classList.remove('nav-open');
+  }
+
+  approvalsPanelEl.hidden = true;
+  shiftClosesPanelEl.hidden = true;
+  reportsPanelEl.hidden = true;
+  tablePanelEl.hidden = true;
+
+  window.AdminApprovals?.deactivate?.();
+  window.AdminShiftCloses?.deactivate?.();
+  window.AdminReports?.deactivate?.();
+
+  if (tab === 'approvals') {
+    window.AdminApprovals?.activate?.();
+    window.AdminShiftCloses?.activate?.();
+  } else if (tab === 'reports') {
+    window.AdminReports?.activate?.();
+  } else if (tab === 'tables') {
+    tablePanelEl.hidden = false;
+    renderNav();
+    loadTable(activeTable);
+  }
+}
+
+document.querySelectorAll('.admin-tab-btn').forEach((btn) => {
+  btn.addEventListener('click', () => switchAdminTab(btn.dataset.tab));
+});
+
+window.AdminTabs = { switchAdminTab, getActiveTab: () => activeAdminTab };
 
 logoutBtn.addEventListener('click', async () => {
   await fetch(`${API}/logout`, { method: 'POST', credentials: 'same-origin' });
@@ -143,14 +194,8 @@ async function loadMeta() {
     .join('');
   tableNavEl.querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => {
-      if (window.AdminApprovals?.isActive?.()) {
-        window.AdminApprovals.hide();
-      }
-      if (window.AdminShiftCloses?.isActive?.()) {
-        window.AdminShiftCloses.hide();
-      }
-      if (window.AdminReports?.closePanel) {
-        window.AdminReports.closePanel();
+      if (activeAdminTab !== 'tables') {
+        switchAdminTab('tables');
       }
       activeTable = btn.dataset.table;
       document.body.classList.remove('nav-open');
@@ -164,9 +209,6 @@ function setNavActive(tableName) {
   tableNavEl.querySelectorAll('button').forEach((btn) => {
     btn.classList.toggle('active', tableName != null && btn.dataset.table === tableName);
   });
-  document.getElementById('approvalsNavBtn')?.classList.remove('active');
-  document.getElementById('shiftClosesNavBtn')?.classList.remove('active');
-  document.getElementById('reportsNavBtn')?.classList.remove('active');
 }
 
 function renderNav() {
@@ -244,10 +286,8 @@ async function deleteRow(id) {
 }
 
 async function loadTable(name) {
-  if (window.AdminReports?.closePanel) window.AdminReports.closePanel();
-  document.getElementById('tablePanel')?.removeAttribute('hidden');
-  const reportsPanel = document.getElementById('reportsPanel');
-  if (reportsPanel) reportsPanel.hidden = true;
+  if (activeAdminTab !== 'tables') return;
+  tablePanelEl.hidden = false;
 
   activeMeta = tablesMeta.find((t) => t.name === name);
   if (!activeMeta) return;
@@ -342,9 +382,6 @@ async function loadTable(name) {
       window.location.href = '/admin/login.html';
       return;
     }
-    if (window.matchMedia('(min-width: 900px)').matches) {
-      document.body.classList.add('nav-open');
-    }
     if (window.AdminApprovals) {
       window.AdminApprovals.configure({
         apiFetch,
@@ -365,11 +402,16 @@ async function loadTable(name) {
         setStatus,
       });
     }
+    if (!session.supervisorApprovalEnabled && approvalsTabBtn) {
+      approvalsTabBtn.hidden = true;
+    }
     await loadMeta();
-    if (session.supervisorApprovalEnabled && session.isSupervisor) {
-      window.AdminApprovals.show();
-    } else {
-      await loadTable(activeTable);
+    const defaultTab =
+      session.supervisorApprovalEnabled && session.isSupervisor ? 'approvals' : 'tables';
+    activeAdminTab = '';
+    switchAdminTab(defaultTab);
+    if (defaultTab === 'tables' && window.matchMedia('(min-width: 900px)').matches) {
+      document.body.classList.add('nav-open');
     }
   } catch (err) {
     if (err.message !== 'Session expired') setStatus(err.message, true);

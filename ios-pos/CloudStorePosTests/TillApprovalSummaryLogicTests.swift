@@ -38,6 +38,19 @@ final class TillApprovalSummaryLogicTests: XCTestCase {
             "Active till #42 · Card payments only"
         )
     }
+
+    func testClosingSummaryWithVariance() {
+        let line = TillApprovalSummaryLogic.closingSummaryLine(
+            cashMode: "cash_and_credit",
+            counted: 215,
+            expected: 200,
+            variance: 15
+        )
+        XCTAssertEqual(
+            line,
+            "Cash + card · Counted $215.00 · Expected $200.00 · Variance +$15.00"
+        )
+    }
 }
 
 final class ApprovalStatusResponseTests: XCTestCase {

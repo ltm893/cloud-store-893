@@ -16,6 +16,22 @@ enum AppConfig {
         RegisterId.current
     }
 
+    static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
+    static var appBuild: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
+    static var adminURL: URL {
+        AppConfigLogic.adminURL(
+            base: apiBaseURL,
+            embeddedIosClient: true,
+            cacheBust: appBuild
+        )
+    }
+
     static var salesFeeRate: Double {
         let raw = Bundle.main.object(forInfoDictionaryKey: "POS_SALES_FEE_RATE") as? String ?? "0.0"
         return Double(raw) ?? 0

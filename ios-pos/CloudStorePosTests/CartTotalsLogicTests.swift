@@ -54,4 +54,10 @@ final class CartTotalsLogicTests: XCTestCase {
         ]
         XCTAssertEqual(CheckoutPaymentLogic.checkoutFinalizeMethod(payments), "split")
     }
+
+    func testAppendQuantityDigitCapsAtFourDigits() {
+        XCTAssertEqual(CashEntryLogic.appendQuantityDigit(current: "123", digit: "4"), "1234")
+        XCTAssertEqual(CashEntryLogic.appendQuantityDigit(current: "1234", digit: "5"), "1234")
+        XCTAssertEqual(CashEntryLogic.appendQuantityDigit(current: "", digit: "a"), "")
+    }
 }

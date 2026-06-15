@@ -42,6 +42,23 @@
 		B20000010000000000000024 /* CartTotalsLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000002E /* CartTotalsLogicTests.swift */; };
 		B20000010000000000000025 /* PosLayoutMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000002F /* PosLayoutMetrics.swift */; };
 		B20000010000000000000026 /* PosPanelStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000030 /* PosPanelStyle.swift */; };
+		B20000010000000000000027 /* SaleTotalsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000031 /* SaleTotalsPanel.swift */; };
+		B20000010000000000000028 /* CartQuantityEditHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000032 /* CartQuantityEditHeader.swift */; };
+		B20000010000000000000029 /* PosRegisterChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000033 /* PosRegisterChrome.swift */; };
+		B2000001000000000000002A /* PosAdminWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000034 /* PosAdminWebView.swift */; };
+		B2000001000000000000002B /* AdminWebScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000035 /* AdminWebScreen.swift */; };
+		B2000001000000000000002C /* CustomerFindLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000036 /* CustomerFindLogic.swift */; };
+		B2000001000000000000002D /* CustomerFindPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000037 /* CustomerFindPanel.swift */; };
+		B2000001000000000000002E /* CustomerFindLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000038 /* CustomerFindLogicTests.swift */; };
+		B20000010000000000000039 /* OfflineQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000039 /* OfflineQueueStore.swift */; };
+		B2000001000000000000003A /* NetworkErrorLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000003A /* NetworkErrorLogic.swift */; };
+		B2000001000000000000003B /* OfflineQueueFlushLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000003B /* OfflineQueueFlushLogic.swift */; };
+		B2000001000000000000003C /* OfflineQueueStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000003C /* OfflineQueueStatus.swift */; };
+		B2000001000000000000003D /* OfflineQueueStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000003D /* OfflineQueueStoreTests.swift */; };
+		B2000001000000000000003E /* RegisterStatusPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000003E /* RegisterStatusPanel.swift */; };
+		B2000001000000000000003F /* SaleReceiptLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000003F /* SaleReceiptLogic.swift */; };
+		B20000010000000000000040 /* SaleReceiptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000040 /* SaleReceiptPanel.swift */; };
+		B20000010000000000000041 /* SaleReceiptLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000041 /* SaleReceiptLogicTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -85,6 +102,23 @@
 		B2000002000000000000002E /* CartTotalsLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartTotalsLogicTests.swift; sourceTree = "<group>"; };
 		B2000002000000000000002F /* PosLayoutMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosLayoutMetrics.swift; sourceTree = "<group>"; };
 		B20000020000000000000030 /* PosPanelStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosPanelStyle.swift; sourceTree = "<group>"; };
+		B20000020000000000000031 /* SaleTotalsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaleTotalsPanel.swift; sourceTree = "<group>"; };
+		B20000020000000000000032 /* CartQuantityEditHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartQuantityEditHeader.swift; sourceTree = "<group>"; };
+		B20000020000000000000033 /* PosRegisterChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosRegisterChrome.swift; sourceTree = "<group>"; };
+		B20000020000000000000034 /* PosAdminWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PosAdminWebView.swift; sourceTree = "<group>"; };
+		B20000020000000000000035 /* AdminWebScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminWebScreen.swift; sourceTree = "<group>"; };
+		B20000020000000000000036 /* CustomerFindLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomerFindLogic.swift; sourceTree = "<group>"; };
+		B20000020000000000000037 /* CustomerFindPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomerFindPanel.swift; sourceTree = "<group>"; };
+		B20000020000000000000038 /* CustomerFindLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomerFindLogicTests.swift; sourceTree = "<group>"; };
+		B20000020000000000000039 /* OfflineQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineQueueStore.swift; sourceTree = "<group>"; };
+		B2000002000000000000003A /* NetworkErrorLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkErrorLogic.swift; sourceTree = "<group>"; };
+		B2000002000000000000003B /* OfflineQueueFlushLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineQueueFlushLogic.swift; sourceTree = "<group>"; };
+		B2000002000000000000003C /* OfflineQueueStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineQueueStatus.swift; sourceTree = "<group>"; };
+		B2000002000000000000003D /* OfflineQueueStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineQueueStoreTests.swift; sourceTree = "<group>"; };
+		B2000002000000000000003E /* RegisterStatusPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterStatusPanel.swift; sourceTree = "<group>"; };
+		B2000002000000000000003F /* SaleReceiptLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaleReceiptLogic.swift; sourceTree = "<group>"; };
+		B20000020000000000000040 /* SaleReceiptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaleReceiptPanel.swift; sourceTree = "<group>"; };
+		B20000020000000000000041 /* SaleReceiptLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaleReceiptLogicTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXContainerItemProxy section */
@@ -171,6 +205,9 @@
 				B20000020000000000000022 /* TillApprovalSummaryLogicTests.swift */,
 				B20000020000000000000027 /* TillCountLogicTests.swift */,
 				B2000002000000000000002E /* CartTotalsLogicTests.swift */,
+				B20000020000000000000038 /* CustomerFindLogicTests.swift */,
+				B2000002000000000000003D /* OfflineQueueStoreTests.swift */,
+				B20000020000000000000041 /* SaleReceiptLogicTests.swift */,
 			);
 			path = CloudStorePosTests;
 			sourceTree = "<group>";
@@ -192,6 +229,7 @@
 				B20000020000000000000018 /* OidcRedirectLogic.swift */,
 				B20000020000000000000019 /* CookieStore.swift */,
 				B2000002000000000000001A /* WebViewCookieSync.swift */,
+				B20000020000000000000039 /* OfflineQueueStore.swift */,
 			);
 			path = Session;
 			sourceTree = "<group>";
@@ -209,6 +247,7 @@
 			isa = PBXGroup;
 			children = (
 				B2000002000000000000001E /* OidcWebView.swift */,
+				B20000020000000000000034 /* PosAdminWebView.swift */,
 			);
 			path = WebViews;
 			sourceTree = "<group>";
@@ -232,6 +271,10 @@
 				B20000020000000000000024 /* TillCountLogic.swift */,
 				B20000020000000000000029 /* CartTotalsLogic.swift */,
 				B2000002000000000000002A /* CheckoutPaymentLogic.swift */,
+				B20000020000000000000036 /* CustomerFindLogic.swift */,
+				B2000002000000000000003A /* NetworkErrorLogic.swift */,
+				B2000002000000000000003B /* OfflineQueueFlushLogic.swift */,
+				B2000002000000000000003F /* SaleReceiptLogic.swift */,
 			);
 			path = Logic;
 			sourceTree = "<group>";
@@ -245,6 +288,14 @@
 				B20000020000000000000026 /* OpeningTillScreen.swift */,
 				B2000002000000000000002C /* RegisterScreen.swift */,
 				B2000002000000000000002D /* CheckoutPaymentPanel.swift */,
+				B20000020000000000000031 /* SaleTotalsPanel.swift */,
+				B20000020000000000000032 /* CartQuantityEditHeader.swift */,
+				B20000020000000000000033 /* PosRegisterChrome.swift */,
+				B20000020000000000000035 /* AdminWebScreen.swift */,
+				B20000020000000000000037 /* CustomerFindPanel.swift */,
+				B2000002000000000000003C /* OfflineQueueStatus.swift */,
+				B2000002000000000000003E /* RegisterStatusPanel.swift */,
+				B20000020000000000000040 /* SaleReceiptPanel.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -375,6 +426,20 @@
 				B20000010000000000000023 /* CheckoutPaymentPanel.swift in Sources */,
 				B20000010000000000000025 /* PosLayoutMetrics.swift in Sources */,
 				B20000010000000000000026 /* PosPanelStyle.swift in Sources */,
+				B20000010000000000000027 /* SaleTotalsPanel.swift in Sources */,
+				B20000010000000000000028 /* CartQuantityEditHeader.swift in Sources */,
+				B20000010000000000000029 /* PosRegisterChrome.swift in Sources */,
+				B2000001000000000000002A /* PosAdminWebView.swift in Sources */,
+				B2000001000000000000002B /* AdminWebScreen.swift in Sources */,
+				B2000001000000000000002C /* CustomerFindLogic.swift in Sources */,
+				B2000001000000000000002D /* CustomerFindPanel.swift in Sources */,
+				B20000010000000000000039 /* OfflineQueueStore.swift in Sources */,
+				B2000001000000000000003A /* NetworkErrorLogic.swift in Sources */,
+				B2000001000000000000003B /* OfflineQueueFlushLogic.swift in Sources */,
+				B2000001000000000000003C /* OfflineQueueStatus.swift in Sources */,
+				B2000001000000000000003E /* RegisterStatusPanel.swift in Sources */,
+				B2000001000000000000003F /* SaleReceiptLogic.swift in Sources */,
+				B20000010000000000000040 /* SaleReceiptPanel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -389,6 +454,9 @@
 				B20000010000000000000015 /* TillApprovalSummaryLogicTests.swift in Sources */,
 				B2000001000000000000001D /* TillCountLogicTests.swift in Sources */,
 				B20000010000000000000024 /* CartTotalsLogicTests.swift in Sources */,
+				B2000001000000000000002E /* CustomerFindLogicTests.swift in Sources */,
+				B2000001000000000000003D /* OfflineQueueStoreTests.swift in Sources */,
+				B20000010000000000000041 /* SaleReceiptLogicTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

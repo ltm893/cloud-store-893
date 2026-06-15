@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="screen-orientation" content="landscape">
   <title>Cloud Store 893 — Admin</title>
-  <link rel="stylesheet" href="/admin/admin.css?v=20260613b">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260611d">
   <script src="/admin/admin-orientation.js?v=20260611c"></script>
 </head>
-<body class="admin-landscape">
+<body class="admin-landscape tab-tables">
   <div id="portraitBlocker" class="portrait-blocker" role="dialog" aria-label="Rotate device">
     <span aria-hidden="true">↻</span>
     <p>Rotate your device to <strong>landscape</strong> to use Admin.</p>
@@ -20,21 +20,28 @@
     <button type="button" id="logoutBtn" class="logout-btn">Sign out</button>
   </header>
 
+  <nav class="admin-tabs" aria-label="Admin sections">
+    <button type="button" class="admin-tab-btn" data-tab="approvals" id="approvalsTabBtn">Approvals</button>
+    <button type="button" class="admin-tab-btn" data-tab="reports">Reports</button>
+    <button type="button" class="admin-tab-btn active" data-tab="tables">Tables</button>
+  </nav>
+
   <nav id="sideNav" class="side-nav" aria-label="Tables">
-    <div id="approvalsNav" class="table-nav approvals-nav" hidden>
-      <button type="button" id="approvalsNavBtn" data-view="approvals">Till open approval</button>
-    </div>
-    <div id="shiftClosesNav" class="table-nav approvals-nav" hidden>
-      <button type="button" id="shiftClosesNavBtn" data-view="shift-closes">Till close approval</button>
-    </div>
-    <div id="reportsNav" class="table-nav approvals-nav" hidden>
-      <button type="button" id="reportsNavBtn" data-view="reports">Reports</button>
-    </div>
     <div id="tableNav" class="table-nav"></div>
   </nav>
 
   <main class="admin-main">
     <div id="status" class="status" role="status"></div>
+    <section id="approvalsPanel" class="approvals-panel" hidden>
+      <h2>Pending till opens</h2>
+      <p id="approvalsHint" class="hint">Approve or deny till open requests. <strong>Till type</strong> shows cash drawer vs card-only before you approve.</p>
+      <div id="approvalsLastAction" class="approvals-last-action" hidden role="status"></div>
+      <div id="approvalsForbidden" class="approvals-forbidden" hidden>
+        <p>Your account does not have supervisor privileges. Sign in with an IdP user in the <code>store-supervisors</code> group, or enable local PIN fallback for development.</p>
+      </div>
+      <div id="approvalsList" class="approvals-list"></div>
+      <p id="approvalsEmpty" class="hint approvals-empty" hidden>No pending till open requests.</p>
+    </section>
     <section id="shiftClosesPanel" class="approvals-panel" hidden>
       <h2>Pending till closes</h2>
       <p class="hint">Approve or deny end-of-till closes. Cash tills show counted vs expected drawer totals.</p>
@@ -76,16 +83,6 @@
       <h4>Movements in period</h4>
       <div id="reportsMovements" class="report-table-wrap"></div>
     </section>
-    <section id="approvalsPanel" class="approvals-panel" hidden>
-      <h2>Pending till opens</h2>
-      <p id="approvalsHint" class="hint">Approve or deny till open requests. <strong>Till type</strong> shows cash drawer vs card-only before you approve.</p>
-      <div id="approvalsLastAction" class="approvals-last-action" hidden role="status"></div>
-      <div id="approvalsForbidden" class="approvals-forbidden" hidden>
-        <p>Your account does not have supervisor privileges. Sign in with an IdP user in the <code>store-supervisors</code> group, or enable local PIN fallback for development.</p>
-      </div>
-      <div id="approvalsList" class="approvals-list"></div>
-      <p id="approvalsEmpty" class="hint approvals-empty" hidden>No pending till open requests.</p>
-    </section>
     <section id="tablePanel" class="table-panel">
       <h2 id="tableTitle">—</h2>
       <p id="tableHint" class="hint"></p>
@@ -111,9 +108,9 @@
   </dialog>
 
   <script src="/shared/dom-utils.js?v=20260611c"></script>
-  <script src="/admin/admin-approvals.js?v=20260611c"></script>
-  <script src="/admin/admin-shift-closes.js?v=20260611c"></script>
-  <script src="/admin/admin-reports.js?v=20260613b"></script>
-  <script src="/admin/admin.js?v=20260613b"></script>
+  <script src="/admin/admin-approvals.js?v=20260611d"></script>
+  <script src="/admin/admin-shift-closes.js?v=20260611d"></script>
+  <script src="/admin/admin-reports.js?v=20260611d"></script>
+  <script src="/admin/admin.js?v=20260611d"></script>
 </body>
 </html>

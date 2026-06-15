@@ -13,7 +13,7 @@ Use this file to resume work in a new session. Canonical setup details live in [
 | **Web POS** (`/`) | Product grid, cart, checkout |
 | **Admin** (`/admin/`) | CRUD on DB tables; PIN login (`ADMIN_PIN`) |
 | **Tablet POS** | Numpad login; unified Pay panel; split tender cash/card; auto-finalize at zero balance |
-| **iPad POS** (`ios-pos/`) | **Auth + opening till + register selling (P0–P2, P3.1–P3.2):** OIDC, cookie bridge, session probe, supervisor approval, opening till count, scan/Add Id cart, checkout, split tender. **Till close (P3.3) next.** |
+| **iPad POS** (`ios-pos/`) | **Auth + opening till + register selling + till close (P0–P2, P3.1–P3.3):** OIDC, cookie bridge, session probe, supervisor approval, opening till count, scan/Add Id cart, checkout, split tender, EOD close + close approval wait. **Offline queue (P3.5) next.** |
 | **Local dev** | `npm run dev:up` + `.env` |
 | **OCI app URL** | **`https://oci.cloudstore893.com/`** (no `:3000`) — LB :443 → container :3000 |
 | **HTTPS / TLS** | **Let's Encrypt** (public CA) via **OCI Certificates** → LB listener by cert OCID (see below) |
@@ -219,18 +219,19 @@ npm run dev:up
 
 ### iOS iPad POS (`ios-pos/`) — in progress
 
-**Status (2026-06-14):** Phases **P0–P2**, **P3.1 opening till**, and **P3.2 register selling** complete on branch `dev`. Register UI matches Android: scan/Add Id + numpad (no product browse grid). **P3.3 till close** next.
+**Status (2026-06-11):** Phases **P0–P2**, **P3.1 opening till**, **P3.2 register selling**, and **P3.3 till close** complete on branch `dev`. **P3.5 offline queue** next.
 
 | Done | Not yet |
 |------|---------|
-| Xcode project, `API_BASE_URL` xcconfig | Till close flow |
-| `client_kind=ios`, `register_id=tablet-{uuid}` | PIN numpad (dev) |
-| OIDC WebView + cookie bridge | Camera barcode scan |
-| Session probe + auth gates | Customer / member discount |
-| Supervisor approval poll (2.5s) + Cancel | Admin WebView from POS menu |
-| Break → `POST /api/cashier/logout` | Offline queue |
-| Opening till count UI | Cart quantity edit panel |
+| Xcode project, `API_BASE_URL` xcconfig | PIN numpad (dev) |
+| `client_kind=ios`, `register_id=tablet-{uuid}` | Camera barcode scan |
+| OIDC WebView + cookie bridge | Customer / member discount |
+| Session probe + auth gates | Admin WebView from POS menu |
+| Supervisor approval poll (2.5s) + Cancel | Offline queue |
+| Break → `POST /api/cashier/logout` | Cart quantity edit panel |
+| Opening till count UI | |
 | Scan/Add Id, cart rows, checkout, split tender | |
+| Till close count + close approval wait | |
 | Thread-safe `CookieStore` (parallel cart API) | |
 
 **Docs**
@@ -244,7 +245,7 @@ npm run dev:up
 
 ```bash
 open ios-pos/CloudStorePos.xcodeproj   # iPad simulator, set signing Team
-npm run test:ios-pos                   # 27 XCTests (last run: pass)
+npm run test:ios-pos                   # 28 XCTests (last run: pass)
 npm run ios-pos:local-config           # after npm run dev:up, for LAN API
 ```
 
@@ -255,10 +256,10 @@ npm run ios-pos:local-config           # after npm run dev:up, for LAN API
 3. **Break:** Signed in → **Break (logout)** → sign-in gate; re-OIDC with `prompt=login`.
 4. **Resume till:** After break, same cashier + same iPad → `cashier_resume=1` path → signed in (till still active).
 5. **Cash float** (if `OPENING_CASH_FLOAT` set on server): OIDC → opening till count → submit → supervisor approval → signed in.
-6. **Sell:** Sign in → enter product ID or barcode via numpad → **Add** → **Pay** → cash/card split → receipt.
-7. **Register lock:** Second tablet/iPad with same `register_id` while till active → sign-in error (409).
+7. **Close till:** Empty cart → **Close till** → count drawer (or credit-only confirm) → supervisor approval → signed out; next sign-in opens fresh till.
+8. **Register lock:** Second tablet/iPad with same `register_id` while till active → sign-in error (409).
 
-**Next session:** P3.3 till close. See plan doc.
+**Next session:** P3.5 offline queue (optional) or admin WebView menu. See plan doc.
 
 **Reference:** `ios-admin/` — admin WebView pattern (`client_kind=ios`); reuse for POS Admin menu later.
 

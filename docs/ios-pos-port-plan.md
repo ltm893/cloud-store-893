@@ -10,18 +10,20 @@ Native SwiftUI register for iPad, reusing server APIs and patterns from `android
 
 ## Session pause (2026-06-14)
 
-**P3.2 register selling complete** (2026-06-14). Register UI matches Android: scan/Add Id, flat cart rows, no product browse grid. Manual-test sell flow on OCI/local before P3.3.
+**P3.5 offline queue complete** (2026-06-11). Checkout network failures enqueue locally; sync replays cart + checkout on reconnect.
 
 | Phase | Status |
 |-------|--------|
 | P0 — contracts | Done (docs + `lib/pos-client-kind.js`) |
 | P2 — iOS auth | Done (`ios-pos` through approval poll) |
 | P3.1 — opening till | Done |
-| P3.2 — selling | **Done** (scan/Add Id, cart rows, checkout, split tender) |
+| P3.2 — selling | Done (scan/Add Id, cart rows, checkout, split tender) |
+| P3.3 — till close | **Done** (close count, credit-only close, close approval poll) |
 | P1 — OpenAPI / Swift payment math | Partial (cart/checkout logic in Swift) |
-| P3.3+ — close, offline | **Next** |
+| P3.5 — offline queue | **Done** (enqueue on network failure, sync/discard UI) |
+| P3.4+ — admin, customer find | **Done** |
 
-**Resume here:** P3.3 till close. See [ios-pos/README.md](../ios-pos/README.md) manual test checklist.
+**Resume here:** PIN unlock, camera barcode, card on file, receipt print. See [ios-pos/README.md](../ios-pos/README.md) manual test checklist.
 
 ---
 
@@ -84,9 +86,9 @@ ios-pos/                          (Xcode project — exists)
 |----|------|-------------|--------|
 | **P3.1** | Opening till + auth polish | Till count UI, PIN (dev); waiting/OIDC already done | **Done** |
 | **P3.2** | Selling | Scan/Add Id, cart rows, checkout, split tender | **Done** |
-| **P3.3** | Till close | Close count, waiting close approval | **Next** |
-| **P3.4** | Break | `POST /api/cashier/logout` — **done** in signed-in stub | Partial |
-| **P3.5** | Offline queue | Port Android queued checkout if needed | Pending |
+| **P3.3** | Till close | Close count, waiting close approval | **Done** |
+| **P3.4** | Break | `POST /api/cashier/logout` — done in register header | **Done** |
+| **P3.5** | Offline queue | Port Android queued checkout if needed | **Done** |
 
 ### Phase 4 — API cleanup (aliases, no breaking changes)
 
@@ -195,7 +197,8 @@ P2.1–P2.4  ios-pos auth scaffold       ✓  ← paused here (2026-06-13)
 P1.1       pos-api.yaml                 (helpful before P3.2)
 P3.1       opening till UI              ✓ done
 P3.2       products/cart/checkout       ✓ done
-P3.3       till close                   ← resume here
+P3.3       till close                   ✓ done
+P3.5       offline queue                ✓ done
 P1.3       Swift payment logic          (parallel with P3.2)
 P4.x       API aliases
 ```

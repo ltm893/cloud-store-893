@@ -26,6 +26,9 @@ enum WebViewCookieSync {
                 cookie.domain.lowercased().hasSuffix(host) || host.hasSuffix(cookie.domain.lowercased())
             }
             cookieStore.saveFromResponse(url: baseURL, cookies: hostCookies)
+            if let awaiting = hostCookies.first(where: { $0.name == CookieStore.cashierAwaitingTill }) {
+                cookieStore.rememberAwaitingTillToken(awaiting.value, baseURL: baseURL)
+            }
         }
 
         for probeURL in OidcRedirectLogic.syncProbeURLs(baseURL: baseURL) {

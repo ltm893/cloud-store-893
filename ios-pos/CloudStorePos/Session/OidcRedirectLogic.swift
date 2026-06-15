@@ -64,6 +64,18 @@ enum OidcRedirectLogic {
         return true
     }
 
+    static func isAwaitingTillRedirect(completionURL: URL) -> Bool {
+        guard let components = URLComponents(url: completionURL, resolvingAgainstBaseURL: false) else {
+            return false
+        }
+        let value = components.queryItems?
+            .first(where: { $0.name == "awaiting_till" })?
+            .value?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return value == "1" || value == "true"
+    }
+
     static func parsePendingRequestToken(from url: URL) -> String? {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             return nil

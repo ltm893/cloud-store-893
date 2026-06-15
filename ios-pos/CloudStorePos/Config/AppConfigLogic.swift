@@ -12,6 +12,19 @@ enum AppConfigLogic {
         return URL(string: normalized) ?? URL(string: fallback)!
     }
 
+    /// Build an API path under `base` with optional query items (never embed `?` in `path`).
+    static func apiRequestURL(
+        base: URL,
+        path: String,
+        queryItems: [URLQueryItem] = []
+    ) -> URL? {
+        var components = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false)
+        if !queryItems.isEmpty {
+            components?.queryItems = queryItems
+        }
+        return components?.url
+    }
+
     /// Oracle OIDC entry for native iPad register (`client_kind=ios`).
     static func oidcLoginURL(
         base: URL,
@@ -30,6 +43,24 @@ enum AppConfigLogic {
             queryItems.append(URLQueryItem(name: "prompt", value: "login"))
         }
         components.queryItems = queryItems
+        return components.url!
+    }
+
+    static func adminURL(base: URL, embeddedIosClient: Bool, cacheBust: String? = nil) -> URL {
+        var components = URLComponents(
+            url: base.appendingPathComponent("admin/"),
+            resolvingAgainstBaseURL: false
+        )!
+        var queryItems: [URLQueryItem] = []
+        if embeddedIosClient {
+            queryItems.append(URLQueryItem(name: "client_kind", value: "ios"))
+        }
+        if let cacheBust, !cacheBust.isEmpty {
+            queryItems.append(URLQueryItem(name: "_cb", value: cacheBust))
+        }
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
         return components.url!
     }
 }

@@ -6,7 +6,7 @@ Kotlin + Jetpack Compose. Theming: **Lister palette** (`ui/theme/`).
 ## Capabilities
 
 - **Cashier login** — on-screen numpad + **Done** when PIN is allowed; **Sign in with Oracle** (WebView → `/oauth/login?client_kind=tablet`) when IdP / Model B is on; supervisor approval waiting screen with poll + cancel
-- **☰ Menu** — show/hide status (connection, offline queue), **Admin** (in-app WebView → `/admin/`), **Lock**
+- **☰ Menu** — **Show status** (API message + offline queue), **Find customer**, **Admin**, **Sign out**, **Close till**
 - Barcode / product ID entry (`POST /api/cart`, `POST /api/cart/barcode`)
 - Camera scanning (CameraX + ML Kit)
 - Offline checkout queue — **Sync queued** in status panel (see caveats below)
@@ -107,7 +107,7 @@ pre-tax line totals.
 Box diagrams (login, sale, drawer, customer find, payment) with color notes: [CONTENTS.md § Tablet POS UI layout (ASCII)](../CONTENTS.md#tablet-pos-ui-layout-ascii).
 
 1. **Header** — ☰ menu, title, version (burgundy bar)
-2. **Status card** (when menu → Show status) — API message, offline queue, **Sync queued**
+2. **Status card** (☰ → **Show status**) — API message, offline queue, **Sync queued**
 3. **Middle** — scan field, **Scan** / **Add**, cart (+ payments list during checkout) | right slot: status (optional) + numpad **or** customer find **or** payment panel
 4. **Bottom** — totals, **Pay** → split tender on right (amount numpad, **Cash** / **Card** / **CardOnFile**); sale completes when balance is $0
 

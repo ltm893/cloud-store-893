@@ -34,6 +34,53 @@ struct Product: Codable, Equatable, Identifiable {
     }
 }
 
+struct StoreCustomer: Codable, Equatable, Identifiable {
+    let id: Int
+    let name: String
+    let email: String?
+    let phone: String?
+    let memberCode: String?
+    let is893: Bool
+    let hasCardOnFile: Bool
+    let cardLast4: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, email, phone, memberCode, is893, hasCardOnFile, cardLast4
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        email = try c.decodeIfPresent(String.self, forKey: .email)
+        phone = try c.decodeIfPresent(String.self, forKey: .phone)
+        memberCode = try c.decodeIfPresent(String.self, forKey: .memberCode)
+        is893 = try c.decodeIfPresent(Bool.self, forKey: .is893) ?? false
+        hasCardOnFile = try c.decodeIfPresent(Bool.self, forKey: .hasCardOnFile) ?? false
+        cardLast4 = try c.decodeIfPresent(String.self, forKey: .cardLast4)
+    }
+
+    init(
+        id: Int,
+        name: String,
+        email: String?,
+        phone: String?,
+        memberCode: String?,
+        is893: Bool,
+        hasCardOnFile: Bool,
+        cardLast4: String?
+    ) {
+        self.id = id
+        self.name = name
+        self.email = email
+        self.phone = phone
+        self.memberCode = memberCode
+        self.is893 = is893
+        self.hasCardOnFile = hasCardOnFile
+        self.cardLast4 = cardLast4
+    }
+}
+
 struct CartItem: Codable, Equatable, Identifiable {
     let id: Int
     let productId: Int
@@ -85,6 +132,16 @@ struct CartResponse: Codable, Equatable {
     }
 }
 
+struct CartLineQuantity: Codable, Equatable {
+    let productId: Int
+    let quantity: Int
+}
+
+struct CartReplaceRequest: Encodable {
+    let items: [CartLineQuantity]
+    let customerId: Int?
+}
+
 struct CheckoutPayment: Codable, Equatable {
     let method: String
     let amount: Double
@@ -120,9 +177,3 @@ struct CheckoutResponse: Codable, Equatable {
     }
 }
 
-struct SaleReceiptInfo: Equatable {
-    let orderNumber: String
-    let total: Double
-    let payments: [CheckoutPayment]
-    let changeTotal: Double
-}

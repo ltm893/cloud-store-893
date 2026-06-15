@@ -105,13 +105,13 @@ fun PosScreen(viewModel: PosViewModel) {
     }
 
     var customerFindOpen by remember { mutableStateOf(false) }
-    var queueStatusVisible by remember { mutableStateOf(false) }
+    var statusVisible by remember { mutableStateOf(false) }
     var adminOpen by remember { mutableStateOf(false) }
     var showCardOnFileConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.queuedCheckoutCount) {
         if (state.queuedCheckoutCount > 0) {
-            queueStatusVisible = true
+            statusVisible = true
         }
     }
 
@@ -119,7 +119,7 @@ fun PosScreen(viewModel: PosViewModel) {
         if (!state.isAuthenticated) {
             customerFindOpen = false
             adminOpen = false
-            queueStatusVisible = false
+            statusVisible = false
         }
     }
 
@@ -299,6 +299,13 @@ fun PosScreen(viewModel: PosViewModel) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     DrawerMenuButton(
+                        text = if (statusVisible) "Hide status" else "Show status",
+                        onClick = {
+                            statusVisible = !statusVisible
+                            scope.launch { drawerState.close() }
+                        },
+                    )
+                    DrawerMenuButton(
                         text = if (customerFindOpen) "Show keypad" else "Find customer",
                         onClick = {
                             if (!customerFindOpen) {
@@ -308,15 +315,6 @@ fun PosScreen(viewModel: PosViewModel) {
                             scope.launch { drawerState.close() }
                         },
                     )
-                    if (state.queuedCheckoutCount > 0 || state.queueSyncing) {
-                        DrawerMenuButton(
-                            text = if (queueStatusVisible) "Hide queue status" else "Show queue status",
-                            onClick = {
-                                queueStatusVisible = !queueStatusVisible
-                                scope.launch { drawerState.close() }
-                            },
-                        )
-                    }
                     if (state.queuedCheckoutCount > 0) {
                         DrawerMenuButton(
                             text = if (state.queueSyncing) {
@@ -649,8 +647,7 @@ fun PosScreen(viewModel: PosViewModel) {
             }
 
             // ── Status slot + fixed-size number pad (right) ───────────────────
-            val showStatusSlot =
-                queueStatusVisible && (state.queuedCheckoutCount > 0 || state.queueSyncing)
+            val showStatusSlot = statusVisible
             if (showReceipt && receipt != null) {
                 Column(
                     modifier = Modifier
@@ -678,23 +675,15 @@ fun PosScreen(viewModel: PosViewModel) {
                         colors = PosCardDefaults.contentColors(),
                         elevation = PosCardDefaults.elevation(),
                     ) {
-                        Column(
+                        RegisterStatusPanel(
+                            apiBaseUrl = BuildConfig.API_BASE_URL,
+                            status = state.status,
+                            queuedCount = state.queuedCheckoutCount,
+                            syncing = state.queueSyncing,
+                            onSyncQueued = viewModel::flushOfflineQueue,
+                            onDiscardQueued = viewModel::clearOfflineQueue,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        ) {
-                            if (state.status != "Ready" && state.status.isNotBlank()) {
-                                Text(
-                                    text = state.status,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(bottom = 6.dp),
-                                )
-                            }
-                            OfflineQueueStatus(
-                                queuedCount = state.queuedCheckoutCount,
-                                syncing = state.queueSyncing,
-                                onSyncQueued = viewModel::flushOfflineQueue,
-                                onDiscardQueued = viewModel::clearOfflineQueue,
-                            )
-                        }
+                        )
                     }
                 }
                 if (!checkout.open && !customerFindOpen) {
@@ -915,6 +904,55 @@ private fun DrawerMenuButton(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun RegisterStatusPanel(
+    apiBaseUrl: String,
+    status: String,
+    queuedCount: Int,
+    syncing: Boolean,
+    onSyncQueued: () -> Unit,
+    onDiscardQueued: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = "Status",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = "API URL",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Text(
+            text = apiBaseUrl,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp, bottom = 6.dp),
+        )
+        if (status.isNotBlank()) {
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 6.dp),
+            )
+        }
+        OfflineQueueStatus(
+            queuedCount = queuedCount,
+            syncing = syncing,
+            onSyncQueued = onSyncQueued,
+            onDiscardQueued = onDiscardQueued,
         )
     }
 }

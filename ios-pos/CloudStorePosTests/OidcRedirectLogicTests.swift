@@ -4,6 +4,11 @@ import XCTest
 final class OidcRedirectLogicTests: XCTestCase {
     private let base = URL(string: "https://oci.cloudstore893.com/")!
 
+    func testIsAwaitingTillRedirect() {
+        let url = URL(string: "https://oci.cloudstore893.com/?awaiting_till=1")!
+        XCTAssertTrue(OidcRedirectLogic.isAwaitingTillRedirect(completionURL: url))
+    }
+
     func testIsCashierOidcCompleteAwaitingTill() {
         let url = URL(string: "https://oci.cloudstore893.com/?awaiting_till=1")!
         XCTAssertTrue(OidcRedirectLogic.isCashierOidcComplete(completionURL: url, apiBaseURL: base))

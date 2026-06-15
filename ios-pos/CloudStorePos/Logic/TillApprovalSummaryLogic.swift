@@ -37,6 +37,32 @@ enum TillApprovalSummaryLogic {
         return parts.joined(separator: " · ")
     }
 
+    static func closingSummaryLine(
+        cashMode: String?,
+        counted: Double?,
+        expected: Double?,
+        variance: Double?
+    ) -> String? {
+        guard let cashMode, !cashMode.isEmpty else { return nil }
+
+        if cashMode == "credit_only" {
+            return "Card only · Card payments only"
+        }
+
+        var parts = ["Cash + card"]
+        if let counted {
+            parts.append("Counted \(formatMoney(counted))")
+        }
+        if let expected {
+            parts.append("Expected \(formatMoney(expected))")
+        }
+        if let variance, abs(variance) > moneyEpsilon {
+            let sign = variance >= 0 ? "+" : ""
+            parts.append("Variance \(sign)\(formatMoney(variance))")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     static func activeTillLine(cashMode: String?, tillId: Int?) -> String? {
         var parts: [String] = []
         if let tillId {

@@ -7,6 +7,8 @@ struct CartTotals: Equatable {
     let memberDiscount: Double
     let saleSavings: Double
     let linked893: Bool
+
+    var showDiscount: Bool { linked893 && memberDiscount > 0.005 }
 }
 
 enum CartTotalsLogic {
@@ -69,10 +71,13 @@ enum CartTotalsLogic {
 
     static func computeSaleGrandTotal(
         cart: [CartItem],
+        customerLinked: Bool = false,
+        customerDiscount: Bool = false,
         salesFeeRate: Double,
         taxRate: Double
     ) -> Double {
-        let totals = computeCartTotals(cart, customerDiscount: false)
+        let items = customerLinked ? normalizeCartItems(cart, customerDiscount: customerDiscount) : cart
+        let totals = computeCartTotals(items, customerDiscount: customerLinked && customerDiscount)
         let salesFee = totals.itemPreTax * salesFeeRate
         let taxable = totals.itemPreTax + salesFee
         let taxAmt = taxable * taxRate
@@ -81,9 +86,19 @@ enum CartTotalsLogic {
 
     static func computeCashAmountDue(
         cart: [CartItem],
+        customerLinked: Bool = false,
+        customerDiscount: Bool = false,
         salesFeeRate: Double,
         taxRate: Double
     ) -> Double {
-        roundToNickel(computeSaleGrandTotal(cart: cart, salesFeeRate: salesFeeRate, taxRate: taxRate))
+        roundToNickel(
+            computeSaleGrandTotal(
+                cart: cart,
+                customerLinked: customerLinked,
+                customerDiscount: customerDiscount,
+                salesFeeRate: salesFeeRate,
+                taxRate: taxRate
+            )
+        )
     }
 }

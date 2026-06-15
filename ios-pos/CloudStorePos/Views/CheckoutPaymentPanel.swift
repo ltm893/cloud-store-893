@@ -41,22 +41,7 @@ struct CheckoutPaymentPanel: View {
 
             amountRow("Sale total", CartTotalsLogic.formatMoney(saleTotal))
             amountRow("Balance due", CartTotalsLogic.formatMoney(balanceDue), bold: true)
-            amountRow("Entered", amountInput.isEmpty ? "—" : "$\(amountInput)")
-
-            if !quickBills.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(quickBills, id: \.self) { bill in
-                        Button("$\(bill)") { onQuickBill(bill) }
-                            .font(.caption.bold())
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.white.opacity(0.7))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    Button("Exact") { onFillRemaining() }
-                        .font(.caption.bold())
-                }
-            }
+            amountRow("Amount entered", amountInput.isEmpty ? "—" : "$\(amountInput)")
 
             if !payments.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
@@ -80,6 +65,26 @@ struct CheckoutPaymentPanel: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
+            Spacer(minLength: 0)
+
+            if balanceDue > 0.005 {
+                HStack(spacing: 6) {
+                    Button {
+                        onFillRemaining()
+                    } label: {
+                        Text(CartTotalsLogic.formatMoney(balanceDue))
+                    }
+                    .buttonStyle(PosOutlinedQuickButtonStyle())
+                    .frame(maxWidth: .infinity)
+
+                    ForEach(quickBills, id: \.self) { bill in
+                        Button("$\(bill)") { onQuickBill(bill) }
+                            .buttonStyle(PosOutlinedQuickButtonStyle())
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+
             PosNumberPad(
                 layout: .compact,
                 onDigit: onAmountDigit,
@@ -97,6 +102,7 @@ struct CheckoutPaymentPanel: View {
                 .disabled(processingCard || balanceDue <= 0.005)
         }
         .padding(4)
+        .frame(maxHeight: .infinity)
     }
 
     private func amountRow(_ label: String, _ value: String, bold: Bool = false) -> some View {

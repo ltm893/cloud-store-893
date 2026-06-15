@@ -19,6 +19,12 @@ final class CookieStore: @unchecked Sendable {
         return pinnedPendingToken != nil
     }
 
+    var hasPinnedAwaitingTillToken: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return pinnedAwaitingTillToken != nil
+    }
+
     func saveFromResponse(url: URL, cookies: [HTTPCookie]) {
         guard !cookies.isEmpty, let host = url.host else { return }
         let now = Date()
@@ -76,6 +82,7 @@ final class CookieStore: @unchecked Sendable {
     func cookies(for url: URL) -> [HTTPCookie] {
         guard let host = url.host else { return [] }
         let now = Date()
+        let secure = url.scheme?.lowercased() == "https"
 
         lock.lock()
         defer { lock.unlock() }
@@ -88,19 +95,19 @@ final class CookieStore: @unchecked Sendable {
         store[host] = bucket
 
         var merged = Array(bucket.values)
-        merged.removeAll { $0.name == Self.cashierPending || $0.name == Self.cashierAwaitingTill }
-
         if let token = pinnedPendingToken,
-           let cookie = makeCookie(host: host, name: Self.cashierPending, value: token) {
+           let cookie = makeCookie(host: host, name: Self.cashierPending, value: token, secure: secure) {
+            merged.removeAll { $0.name == Self.cashierPending }
             merged.append(cookie)
         }
         if let token = pinnedAwaitingTillToken,
-           let cookie = makeCookie(host: host, name: Self.cashierAwaitingTill, value: token) {
+           let cookie = makeCookie(host: host, name: Self.cashierAwaitingTill, value: token, secure: secure) {
+            merged.removeAll { $0.name == Self.cashierAwaitingTill }
             merged.append(cookie)
         }
         if let sessionId = manualSessionId,
            !merged.contains(where: { $0.name == Self.cashierSession }),
-           let cookie = makeCookie(host: host, name: Self.cashierSession, value: sessionId) {
+           let cookie = makeCookie(host: host, name: Self.cashierSession, value: sessionId, secure: secure) {
             merged.append(cookie)
         }
         return merged
@@ -114,14 +121,39 @@ final class CookieStore: @unchecked Sendable {
     func rememberPendingRequestToken(_ token: String, baseURL: URL) {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let host = baseURL.host else { return }
+        let secure = baseURL.scheme?.lowercased() == "https"
 
         lock.lock()
         pinnedPendingToken = trimmed
         lock.unlock()
 
-        if let cookie = makeCookie(host: host, name: Self.cashierPending, value: trimmed) {
+        if let cookie = makeCookie(host: host, name: Self.cashierPending, value: trimmed, secure: secure) {
             saveFromResponse(url: baseURL, cookies: [cookie])
         }
+    }
+
+    func rememberAwaitingTillToken(_ token: String, baseURL: URL) {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let host = baseURL.host else { return }
+        let secure = baseURL.scheme?.lowercased() == "https"
+
+        lock.lock()
+        pinnedAwaitingTillToken = trimmed
+        lock.unlock()
+
+        if let cookie = makeCookie(host: host, name: Self.cashierAwaitingTill, value: trimmed, secure: secure) {
+            saveFromResponse(url: baseURL, cookies: [cookie])
+        }
+    }
+
+    /// After WebView sync, pin awaiting-till from the jar if the server set it but the pin was lost.
+    func pinAwaitingTillFromStoreIfNeeded(baseURL: URL) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard pinnedAwaitingTillToken == nil,
+              let host = baseURL.host,
+              let cookie = store[host]?[Self.cashierAwaitingTill] else { return }
+        pinnedAwaitingTillToken = cookie.value
     }
 
     func clearHost(_ host: String) {
@@ -142,13 +174,13 @@ final class CookieStore: @unchecked Sendable {
         manualSessionId = nil
     }
 
-    private func makeCookie(host: String, name: String, value: String) -> HTTPCookie? {
+    private func makeCookie(host: String, name: String, value: String, secure: Bool) -> HTTPCookie? {
         HTTPCookie(properties: [
             .domain: host,
             .path: "/",
             .name: name,
             .value: value,
-            .secure: "FALSE",
+            .secure: secure ? "TRUE" : "FALSE",
             .discard: "TRUE",
         ])
     }

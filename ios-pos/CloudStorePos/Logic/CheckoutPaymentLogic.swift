@@ -79,4 +79,14 @@ enum CashEntryLogic {
         if current.count >= 20 { return current }
         return current + String(digit)
     }
+
+    static func appendQuantityDigit(current: String, digit: Character) -> String {
+        guard digit.isNumber else { return current }
+        if current.count >= 4 { return current }
+        return current + String(digit)
+    }
+
+    static func sanitizeQuantityInput(_ value: String) -> String {
+        String(value.filter(\.isNumber).prefix(4))
+    }
 }

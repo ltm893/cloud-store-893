@@ -21,6 +21,25 @@ enum CashierAuthGate: Equatable {
         selectedDenominationId: String?,
         submitting: Bool
     )
+    case closingTill(
+        expectedCloseFloat: Double?,
+        openingCountedFloat: Double?,
+        cashSalesTotal: Double?,
+        changeGivenTotal: Double?,
+        denominations: [TillDenomination],
+        counts: [String: String],
+        selectedDenominationId: String?,
+        submitting: Bool
+    )
+    case closingCreditOnly(submitting: Bool)
+    case waitingCloseApproval(
+        closeToken: String?,
+        secondsRemaining: Int?,
+        cashMode: String?,
+        expectedCloseFloat: Double?,
+        countedCloseFloat: Double?,
+        closeVariance: Double?
+    )
 }
 
 @Observable
@@ -39,6 +58,7 @@ final class PosSessionViewModel {
     private let registerId: String
     private var requireFreshIdpLogin = false
     private var approvalPollTask: Task<Void, Never>?
+    private var closePollTask: Task<Void, Never>?
 
     init(
         apiBaseURL: URL = AppConfig.apiBaseURL,
@@ -101,6 +121,9 @@ final class PosSessionViewModel {
             if let token = OidcRedirectLogic.parsePendingRequestToken(from: completionURL) {
                 cookieStore.rememberPendingRequestToken(token, baseURL: apiBaseURL)
             }
+            if OidcRedirectLogic.isAwaitingTillRedirect(completionURL: completionURL) {
+                cookieStore.pinAwaitingTillFromStoreIfNeeded(baseURL: apiBaseURL)
+            }
             await probeSession()
             ensureWaitingApprovalAfterOidc(completionURL: completionURL)
         }
@@ -112,17 +135,11 @@ final class PosSessionViewModel {
 
     func cancelApprovalWait() {
         Task {
-            stopApprovalPoll()
             status = "Cancelling…"
             try? await api.cancelApproval()
-            if let host = apiBaseURL.host {
-                cookieStore.clearHost(host)
-            } else {
-                cookieStore.clearAll()
-            }
-            await probeSession()
-            if case .waitingApproval = authGate {
-                authGate = .signIn(pinAllowed: false, idpEnabled: lastSession?.idpEnabled ?? true)
+            await returnToFreshSignIn(status: "Login request cancelled")
+            await probeSession(showChecking: false)
+            if case .signIn = authGate {
                 status = "Login request cancelled"
             }
         }
@@ -131,6 +148,7 @@ final class PosSessionViewModel {
     func signOutForBreak() {
         Task {
             stopApprovalPoll()
+            stopClosePoll()
             status = "Signing out…"
             try? await api.logoutCashier()
             await WebViewCookieSync.clearIdpCookies()
@@ -215,13 +233,108 @@ final class PosSessionViewModel {
 
     func cancelOpeningTill() {
         Task {
-            stopApprovalPoll()
             status = "Cancelling…"
             try? await api.cancelOpeningTill()
-            clearCashierCookies()
-            authGate = .signIn(pinAllowed: false, idpEnabled: lastSession?.idpEnabled ?? true)
-            status = "Sign-in cancelled"
+            await returnToFreshSignIn(status: "Sign-in cancelled")
             await probeSession(showChecking: false)
+            if case .signIn = authGate {
+                status = "Sign-in cancelled"
+            }
+        }
+    }
+
+    func beginCloseTill() {
+        Task {
+            status = "Loading close till…"
+            do {
+                let preview = try await api.closeTillPreview()
+                guard preview.ok else {
+                    status = preview.error ?? "Cannot close till"
+                    return
+                }
+                if preview.cartBlocked {
+                    status = "Clear the cart before closing the till"
+                    return
+                }
+                if preview.creditOnly {
+                    enterClosingCreditOnly()
+                } else {
+                    enterClosingTill(preview)
+                }
+            } catch {
+                status = error.localizedDescription
+            }
+        }
+    }
+
+    func cancelCloseTill() {
+        Task {
+            stopClosePoll()
+            try? await api.cancelCloseTill()
+            let user = lastSession?.displayUser ?? "Cashier"
+            authGate = .signedIn(user: user)
+            status = "Close till cancelled"
+        }
+    }
+
+    func submitClosingCreditOnly() {
+        submitCloseTillRequest(cashMode: "credit_only")
+    }
+
+    func submitClosingTill() {
+        guard case .closingTill(_, _, _, _, let denominations, let counts, _, _) = authGate else { return }
+        let nonEmptyCounts = counts.compactMap { id, raw -> (String, Int)? in
+            let count = Int(raw) ?? 0
+            return count > 0 ? (id, count) : nil
+        }
+        let countedTotal = TillCountLogic.sumTillCounts(denominations: denominations, counts: counts)
+        submitCloseTillRequest(
+            cashMode: "cash_and_credit",
+            denominations: Dictionary(uniqueKeysWithValues: nonEmptyCounts),
+            countedTotal: countedTotal
+        )
+    }
+
+    func selectClosingDenomination(_ denominationId: String) {
+        updateClosingTillGate { $0.copy(selectedDenominationId: denominationId) }
+    }
+
+    func appendClosingTillDigit(_ digit: Character) {
+        guard case .closingTill(_, _, _, _, _, let counts, let selectedDenominationId, _) = authGate,
+              let id = selectedDenominationId else { return }
+        let current = counts[id] ?? ""
+        guard current.count < 4 else { return }
+        let next = current == "0" ? String(digit) : current + String(digit)
+        updateClosingTillCount(denominationId: id, value: next)
+    }
+
+    func clearClosingTillCount() {
+        guard case .closingTill(_, _, _, _, _, _, let selectedDenominationId, _) = authGate,
+              let id = selectedDenominationId else { return }
+        updateClosingTillCount(denominationId: id, value: "")
+    }
+
+    func backspaceClosingTillCount() {
+        guard case .closingTill(_, _, _, _, _, let counts, let selectedDenominationId, _) = authGate,
+              let id = selectedDenominationId else { return }
+        updateClosingTillCount(denominationId: id, value: String((counts[id] ?? "").dropLast()))
+    }
+
+    func selectNextClosingDenomination() {
+        updateClosingTillGate { gate in
+            guard !gate.denominations.isEmpty else { return gate }
+            let currentIdx = gate.denominations.firstIndex { $0.id == gate.selectedDenominationId } ?? -1
+            let nextIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % gate.denominations.count
+            return gate.copy(selectedDenominationId: gate.denominations[nextIdx].id)
+        }
+    }
+
+    func selectPreviousClosingDenomination() {
+        updateClosingTillGate { gate in
+            guard !gate.denominations.isEmpty else { return gate }
+            let currentIdx = gate.denominations.firstIndex { $0.id == gate.selectedDenominationId } ?? 0
+            let prevIdx = currentIdx <= 0 ? gate.denominations.count - 1 : currentIdx - 1
+            return gate.copy(selectedDenominationId: gate.denominations[prevIdx].id)
         }
     }
 
@@ -229,6 +342,11 @@ final class PosSessionViewModel {
         await WebViewCookieSync.sync(baseURL: apiBaseURL, cookieStore: cookieStore)
         try? await Task.sleep(nanoseconds: 150_000_000)
         await WebViewCookieSync.sync(baseURL: apiBaseURL, cookieStore: cookieStore)
+        cookieStore.pinAwaitingTillFromStoreIfNeeded(baseURL: apiBaseURL)
+    }
+
+    private func ensureOpeningTillCookies() async {
+        await syncWebViewCookiesWithRetry()
     }
 
     private func ensureWaitingApprovalAfterOidc(completionURL: URL) {
@@ -361,7 +479,7 @@ final class PosSessionViewModel {
             switch poll.status.lowercased() {
             case "approved":
                 if poll.ok {
-                    await completeApprovedLogin()
+                    finishApprovedLogin()
                 }
             case "pending":
                 authGate = waitingApprovalGate(
@@ -408,8 +526,15 @@ final class PosSessionViewModel {
         }
     }
 
-    private func completeApprovedLogin() async {
+    /// Finish login on a fresh task — do not cancel the poll job before session fetch runs (Android parity).
+    private func finishApprovedLogin() {
+        Task { @MainActor in
+            await applyApprovedSession()
+        }
         stopApprovalPoll()
+    }
+
+    private func applyApprovedSession() async {
         status = "Completing sign-in…"
         do {
             let session = try await api.fetchCashierSession()
@@ -420,6 +545,8 @@ final class PosSessionViewModel {
                 authGate = .signIn(pinAllowed: false, idpEnabled: lastSession?.idpEnabled ?? true)
                 status = "Approved but session did not persist — sign in again"
             }
+        } catch is CancellationError {
+            return
         } catch {
             authGate = .signIn(pinAllowed: false, idpEnabled: lastSession?.idpEnabled ?? true)
             status = error.localizedDescription
@@ -493,6 +620,8 @@ final class PosSessionViewModel {
             status = "Submitting till count…"
 
             do {
+                await ensureOpeningTillCookies()
+
                 let response = try await api.submitOpeningTill(
                     SubmitOpeningTillRequest(
                         cashMode: cashMode,
@@ -502,6 +631,9 @@ final class PosSessionViewModel {
                 )
 
                 if response.pending {
+                    if let token = response.requestToken {
+                        cookieStore.rememberPendingRequestToken(token, baseURL: apiBaseURL)
+                    }
                     let counted = denominationsForSummary.isEmpty
                         ? nil
                         : TillCountLogic.sumTillCounts(
@@ -525,9 +657,7 @@ final class PosSessionViewModel {
                 }
 
                 if response.ok {
-                    let session = try await api.fetchCashierSession()
-                    lastSession = session
-                    applySessionProbe(session)
+                    await applySessionAfterTillSubmit()
                     return
                 }
 
@@ -536,13 +666,9 @@ final class PosSessionViewModel {
             } catch let error as PosAPIError {
                 switch error {
                 case .httpStatus(401, _):
-                    clearCashierCookies()
-                    authGate = .signIn(pinAllowed: false, idpEnabled: lastSession?.idpEnabled ?? true)
-                    status = "Sign-in expired — sign in with Oracle again"
+                    await returnToFreshSignIn(status: "Sign-in expired — sign in with Oracle again")
                 case .httpStatus(409, let message):
-                    clearCashierCookies()
-                    authGate = .signIn(pinAllowed: false, idpEnabled: lastSession?.idpEnabled ?? true)
-                    status = registerInUseMessage(from: message)
+                    await returnToFreshSignIn(status: registerInUseMessage(from: message))
                 default:
                     updateOpeningTillGate { $0.copy(submitting: false) }
                     status = error.localizedDescription
@@ -554,12 +680,250 @@ final class PosSessionViewModel {
         }
     }
 
+    private func applySessionAfterTillSubmit() async {
+        for attempt in 0 ..< 2 {
+            do {
+                let session = try await api.fetchCashierSession()
+                lastSession = session
+                applySessionProbe(session)
+                if case .signedIn = authGate { return }
+                if case .waitingApproval = authGate { return }
+            } catch {
+                if attempt == 1 {
+                    await returnToFreshSignIn(
+                        status: "Till submitted but session did not persist — sign in again"
+                    )
+                    return
+                }
+            }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        await returnToFreshSignIn(status: "Till submitted but session did not persist — sign in again")
+    }
+
+    private func enterClosingCreditOnly() {
+        stopClosePoll()
+        authGate = .closingCreditOnly(submitting: false)
+        status = "Close credit-only shift"
+    }
+
+    private func enterClosingTill(_ preview: CloseTillPreviewResponse) {
+        stopClosePoll()
+        authGate = .closingTill(
+            expectedCloseFloat: preview.expectedCloseFloat,
+            openingCountedFloat: preview.openingCountedFloat,
+            cashSalesTotal: preview.cashSalesTotal,
+            changeGivenTotal: preview.changeGivenTotal,
+            denominations: preview.denominations,
+            counts: [:],
+            selectedDenominationId: preview.denominations.first?.id,
+            submitting: false
+        )
+        status = "Count closing till"
+    }
+
+    private func submitCloseTillRequest(
+        cashMode: String,
+        denominations: [String: Int]? = nil,
+        countedTotal: Double? = nil
+    ) {
+        Task {
+            setCloseSubmitting(true)
+            status = "Submitting close…"
+            do {
+                let response = try await api.submitCloseTill(
+                    SubmitCloseTillRequest(
+                        cashMode: cashMode,
+                        denominations: denominations,
+                        countedTotal: countedTotal
+                    )
+                )
+                if response.approved {
+                    await finishCloseTillSignedOff()
+                    return
+                }
+                if response.pending {
+                    authGate = .waitingCloseApproval(
+                        closeToken: response.closeToken,
+                        secondsRemaining: nil,
+                        cashMode: response.cashMode,
+                        expectedCloseFloat: response.expectedCloseFloat,
+                        countedCloseFloat: response.countedCloseFloat,
+                        closeVariance: response.closeVariance
+                    )
+                    status = "Waiting for supervisor to approve close"
+                    startClosePoll()
+                    return
+                }
+                setCloseSubmitting(false)
+                status = response.error ?? "Close till failed"
+            } catch {
+                setCloseSubmitting(false)
+                status = error.localizedDescription
+            }
+        }
+    }
+
+    private func setCloseSubmitting(_ submitting: Bool) {
+        switch authGate {
+        case .closingTill(let expected, let opening, let sales, let change, let denominations, let counts, let selected, _):
+            authGate = .closingTill(
+                expectedCloseFloat: expected,
+                openingCountedFloat: opening,
+                cashSalesTotal: sales,
+                changeGivenTotal: change,
+                denominations: denominations,
+                counts: counts,
+                selectedDenominationId: selected,
+                submitting: submitting
+            )
+        case .closingCreditOnly:
+            authGate = .closingCreditOnly(submitting: submitting)
+        default:
+            break
+        }
+    }
+
+    private func finishCloseTillSignedOff() async {
+        stopClosePoll()
+        stopApprovalPoll()
+        await WebViewCookieSync.clearIdpCookies()
+        requireFreshIdpLogin = true
+        lastSession = nil
+        signedInViaTillResume = false
+        clearCashierCookies()
+        authGate = .checking
+        status = "Till closed — sign in with your credentials"
+        await probeSession(showChecking: false)
+    }
+
+    private func startClosePoll() {
+        closePollTask?.cancel()
+        closePollTask = Task {
+            await pollCloseOnce()
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: Self.approvalPollNanos)
+                guard !Task.isCancelled else { break }
+                await pollCloseOnce()
+            }
+        }
+    }
+
+    private func stopClosePoll() {
+        closePollTask?.cancel()
+        closePollTask = nil
+    }
+
+    private func pollCloseOnce() async {
+        guard case .waitingCloseApproval(let closeToken, _, _, _, _, _) = authGate else { return }
+        do {
+            let poll = try await api.closeTillStatus(closeToken: closeToken)
+            switch poll.status?.lowercased() {
+            case "approved":
+                await finishCloseTillSignedOff()
+            case "denied":
+                stopClosePoll()
+                let user = lastSession?.displayUser ?? "Cashier"
+                authGate = .signedIn(user: user)
+                status = poll.reason.map { "Close denied: \($0)" } ?? "Supervisor denied close"
+            case "pending":
+                authGate = .waitingCloseApproval(
+                    closeToken: poll.closeToken ?? closeToken,
+                    secondsRemaining: poll.secondsRemaining,
+                    cashMode: poll.cashMode,
+                    expectedCloseFloat: poll.expectedCloseFloat,
+                    countedCloseFloat: poll.countedCloseFloat,
+                    closeVariance: poll.closeVariance
+                )
+                status = "Waiting for supervisor to approve close"
+            case "none":
+                await handleAmbiguousClosePoll()
+            default:
+                if poll.ok {
+                    await finishCloseTillSignedOff()
+                }
+            }
+        } catch let error as PosAPIError {
+            if case .httpStatus(401, _) = error {
+                await finishCloseTillSignedOff()
+            } else {
+                status = "Waiting for supervisor to approve close — \(error.localizedDescription)"
+            }
+        } catch {
+            status = "Waiting for supervisor to approve close — \(error.localizedDescription)"
+        }
+    }
+
+    /// After supervisor approval the server may clear the session before the next poll sees `approved`.
+    private func handleAmbiguousClosePoll() async {
+        if let session = try? await api.fetchCashierSession(), session.ok {
+            status = "Waiting for supervisor to approve close"
+            return
+        }
+        await finishCloseTillSignedOff()
+    }
+
+    private func updateClosingTillCount(denominationId: String, value: String) {
+        updateClosingTillGate { gate in
+            var counts = gate.counts
+            counts[denominationId] = value
+            return gate.copy(counts: counts)
+        }
+    }
+
+    private func updateClosingTillGate(_ transform: (ClosingTillGate) -> ClosingTillGate) {
+        guard case .closingTill(
+            let expected,
+            let opening,
+            let sales,
+            let change,
+            let denominations,
+            let counts,
+            let selected,
+            let submitting
+        ) = authGate else { return }
+        let gate = ClosingTillGate(
+            expectedCloseFloat: expected,
+            openingCountedFloat: opening,
+            cashSalesTotal: sales,
+            changeGivenTotal: change,
+            denominations: denominations,
+            counts: counts,
+            selectedDenominationId: selected,
+            submitting: submitting
+        )
+        let next = transform(gate)
+        authGate = .closingTill(
+            expectedCloseFloat: next.expectedCloseFloat,
+            openingCountedFloat: next.openingCountedFloat,
+            cashSalesTotal: next.cashSalesTotal,
+            changeGivenTotal: next.changeGivenTotal,
+            denominations: next.denominations,
+            counts: next.counts,
+            selectedDenominationId: next.selectedDenominationId,
+            submitting: next.submitting
+        )
+    }
+
     private func clearCashierCookies() {
         if let host = apiBaseURL.host {
             cookieStore.clearHost(host)
         } else {
             cookieStore.clearAll()
         }
+    }
+
+    /// Abandon in-progress sign-in / till open — next Oracle sign-in must ask for credentials.
+    private func returnToFreshSignIn(status: String) async {
+        stopApprovalPoll()
+        stopClosePoll()
+        await WebViewCookieSync.clearIdpCookies()
+        requireFreshIdpLogin = true
+        lastSession = nil
+        signedInViaTillResume = false
+        clearCashierCookies()
+        authGate = .signIn(pinAllowed: false, idpEnabled: true)
+        self.status = status
     }
 
     private func registerInUseMessage(from body: String?) -> String {
@@ -574,6 +938,39 @@ final class PosSessionViewModel {
             }
         }
         return "This tablet is in use — the current cashier must sign off first"
+    }
+}
+
+private struct ClosingTillGate {
+    let expectedCloseFloat: Double?
+    let openingCountedFloat: Double?
+    let cashSalesTotal: Double?
+    let changeGivenTotal: Double?
+    let denominations: [TillDenomination]
+    let counts: [String: String]
+    let selectedDenominationId: String?
+    let submitting: Bool
+
+    func copy(
+        expectedCloseFloat: Double? = nil,
+        openingCountedFloat: Double? = nil,
+        cashSalesTotal: Double? = nil,
+        changeGivenTotal: Double? = nil,
+        denominations: [TillDenomination]? = nil,
+        counts: [String: String]? = nil,
+        selectedDenominationId: String?? = nil,
+        submitting: Bool? = nil
+    ) -> ClosingTillGate {
+        ClosingTillGate(
+            expectedCloseFloat: expectedCloseFloat ?? self.expectedCloseFloat,
+            openingCountedFloat: openingCountedFloat ?? self.openingCountedFloat,
+            cashSalesTotal: cashSalesTotal ?? self.cashSalesTotal,
+            changeGivenTotal: changeGivenTotal ?? self.changeGivenTotal,
+            denominations: denominations ?? self.denominations,
+            counts: counts ?? self.counts,
+            selectedDenominationId: selectedDenominationId ?? self.selectedDenominationId,
+            submitting: submitting ?? self.submitting
+        )
     }
 }
 

@@ -45,9 +45,9 @@ struct PosNumberPad: View {
                     }
                 }
                 keyRow {
-                    padKey("C", role: .secondary, action: onClear)
+                    padKey("C", action: onClear)
                     padKey("0") { onDigit("0") }
-                    padKey("⌫", role: .secondary, action: onBackspace)
+                    padKey("⌫", action: onBackspace)
                 }
             }
 
@@ -71,7 +71,6 @@ struct PosNumberPad: View {
 
     private func padKey(
         _ label: String,
-        role: PadKeyRole = .digit,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -79,7 +78,7 @@ struct PosNumberPad: View {
                 .font(.title3.bold())
                 .frame(maxWidth: .infinity)
                 .modifier(KeyRowHeightModifier(layout: layout))
-                .background(role == .digit ? PosColors.numpadKey : Color.white.opacity(0.7))
+                .background(PosColors.numpadKey)
                 .foregroundStyle(.primary)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
@@ -95,11 +94,6 @@ struct PosNumberPad: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
-    }
-
-    private enum PadKeyRole {
-        case digit
-        case secondary
     }
 }
 

@@ -2,7 +2,7 @@
 
 Native SwiftUI register for **Cloud Store 893**, mirroring `android-pos/`. **iPad-only**, landscape.
 
-**Status (2026-06-14):** Auth + opening till (P0–P2, **P3.1**) + **register selling (P3.2)**. Layout matches Android tablet: scan/Add Id + numpad (no product browse grid). Till close (P3.3) next.
+**Status (2026-06-11):** Auth + opening till (P3.1) + register selling (P3.2) + till close (P3.3) + customer find + admin WebView + **offline queue (P3.5)**.
 
 ---
 
@@ -18,16 +18,18 @@ Native SwiftUI register for **Cloud Store 893**, mirroring `android-pos/`. **iPa
 | Break | `POST /api/cashier/logout` — till stays open; re-sign-in resumes |
 | Opening till count | `GET /api/cashier/till/config`, `POST /api/cashier/approval/till`, denomination numpad |
 | **Register selling** | Scan/Add Id numpad → cart (Android-style rows) → Pay → cash/card split tender → receipt |
+| **Customer find** | Link/unlink member; scan customer ID without product |
+| **Admin WebView** | ☰ menu → `/admin/?client_kind=ios` |
+| **Offline queue** | Network failure at checkout → queue sale locally → **Sync queued** replays `POST /api/cart/replace` + checkout |
+| **Show status** | ☰ menu → status panel (API message + offline queue) above numpad |
+| **Till close** | **Close till** in menu → count/confirm → supervisor close approval → sign-in gate |
 
-## Not implemented yet (P3.3+)
+## Not implemented yet
 
 - PIN numpad unlock
 - Camera barcode scan
-- Customer find / member discount
-- Cart quantity edit panel
-- Till close + close approval wait
-- Admin WebView (menu item)
-- Offline checkout queue
+- Card on file
+- Receipt print
 
 ---
 
@@ -84,7 +86,7 @@ Select an **iPad** simulator (not iPhone — `TARGETED_DEVICE_FAMILY = 2`), set 
 npm run test:ios-pos
 ```
 
-27 XCTests (config, register id, OIDC redirect, till count/summary, approval JSON, cart/checkout math). Requires macOS + Xcode.
+37+ XCTests (config, register id, OIDC redirect, till count/summary, approval JSON, cart/checkout math, offline queue). Requires macOS + Xcode.
 
 ## Manual test checklist
 
@@ -97,8 +99,9 @@ Use **OCI** (`https://oci.cloudstore893.com/`) with Model B (supervisor approval
 5. **Break:** Signed in → Break → sign-in; next OIDC forces fresh login (`prompt=login`).
 6. **Resume:** After break, same cashier on same iPad resumes active till (`cashier_resume`).
 7. **Cash float:** If server has `OPENING_CASH_FLOAT`, OIDC → opening till count → submit → supervisor approval (or signed in if approval off) → register.
-8. **Sell:** Enter product ID or barcode → **Add** → **Pay** → cash/card → receipt → **New sale**.
+8. **Sell:** Enter product ID or barcode → **Add** → **Pay** → cash/card → receipt in sale panel → **Print Receipt** → new sale.
 9. **Credit-only till:** Card payments only; cash buttons hidden when till is credit-only.
+10. **Offline queue:** Airplane mode (or unreachable API) → complete checkout → receipt shows **Queued for sync** → reconnect → ☰ **Sync queued** → sale posts to server.
 
 ## Related docs
 
@@ -106,7 +109,3 @@ Use **OCI** (`https://oci.cloudstore893.com/`) with Model B (supervisor approval
 - [docs/pos-session-cookies.md](../docs/pos-session-cookies.md) — cookie / OIDC state machine
 - [docs/pos-client-identifiers.md](../docs/pos-client-identifiers.md) — `client_kind=ios`, `register_id`
 - [ios-admin/README.md](../ios-admin/README.md) — admin WebView reference
-
-## Resume development
-
-Next: **P3.3** till close. See [CONTENTS.md](../CONTENTS.md) session handoff.

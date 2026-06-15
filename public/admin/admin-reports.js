@@ -2,10 +2,7 @@
  * Admin on-demand sales and inventory reports.
  */
 (function initAdminReports() {
-  const reportsNavEl = document.getElementById('reportsNav');
-  const reportsNavBtn = document.getElementById('reportsNavBtn');
   const reportsPanelEl = document.getElementById('reportsPanel');
-  const tablePanelEl = document.getElementById('tablePanel');
   const periodSelectEl = document.getElementById('reportsPeriod');
   const anchorInputEl = document.getElementById('reportsAnchor');
   const loadBtnEl = document.getElementById('reportsLoadBtn');
@@ -179,41 +176,38 @@
     }
   }
 
-  function show() {
-    active = true;
-    if (reportsNavEl) reportsNavEl.hidden = false;
-    if (anchorInputEl && !anchorInputEl.value) anchorInputEl.value = todayAnchor();
-  }
-
-  function openPanel() {
+  function activate() {
     active = true;
     if (reportsPanelEl) reportsPanelEl.hidden = false;
-    if (tablePanelEl) tablePanelEl.hidden = true;
-    document.querySelectorAll('#tableNav button').forEach((btn) => btn.classList.remove('active'));
-    document.getElementById('approvalsNavBtn')?.classList.remove('active');
-    document.getElementById('shiftClosesNavBtn')?.classList.remove('active');
-    reportsNavBtn?.classList.add('active');
+    if (anchorInputEl && !anchorInputEl.value) anchorInputEl.value = todayAnchor();
     loadReports();
   }
 
-  function closePanel() {
+  function deactivate() {
     active = false;
     if (reportsPanelEl) reportsPanelEl.hidden = true;
-    reportsNavBtn?.classList.remove('active');
+  }
+
+  function openPanel() {
+    window.AdminTabs?.switchAdminTab?.('reports');
+  }
+
+  function closePanel() {
+    deactivate();
   }
 
   function configure({ apiFetch: fetchFn, setStatus: statusFn }) {
     apiFetch = fetchFn;
     setStatus = statusFn;
-    show();
   }
 
-  reportsNavBtn?.addEventListener('click', openPanel);
   loadBtnEl?.addEventListener('click', loadReports);
 
   window.AdminReports = {
     configure,
-    show,
+    activate,
+    deactivate,
+    show: activate,
     openPanel,
     closePanel,
     isActive: () => active,

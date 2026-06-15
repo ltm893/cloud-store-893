@@ -1,8 +1,32 @@
 import SwiftUI
 
 private let tillPanelBorder = Color.black.opacity(0.75)
-private let tillSideGutter: CGFloat = 20
-private let tillCenterGutter: CGFloat = 28
+
+struct TillCountScreenOptions {
+    var screenTitle = "Count opening till"
+    var referenceLabel = "Target"
+    var headerHint = "Tap row -> count · ↑↓ to move"
+    var submitButtonText = "Submit Till Count"
+    var showNoCashButton = true
+    var requireExactMatch = true
+    var defaultStatus = "Count opening till"
+    var secondaryHeaderLine: String?
+
+    static let opening = TillCountScreenOptions()
+
+    static func closing(headerHint: String?) -> TillCountScreenOptions {
+        TillCountScreenOptions(
+            screenTitle: "Close till",
+            referenceLabel: "Expected",
+            headerHint: "Tap row -> count · ↑↓ to move",
+            submitButtonText: "Submit for approval",
+            showNoCashButton: false,
+            requireExactMatch: false,
+            defaultStatus: "Count closing till",
+            secondaryHeaderLine: headerHint
+        )
+    }
+}
 
 struct OpeningTillScreen: View {
     let expectedOpeningFloat: Double?
@@ -11,6 +35,7 @@ struct OpeningTillScreen: View {
     let selectedDenominationId: String?
     let status: String
     let submitting: Bool
+    let options: TillCountScreenOptions
     let onSelectDenomination: (String) -> Void
     let onDigit: (Character) -> Void
     let onClearCount: () -> Void
@@ -21,6 +46,42 @@ struct OpeningTillScreen: View {
     let onNoCashToday: () -> Void
     let onCancel: () -> Void
 
+    init(
+        expectedOpeningFloat: Double?,
+        denominations: [TillDenomination],
+        counts: [String: String],
+        selectedDenominationId: String?,
+        status: String,
+        submitting: Bool,
+        options: TillCountScreenOptions = .opening,
+        onSelectDenomination: @escaping (String) -> Void,
+        onDigit: @escaping (Character) -> Void,
+        onClearCount: @escaping () -> Void,
+        onBackspaceCount: @escaping () -> Void,
+        onPreviousDenomination: @escaping () -> Void,
+        onNextDenomination: @escaping () -> Void,
+        onSubmit: @escaping () -> Void,
+        onNoCashToday: @escaping () -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.expectedOpeningFloat = expectedOpeningFloat
+        self.denominations = denominations
+        self.counts = counts
+        self.selectedDenominationId = selectedDenominationId
+        self.status = status
+        self.submitting = submitting
+        self.options = options
+        self.onSelectDenomination = onSelectDenomination
+        self.onDigit = onDigit
+        self.onClearCount = onClearCount
+        self.onBackspaceCount = onBackspaceCount
+        self.onPreviousDenomination = onPreviousDenomination
+        self.onNextDenomination = onNextDenomination
+        self.onSubmit = onSubmit
+        self.onNoCashToday = onNoCashToday
+        self.onCancel = onCancel
+    }
+
     private var countedTotal: Double {
         TillCountLogic.sumTillCounts(denominations: denominations, counts: counts)
     }
@@ -29,7 +90,8 @@ struct OpeningTillScreen: View {
         TillCountLogic.canSubmit(
             expectedOpeningFloat: expectedOpeningFloat,
             denominations: denominations,
-            counts: counts
+            counts: counts,
+            requireExactMatch: options.requireExactMatch
         )
     }
 
@@ -44,54 +106,77 @@ struct OpeningTillScreen: View {
             statusBar
             actionButtons
         }
-        .background(Color(red: 250 / 255, green: 243 / 255, blue: 223 / 255))
+        .background(PosColors.cream)
     }
 
     private var mainPanels: some View {
-        HStack(alignment: .top, spacing: 0) {
-            Spacer(minLength: tillSideGutter)
+        GeometryReader { geo in
+            let sidePad = PosLayoutMetrics.tillPanelGutter
+            let contentWidth = max(0, geo.size.width - sidePad * 2)
+            HStack(spacing: 0) {
+                Spacer().frame(width: sidePad)
+                denominationPanel
+                    .frame(width: contentWidth * PosLayoutMetrics.tillDenomPanelWeight)
+                Spacer().frame(width: contentWidth * PosLayoutMetrics.tillGutterWeight)
+                numpadPanel
+                    .frame(width: contentWidth * PosLayoutMetrics.tillNumpadPanelWeight)
+                Spacer().frame(width: sidePad)
+            }
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+        .frame(maxHeight: .infinity)
+    }
 
-            denominationList
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .tillPanelStyle()
+    private var denominationPanel: some View {
+        denominationList
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(4)
+    }
 
-            Spacer(minLength: tillCenterGutter)
-
+    private var numpadPanel: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: PosLayoutMetrics.tillPanelEdgeSpacer)
             PosNumberPad(
+                layout: .compact,
                 onDigit: onDigit,
                 onClear: onClearCount,
                 onBackspace: onBackspaceCount,
                 onUp: onPreviousDenomination,
                 onDown: onNextDenomination
             )
-            .frame(maxWidth: 280)
-            .frame(maxHeight: .infinity)
-            .tillPanelStyle()
-
-            Spacer(minLength: tillSideGutter)
+            .padding(PosLayoutMetrics.numpadInnerPadding)
+            .frame(height: PosLayoutMetrics.numpadCardHeight)
+            Spacer(minLength: PosLayoutMetrics.tillPanelEdgeSpacer)
         }
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-        .frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(PosColors.cream)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private var header: some View {
         VStack(spacing: 4) {
-            Text("Count opening till")
+            Text(options.screenTitle)
                 .font(.title3.bold())
             Text(TillCountLogic.summaryLine(
                 expectedOpeningFloat: expectedOpeningFloat,
-                countedTotal: countedTotal
+                countedTotal: countedTotal,
+                referenceLabel: options.referenceLabel
             ))
             .font(.subheadline)
-            Text("Tap row → count · ↑↓ to move")
+            if let secondaryHeaderLine = options.secondaryHeaderLine, !secondaryHeaderLine.isEmpty {
+                Text(secondaryHeaderLine)
+                    .font(.caption)
+                    .opacity(0.9)
+            }
+            Text(options.headerHint)
                 .font(.caption)
                 .opacity(0.85)
         }
-        .foregroundStyle(Color(red: 250 / 255, green: 243 / 255, blue: 223 / 255))
+        .foregroundStyle(PosColors.cream)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(Color(red: 135 / 255, green: 36 / 255, blue: 52 / 255))
+        .background(PosColors.burgundy)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color.black)
@@ -102,43 +187,12 @@ struct OpeningTillScreen: View {
     private var denominationList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 4) {
+                LazyVStack(spacing: PosLayoutMetrics.tillDenomRowSpacing) {
                     ForEach(denominations) { denom in
-                        let count = Int(counts[denom.id] ?? "") ?? 0
-                        let isSelected = denom.id == selectedDenominationId
-                        Button {
-                            onSelectDenomination(denom.id)
-                        } label: {
-                            HStack {
-                                Text(denom.label)
-                                    .fontWeight(isSelected ? .bold : .medium)
-                                Spacer()
-                                Text(count > 0 ? "× \(count)" : "—")
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(isSelected ? Color(red: 135 / 255, green: 36 / 255, blue: 52 / 255) : .primary)
-                                Text(TillCountLogic.formatMoney(denom.value * Double(count)))
-                                    .font(.caption)
-                                    .frame(width: 56, alignment: .trailing)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                            .background(Color.white.opacity(0.55))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(
-                                        isSelected
-                                            ? Color(red: 135 / 255, green: 36 / 255, blue: 52 / 255)
-                                            : tillPanelBorder.opacity(0.45),
-                                        lineWidth: isSelected ? 2 : 1
-                                    )
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                        .buttonStyle(.plain)
-                        .id(denom.id)
+                        denominationRow(denom)
+                            .id(denom.id)
                     }
                 }
-                .padding(8)
             }
             .onChange(of: selectedDenominationId) { _, newId in
                 guard let newId else { return }
@@ -149,10 +203,46 @@ struct OpeningTillScreen: View {
         }
     }
 
+    private func denominationRow(_ denom: TillDenomination) -> some View {
+        let count = Int(counts[denom.id] ?? "") ?? 0
+        let isSelected = denom.id == selectedDenominationId
+        return Button {
+            onSelectDenomination(denom.id)
+        } label: {
+            HStack {
+                Text(denom.label)
+                    .font(.body)
+                    .fontWeight(isSelected ? .bold : .medium)
+                Spacer()
+                Text(count > 0 ? "× \(count)" : "—")
+                    .font(.body)
+                    .fontWeight(.bold)
+                    .foregroundStyle(isSelected ? PosColors.burgundy : .primary)
+                    .padding(.horizontal, 4)
+                Text(TillCountLogic.formatMoney(denom.value * Double(count)))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 52, alignment: .trailing)
+            }
+            .frame(minHeight: PosLayoutMetrics.tillDenomRowMinHeight)
+            .padding(.horizontal, 8)
+            .padding(.vertical, PosLayoutMetrics.tillDenomRowVerticalPadding)
+            .background(PosColors.highlightPanel)
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(PosColors.burgundy, lineWidth: 2)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var statusBar: some View {
         HStack {
             Text(selectionStatus)
-                .font(.caption)
+                .font(.subheadline)
                 .fontWeight(.semibold)
             Spacer()
             Text(TillCountLogic.actionStatus(
@@ -160,27 +250,30 @@ struct OpeningTillScreen: View {
                 denominations: denominations,
                 counts: counts,
                 submitting: submitting,
-                status: status
+                status: status,
+                defaultStatus: options.defaultStatus,
+                requireExactMatch: options.requireExactMatch
             ))
-            .font(.caption)
+            .font(.subheadline)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.trailing)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(Color.white.opacity(0.55))
+        .padding(.vertical, PosLayoutMetrics.tillStatusBarVerticalPadding)
+        .frame(minHeight: PosLayoutMetrics.tillStatusBarMinHeight)
+        .background(PosColors.highlightPanel)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(tillPanelBorder.opacity(0.5), lineWidth: 1)
         )
-        .padding(.horizontal, tillSideGutter)
+        .padding(.horizontal, PosLayoutMetrics.tillPanelGutter)
         .padding(.top, 8)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(Color.black.opacity(0.35))
                 .frame(height: 1)
-                .padding(.horizontal, tillSideGutter)
+                .padding(.horizontal, PosLayoutMetrics.tillPanelGutter)
         }
     }
 
@@ -194,44 +287,62 @@ struct OpeningTillScreen: View {
 
     private var actionButtons: some View {
         HStack(spacing: 8) {
-            Button(submitting ? "Submitting…" : "Submit Till Count") {
+            Button(submitting ? "Submitting…" : options.submitButtonText) {
                 onSubmit()
             }
-            .buttonStyle(PosPrimaryButtonStyle())
+            .buttonStyle(PosTealButtonStyle())
+            .frame(maxWidth: .infinity)
             .disabled(submitting || !canSubmit)
 
-            Button("Credit Cards Only") {
-                onNoCashToday()
+            if options.showNoCashButton {
+                Button("Credit Cards Only") {
+                    onNoCashToday()
+                }
+                .buttonStyle(PosTealButtonStyle())
+                .frame(maxWidth: .infinity)
+                .disabled(submitting)
             }
-            .buttonStyle(PosPrimaryButtonStyle())
-            .disabled(submitting)
 
             Button("Cancel") {
                 onCancel()
             }
-            .font(.headline)
-            .foregroundStyle(Color(red: 135 / 255, green: 36 / 255, blue: 52 / 255))
+            .buttonStyle(PosBurgundyButtonStyle())
+            .frame(maxWidth: .infinity)
             .disabled(submitting)
         }
-        .padding(.horizontal, tillSideGutter)
-        .padding(.vertical, 12)
+        .padding(.horizontal, PosLayoutMetrics.tillPanelGutter)
+        .padding(.vertical, 8)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(Color.black.opacity(0.35))
                 .frame(height: 1)
-                .padding(.horizontal, tillSideGutter)
+                .padding(.horizontal, PosLayoutMetrics.tillPanelGutter)
         }
     }
 }
 
-private extension View {
-    func tillPanelStyle() -> some View {
-        padding(10)
-            .background(Color.white.opacity(0.45))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(tillPanelBorder, lineWidth: 1)
-            )
+struct PosTealButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.bold())
+            .foregroundStyle(.white)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(PosColors.teal)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+struct PosBurgundyButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.bold())
+            .foregroundStyle(.white)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(PosColors.burgundy)
+            .opacity(configuration.isPressed ? 0.85 : 1)
             .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }

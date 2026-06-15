@@ -2,10 +2,7 @@
  * Supervisor shift-close panel (EOD till balance).
  */
 (function () {
-  const shiftClosesNavEl = document.getElementById('shiftClosesNav');
-  const shiftClosesNavBtn = document.getElementById('shiftClosesNavBtn');
   const shiftClosesPanelEl = document.getElementById('shiftClosesPanel');
-  const tablePanelEl = document.getElementById('tablePanel');
   const listEl = document.getElementById('shiftClosesList');
   const emptyEl = document.getElementById('shiftClosesEmpty');
   const forbiddenEl = document.getElementById('shiftClosesForbidden');
@@ -150,34 +147,28 @@
     }
   }
 
-  function showView() {
-    if (!session?.supervisorApprovalEnabled) {
-      shiftClosesNavEl.hidden = true;
-      return;
-    }
-    shiftClosesNavEl.hidden = false;
+  function activate() {
+    if (!session?.supervisorApprovalEnabled) return;
+    active = true;
+    shiftClosesPanelEl.hidden = false;
     if (!session.isSupervisor) {
-      shiftClosesPanelEl.hidden = false;
-      tablePanelEl.hidden = true;
       forbiddenEl.hidden = false;
       listEl.innerHTML = '';
       emptyEl.hidden = true;
+      if (pollTimer) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+      }
       return;
     }
     forbiddenEl.hidden = true;
-    if (active) {
-      shiftClosesPanelEl.hidden = false;
-      tablePanelEl.hidden = true;
-      if (window.AdminTables?.setNavActive) window.AdminTables.setNavActive(null);
-      loadPending();
-      if (!pollTimer) pollTimer = window.setInterval(() => loadPending({ quiet: true }), 4000);
-    }
+    loadPending();
+    if (!pollTimer) pollTimer = window.setInterval(() => loadPending({ quiet: true }), 4000);
   }
 
-  function hide() {
+  function deactivate() {
     active = false;
     shiftClosesPanelEl.hidden = true;
-    tablePanelEl.hidden = false;
     if (pollTimer) {
       window.clearInterval(pollTimer);
       pollTimer = null;
@@ -185,12 +176,11 @@
   }
 
   function show() {
-    if (window.AdminApprovals?.isActive?.()) {
-      window.AdminApprovals.hide();
-    }
-    active = true;
-    document.body.classList.remove('nav-open');
-    showView();
+    window.AdminTabs?.switchAdminTab?.('approvals');
+  }
+
+  function hide() {
+    deactivate();
   }
 
   function isActive() {
@@ -201,12 +191,7 @@
     apiFetch = fetchFn;
     setStatus = statusFn;
     session = adminSession;
-    shiftClosesNavBtn?.addEventListener('click', () => {
-      if (window.AdminApprovals?.isActive?.()) window.AdminApprovals.hide();
-      show();
-    });
-    showView();
   }
 
-  window.AdminShiftCloses = { configure, show, hide, isActive };
+  window.AdminShiftCloses = { configure, activate, deactivate, show, hide, isActive };
 })();

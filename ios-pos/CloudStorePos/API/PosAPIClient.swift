@@ -62,36 +62,109 @@ final class PosAPIClient {
         _ = try await postJSON(path: "api/cashier/approval/till/cancel", body: EmptyBody(), as: OkResponse.self)
     }
 
+    func closeTillPreview() async throws -> CloseTillPreviewResponse {
+        try await getJSON(path: "api/cashier/shift/close/preview", as: CloseTillPreviewResponse.self)
+    }
+
+    func submitCloseTill(_ body: SubmitCloseTillRequest) async throws -> SubmitCloseTillResponse {
+        try await postJSON(path: "api/cashier/shift/close/till", body: body, as: SubmitCloseTillResponse.self)
+    }
+
+    func closeTillStatus(closeToken: String? = nil) async throws -> CloseTillStatusResponse {
+        var queryItems: [URLQueryItem] = []
+        if let token = closeToken?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
+            queryItems.append(URLQueryItem(name: "closeToken", value: token))
+        }
+        return try await getJSON(
+            path: "api/cashier/shift/close/status",
+            queryItems: queryItems,
+            as: CloseTillStatusResponse.self
+        )
+    }
+
+    func cancelCloseTill() async throws {
+        _ = try await postJSON(path: "api/cashier/shift/close/cancel", body: EmptyBody(), as: OkResponse.self)
+    }
+
     func fetchProducts() async throws -> [Product] {
         try await getJSON(path: "api/products", as: [Product].self)
     }
 
-    func fetchCart() async throws -> CartResponse {
-        try await getJSON(path: "api/cart", as: CartResponse.self)
+    func fetchCustomers() async throws -> [StoreCustomer] {
+        try await getJSON(path: "api/customers", as: [StoreCustomer].self)
     }
 
-    func addProductToCart(productId: Int) async throws -> CartResponse {
-        try await postJSON(path: "api/cart", body: ProductIdBody(productId: productId), as: CartResponse.self)
+    func fetchCart(customerId: Int? = nil) async throws -> CartResponse {
+        try await getJSON(
+            path: "api/cart",
+            queryItems: customerQueryItems(customerId),
+            as: CartResponse.self
+        )
     }
 
-    func addBarcodeToCart(barcode: String) async throws -> CartResponse {
-        try await postJSON(path: "api/cart/barcode", body: BarcodeBody(barcode: barcode), as: CartResponse.self)
+    func addProductToCart(productId: Int, customerId: Int? = nil) async throws -> CartResponse {
+        try await postJSON(
+            path: "api/cart",
+            body: ProductIdBody(productId: productId),
+            queryItems: customerQueryItems(customerId),
+            as: CartResponse.self
+        )
     }
 
-    func removeCartItem(id: Int) async throws -> CartResponse {
-        try await deleteJSON(path: "api/cart/\(id)", as: CartResponse.self)
+    func addBarcodeToCart(barcode: String, customerId: Int? = nil) async throws -> CartResponse {
+        try await postJSON(
+            path: "api/cart/barcode",
+            body: BarcodeBody(barcode: barcode),
+            queryItems: customerQueryItems(customerId),
+            as: CartResponse.self
+        )
+    }
+
+    func removeCartItem(id: Int, customerId: Int? = nil) async throws -> CartResponse {
+        try await deleteJSON(
+            path: "api/cart/\(id)",
+            queryItems: customerQueryItems(customerId),
+            as: CartResponse.self
+        )
+    }
+
+    func updateCartItemQuantity(id: Int, quantity: Int, customerId: Int? = nil) async throws -> CartResponse {
+        try await putJSON(
+            path: "api/cart/\(id)",
+            body: QuantityBody(quantity: quantity),
+            queryItems: customerQueryItems(customerId),
+            as: CartResponse.self
+        )
+    }
+
+    func replaceCart(items: [CartLineQuantity], customerId: Int? = nil) async throws -> CartResponse {
+        try await postJSON(
+            path: "api/cart/replace",
+            body: CartReplaceRequest(items: items, customerId: customerId),
+            as: CartResponse.self
+        )
     }
 
     func checkout(_ body: CheckoutRequest) async throws -> CheckoutResponse {
         try await postJSON(path: "api/checkout", body: body, as: CheckoutResponse.self)
     }
 
+    private func customerQueryItems(_ customerId: Int?) -> [URLQueryItem] {
+        guard let customerId else { return [] }
+        return [URLQueryItem(name: "customerId", value: String(customerId))]
+    }
+
     private struct EmptyBody: Encodable {}
     private struct ProductIdBody: Encodable { let productId: Int }
     private struct BarcodeBody: Encodable { let barcode: String }
+    private struct QuantityBody: Encodable { let quantity: Int }
 
-    private func getJSON<T: Decodable>(path: String, as type: T.Type) async throws -> T {
-        let url = baseURL.appendingPathComponent(path)
+    private func getJSON<T: Decodable>(
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        as type: T.Type
+    ) async throws -> T {
+        let url = try requestURL(path: path, queryItems: queryItems)
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         applyCookies(to: &request, url: url)
@@ -101,9 +174,10 @@ final class PosAPIClient {
     private func postJSON<T: Decodable, B: Encodable>(
         path: String,
         body: B,
+        queryItems: [URLQueryItem] = [],
         as type: T.Type
     ) async throws -> T {
-        let url = baseURL.appendingPathComponent(path)
+        let url = try requestURL(path: path, queryItems: queryItems)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -112,12 +186,38 @@ final class PosAPIClient {
         return try await perform(request, url: url, as: type)
     }
 
-    private func deleteJSON<T: Decodable>(path: String, as type: T.Type) async throws -> T {
-        let url = baseURL.appendingPathComponent(path)
+    private func putJSON<T: Decodable, B: Encodable>(
+        path: String,
+        body: B,
+        queryItems: [URLQueryItem] = [],
+        as type: T.Type
+    ) async throws -> T {
+        let url = try requestURL(path: path, queryItems: queryItems)
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
+        applyCookies(to: &request, url: url)
+        return try await perform(request, url: url, as: type)
+    }
+
+    private func deleteJSON<T: Decodable>(
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        as type: T.Type
+    ) async throws -> T {
+        let url = try requestURL(path: path, queryItems: queryItems)
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         applyCookies(to: &request, url: url)
         return try await perform(request, url: url, as: type)
+    }
+
+    private func requestURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
+        guard let url = AppConfigLogic.apiRequestURL(base: baseURL, path: path, queryItems: queryItems) else {
+            throw PosAPIError.invalidURL
+        }
+        return url
     }
 
     private func applyCookies(to request: inout URLRequest, url: URL) {
