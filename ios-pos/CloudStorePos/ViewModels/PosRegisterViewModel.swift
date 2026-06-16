@@ -97,7 +97,7 @@ final class PosRegisterViewModel {
             && receipt == nil
             && !checkoutOpen
             && !customerFindOpen
-            && !(quantityEditing && !quantityEditInput.isEmpty)
+            && !quantityEditing
     }
 
     func loadOnAppear() {

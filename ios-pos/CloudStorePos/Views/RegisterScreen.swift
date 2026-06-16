@@ -36,8 +36,8 @@ struct RegisterScreen: View {
                     let hPad = PosLayoutMetrics.registerSideGutter * 2
                     let available = geo.size.width - hPad - gutter
                     HStack(alignment: .top, spacing: gutter) {
-                        mainColumn.frame(width: (available * 0.52).rounded())
-                        rightColumn.frame(width: (available * 0.48).rounded())
+                        mainColumn.frame(width: (available * 0.65).rounded())
+                        rightColumn.frame(width: (available * 0.35).rounded())
                     }
                     .padding(.horizontal, PosLayoutMetrics.registerSideGutter)
                     .padding(.vertical, 8)
