@@ -36,15 +36,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cloudstore.pos.data.TillDenomination
+import com.cloudstore.pos.domain.pricing.formatMoney
+import com.cloudstore.pos.domain.pricing.roundMoney
 import com.cloudstore.pos.ui.theme.PosBackground
 import com.cloudstore.pos.ui.theme.PosButtonDefaults
 import com.cloudstore.pos.ui.theme.PosCardDefaults
 import com.cloudstore.pos.ui.theme.PosPrimary
 import kotlin.math.abs
 
-private const val TillDenomPanelWeight = 0.40f
-private const val TillGutterWeight = 0.20f
-private const val TillNumpadPanelWeight = 0.40f
+private const val TillDenomPanelWeight = 0.63f
+private const val TillGutterWeight = 0.02f
+private const val TillNumpadPanelWeight = 0.35f
 
 /** Fixed space above and below denom list / numpad within each panel. */
 private val TillPanelEdgeSpacer = 12.dp

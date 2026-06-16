@@ -20,6 +20,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.cloudstore.pos.domain.checkout.paymentMethodLabel
+import com.cloudstore.pos.domain.pricing.formatMoney
+import com.cloudstore.pos.domain.receipt.ReceiptLine
+import com.cloudstore.pos.domain.receipt.SaleReceipt
 import com.cloudstore.pos.ui.theme.PosBorder
 import com.cloudstore.pos.ui.theme.PosButtonDefaults
 import com.cloudstore.pos.ui.theme.PosPanel
@@ -170,17 +174,19 @@ private fun ReceiptPaymentsSection(receipt: SaleReceipt) {
         )
         payment.changeGiven?.takeIf { it > 0.005 }?.let { change ->
             Text(
-                text = "Change ${formatMoney(change)}",
+                text = "Change given: ${formatMoney(change)}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.tertiary,
             )
         }
     }
     if (receipt.changeTotal > 0.005 && receipt.payments.none { (it.changeGiven ?: 0.0) > 0.005 }) {
         Text(
-            text = "Change ${formatMoney(receipt.changeTotal)}",
+            text = "Change given: ${formatMoney(receipt.changeTotal)}",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.tertiary,
         )
     }
 }

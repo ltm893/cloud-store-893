@@ -56,6 +56,17 @@ struct CheckoutPaymentPanel: View {
             amountRow("Balance due", CartTotalsLogic.formatMoney(balanceDue), bold: true)
             amountRow("Amount entered", CashEntryLogic.displayCashEntry(amountInput))
 
+            if let entered = CashEntryLogic.parseCashTendered(amountInput) {
+                let changeDelta = CartTotalsLogic.roundMoney(entered - tenderTarget)
+                if changeDelta < -0.005 {
+                    amountRow("Still need", CartTotalsLogic.formatMoney(-changeDelta), color: PosColors.burgundy)
+                } else if changeDelta >= 0.005 {
+                    amountRow("Give change", CartTotalsLogic.formatMoney(changeDelta), bold: true, color: PosColors.teal)
+                } else {
+                    amountRow("Change", CartTotalsLogic.formatMoney(0))
+                }
+            }
+
             if !payments.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Payments received")
@@ -106,6 +117,10 @@ struct CheckoutPaymentPanel: View {
                 onDecimal: onAmountDecimal
             )
 
+            let nextAmount = CashEntryLogic.parseCashTendered(amountInput)
+            let canPayCard = balanceDue > 0.005
+                && nextAmount.map { $0 > 0 && $0 <= balanceDue + 0.005 } ?? false
+
             if cashEnabled && !creditOnlyPayments {
                 Button("Cash") { onApplyCash() }
                     .buttonStyle(PosFullWidthButtonStyle())
@@ -113,19 +128,21 @@ struct CheckoutPaymentPanel: View {
             }
             Button(processingCard ? "Processing…" : "Charge Card") { onApplyCard() }
                 .buttonStyle(PosFullWidthButtonStyle())
-                .disabled(processingCard || balanceDue <= 0.005)
+                .disabled(processingCard || !canPayCard)
         }
         .padding(4)
         .frame(maxHeight: .infinity)
     }
 
-    private func amountRow(_ label: String, _ value: String, bold: Bool = false) -> some View {
+    private func amountRow(_ label: String, _ value: String, bold: Bool = false, color: Color? = nil) -> some View {
         HStack {
             Text(label)
                 .font(.caption)
+                .foregroundStyle(color ?? Color.primary)
             Spacer()
             Text(value)
                 .font(bold ? .subheadline.bold() : .subheadline)
+                .foregroundStyle(color ?? Color.primary)
         }
     }
 }

@@ -145,6 +145,49 @@ Cash due and change use the total rounded **down** to the nearest **$0.05** (e.g
 
 **Debug** is fine for a personal tablet. **Release** needs `signingConfig` in `app/build.gradle.kts`.
 
+## Package structure
+
+```
+app/src/main/java/com/cloudstore/pos/
+├── domain/              ← pure Kotlin, no Compose/Android imports — unit-testable
+│   ├── pricing/
+│   │   └── CartTotals.kt          roundMoney, formatMoney, roundToNickel,
+│   │                              cashQuickDenominations, computeCartTotals,
+│   │                              computeSaleGrandTotal, collectedTotal,
+│   │                              remainingCashAmountDue
+│   ├── checkout/
+│   │   ├── CheckoutPaymentLogic.kt  buildCheckoutPaymentLine, exactBalanceDue,
+│   │   │                            cashBalanceDue, isCheckoutComplete,
+│   │   │                            paymentMethodLabel, finalizeProcessingMessage
+│   │   └── CashInput.kt             formatCashEntry, parseCashTendered,
+│   │                                normalizeCashEntryInput, appendCashDigit,
+│   │                                backspaceCashEntry, displayCashEntry
+│   ├── receipt/
+│   │   └── SaleReceipt.kt           SaleReceipt, ReceiptLine, buildSaleReceipt,
+│   │                                customerDisplayName
+│   └── network/
+│       └── NetworkErrorLogic.kt     isOfflineLike, isRetryableSyncError,
+│                                    httpErrorMessage
+├── ui/                  ← Compose screens and components only
+│   ├── PosScreen.kt
+│   ├── PosViewModel.kt
+│   ├── CheckoutPaymentPanel.kt
+│   ├── SaleReceiptPanel.kt
+│   ├── OpeningTillScreen.kt
+│   ├── CheckoutUiState.kt
+│   ├── PosNumberPad.kt
+│   ├── PosLayoutMetrics.kt
+│   └── theme/           Color.kt · Theme.kt · Type.kt
+└── data/                ← API, models, persistence
+    ├── PosApi.kt
+    ├── PosModels.kt
+    ├── PosRepository.kt
+    ├── MemoryCookieJar.kt
+    └── …
+```
+
+`domain/` has no Compose or Android framework imports — every function in it can be unit-tested with plain JUnit without Robolectric or an emulator.
+
 ## Open in Android Studio
 
 Open the `android-pos` folder, sync Gradle, run on device or emulator.

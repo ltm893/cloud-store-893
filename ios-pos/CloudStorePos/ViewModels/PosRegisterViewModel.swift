@@ -429,7 +429,10 @@ final class PosRegisterViewModel {
         }
         let customerLinked = customerId != nil
         let customerDiscount = customerLinked
-        status = "Completing sale…"
+        let changeTotal = CheckoutPaymentLogic.checkoutChangeTotal(payments)
+        status = changeTotal > 0.005
+            ? "Give change \(CartTotalsLogic.formatMoney(changeTotal)) — completing sale…"
+            : "Completing sale…"
         do {
             let response = try await api.checkout(
                 CheckoutRequest(
