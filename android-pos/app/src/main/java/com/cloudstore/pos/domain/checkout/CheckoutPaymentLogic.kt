@@ -1,6 +1,11 @@
-package com.cloudstore.pos.ui
+package com.cloudstore.pos.domain.checkout
 
 import com.cloudstore.pos.data.CheckoutPayment
+import com.cloudstore.pos.domain.pricing.collectedTotal
+import com.cloudstore.pos.domain.pricing.formatMoney
+import com.cloudstore.pos.domain.pricing.remainingCashAmountDue
+import com.cloudstore.pos.domain.pricing.roundMoney
+import com.cloudstore.pos.domain.pricing.roundToNickel
 
 fun paymentMethodLabel(method: String): String = when (method) {
     "card" -> "Card"

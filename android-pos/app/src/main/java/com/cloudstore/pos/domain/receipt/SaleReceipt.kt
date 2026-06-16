@@ -1,8 +1,12 @@
-package com.cloudstore.pos.ui
+package com.cloudstore.pos.domain.receipt
 
 import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.CheckoutPayment
 import com.cloudstore.pos.data.StoreCustomer
+import com.cloudstore.pos.domain.checkout.checkoutChangeTotal
+import com.cloudstore.pos.domain.pricing.computeCartTotals
+import com.cloudstore.pos.domain.pricing.normalizeCartItems
+import com.cloudstore.pos.domain.pricing.roundMoney
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter

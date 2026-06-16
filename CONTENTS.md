@@ -1,6 +1,6 @@
 # Cloud Store 893 — session handoff
 
-Last updated: 2026-06-11
+Last updated: 2026-06-16
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
 
@@ -495,7 +495,7 @@ scripts/reset-db.sh
 
 ### Cash rounding
 
-**Done end-to-end:** Tablets round cash **down** to **$0.05** (`roundToNickel` in `CartTotals.kt` / `CartTotalsLogic.swift`). Checkout uses `lib/pos-pricing.js` + `lib/checkout-settlement.js` on the server:
+**Done end-to-end:** Tablets round cash **down** to **$0.05** (`roundToNickel` in `domain/pricing/CartTotals.kt` / `CartTotalsLogic.swift`). Checkout uses `lib/pos-pricing.js` + `lib/checkout-settlement.js` on the server:
 
 - **`register_total`** — exact tax-inclusive total (register / receipt subtotal).
 - **`cash_due`** — nickel-rounded cash portion (full sale if cash-only, or remainder after card in split).
@@ -557,13 +557,17 @@ POS sends (conceptually): amount, currency, sale reference (`orderNumber`), opti
 
 **Implementation status in repo:**
 
-- Android UI/state changes are implemented in:
+- Android domain logic (pure Kotlin, no Compose dependencies):
+  - `android-pos/app/src/main/java/com/cloudstore/pos/domain/checkout/CheckoutPaymentLogic.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/domain/checkout/CashInput.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/domain/pricing/CartTotals.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/domain/receipt/SaleReceipt.kt`
+  - `android-pos/app/src/main/java/com/cloudstore/pos/domain/network/NetworkErrorLogic.kt`
+- Android UI / Compose screens:
   - `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosScreen.kt`
   - `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosViewModel.kt`
   - `android-pos/app/src/main/java/com/cloudstore/pos/ui/CheckoutUiState.kt`
   - `android-pos/app/src/main/java/com/cloudstore/pos/ui/CheckoutPaymentPanel.kt`
-  - `android-pos/app/src/main/java/com/cloudstore/pos/ui/CheckoutPaymentLogic.kt`
-  - `android-pos/app/src/main/java/com/cloudstore/pos/ui/CashInput.kt`
   - `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosNumberPad.kt`
 - Shared checkout payload / offline queue changes are implemented in:
   - `android-pos/app/src/main/java/com/cloudstore/pos/data/PosApi.kt`
@@ -577,6 +581,8 @@ POS sends (conceptually): amount, currency, sale reference (`orderNumber`), opti
 
 **Likely files for split-tender work:**
 
+- `android-pos/app/src/main/java/com/cloudstore/pos/domain/checkout/CheckoutPaymentLogic.kt` — balance / payment line logic
+- `android-pos/app/src/main/java/com/cloudstore/pos/domain/checkout/CashInput.kt` — keypad input parsing
 - `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosScreen.kt`
 - `android-pos/app/src/main/java/com/cloudstore/pos/ui/PosViewModel.kt`
 - `android-pos/app/src/main/java/com/cloudstore/pos/data/PosApi.kt`
@@ -590,9 +596,8 @@ POS sends (conceptually): amount, currency, sale reference (`orderNumber`), opti
 **Next resume steps:**
 
 1. Run end-to-end tests against local/OCI with real DB state (`sale_payments` inserts + admin visibility).
-2. Decide whether to move remaining checkout orchestration entirely behind ViewModel intents.
-3. Add unit tests for payment logic helpers (`CheckoutPaymentLogic.kt`, cash input parsing).
-4. Keep card terminal integration as a separate follow-up (current card flow remains simulated/manual).
+2. Add unit tests for payment logic helpers (now straightforward — `domain/checkout/` and `domain/pricing/` have no Compose/Android imports).
+3. Keep card terminal integration as a separate follow-up (current card flow remains simulated/manual).
 
 ---
 

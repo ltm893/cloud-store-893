@@ -12,9 +12,9 @@ enum PosLayoutMetrics {
     /// Space above/below numpad inside till-count panel (Android `TillPanelEdgeSpacer`).
     static let tillPanelEdgeSpacer: CGFloat = 12
     static let tillPanelGutter: CGFloat = 8
-    static let tillDenomPanelWeight: CGFloat = 0.40
-    static let tillGutterWeight: CGFloat = 0.20
-    static let tillNumpadPanelWeight: CGFloat = 0.40
+    static let tillDenomPanelWeight: CGFloat = 0.63
+    static let tillGutterWeight: CGFloat = 0.02
+    static let tillNumpadPanelWeight: CGFloat = 0.35
 
     /// Denomination row sizing — 5% shorter than prior values; padding moved to status bar.
     static let tillDenomRowVerticalPadding: CGFloat = 9.5

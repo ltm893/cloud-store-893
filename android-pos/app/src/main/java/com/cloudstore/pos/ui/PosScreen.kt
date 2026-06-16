@@ -72,6 +72,15 @@ import androidx.core.content.ContextCompat
 import com.cloudstore.pos.BuildConfig
 import com.cloudstore.pos.data.CartItem
 import com.cloudstore.pos.data.StoreCustomer
+import com.cloudstore.pos.domain.checkout.cashBalanceDue
+import com.cloudstore.pos.domain.checkout.exactBalanceDue
+import com.cloudstore.pos.domain.checkout.formatCashEntry
+import com.cloudstore.pos.domain.checkout.normalizeCashEntryInput
+import com.cloudstore.pos.domain.pricing.computeCartTotals
+import com.cloudstore.pos.domain.pricing.computeSaleGrandTotal
+import com.cloudstore.pos.domain.pricing.formatMoney
+import com.cloudstore.pos.domain.pricing.normalizeCartItems
+import com.cloudstore.pos.domain.receipt.customerDisplayName
 import com.cloudstore.pos.ui.theme.PosBackground
 import com.cloudstore.pos.ui.theme.PosBorder
 import com.cloudstore.pos.ui.theme.PosButtonDefaults
@@ -441,7 +450,7 @@ fun PosScreen(viewModel: PosViewModel) {
             // ── Scan & items (left) ─────────────────────────────────────────
             Card(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(0.65f)
                     .fillMaxHeight(),
                 colors = PosCardDefaults.contentColors(),
                 elevation = PosCardDefaults.elevation(),
@@ -651,7 +660,7 @@ fun PosScreen(viewModel: PosViewModel) {
             if (showReceipt && receipt != null) {
                 Column(
                     modifier = Modifier
-                        .width(PosNumpadColumnWidth)
+                        .weight(0.35f)
                         .fillMaxHeight(),
                 ) {
                     Spacer(modifier = Modifier.weight(1f))
@@ -664,7 +673,7 @@ fun PosScreen(viewModel: PosViewModel) {
             } else {
             Column(
                 modifier = Modifier
-                    .width(PosNumpadColumnWidth)
+                    .weight(0.35f)
                     .fillMaxHeight(),
             ) {
                 if (showStatusSlot) {

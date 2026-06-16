@@ -139,17 +139,17 @@ private struct ReceiptPaymentsSection: View {
             Text("\(CheckoutPaymentLogic.paymentMethodLabel(payment.method)) \(CartTotalsLogic.formatMoney(tendered))")
                 .font(.caption)
             if let change = payment.changeGiven, change > 0.005 {
-                Text("Change \(CartTotalsLogic.formatMoney(change))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text("Change given: \(CartTotalsLogic.formatMoney(change))")
+                    .font(.caption.bold())
+                    .foregroundStyle(PosColors.teal)
             }
         }
 
         if receipt.changeTotal > 0.005,
            !receipt.payments.contains(where: { ($0.changeGiven ?? 0) > 0.005 }) {
-            Text("Change \(CartTotalsLogic.formatMoney(receipt.changeTotal))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text("Change given: \(CartTotalsLogic.formatMoney(receipt.changeTotal))")
+                .font(.caption.bold())
+                .foregroundStyle(PosColors.teal)
         }
     }
 }

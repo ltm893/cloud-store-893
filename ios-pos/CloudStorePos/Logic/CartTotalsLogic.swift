@@ -29,9 +29,11 @@ enum CartTotalsLogic {
     static func cashQuickDenominations(amountDue: Double, cashEnabled: Bool = true) -> [Int] {
         if !cashEnabled || amountDue <= moneyEpsilon { return [] }
         let bills = [5, 10, 20, 50, 100]
-        let start = bills.firstIndex { Double($0) >= amountDue - 0.001 } ?? bills.count
-        if start >= bills.count { return [100] }
-        return Array(bills.dropFirst(start).prefix(3))
+        if let start = bills.firstIndex(where: { Double($0) >= amountDue - 0.001 }) {
+            return Array(bills.dropFirst(start).prefix(3))
+        }
+        let base = Int(ceil(amountDue / 10.0)) * 10
+        return [base, base + 10, base + 20]
     }
 
     static func normalizeCartItems(_ items: [CartItem], customerDiscount: Bool) -> [CartItem] {

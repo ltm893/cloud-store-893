@@ -1,4 +1,6 @@
-package com.cloudstore.pos.ui
+package com.cloudstore.pos.domain.checkout
+
+import com.cloudstore.pos.domain.pricing.roundMoney
 
 internal fun formatCashEntry(amount: Double): String {
     val rounded = roundMoney(amount)

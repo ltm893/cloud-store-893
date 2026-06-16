@@ -1,4 +1,4 @@
-package com.cloudstore.pos.ui
+package com.cloudstore.pos.domain.pricing
 
 import com.cloudstore.pos.data.CartItem
 import kotlin.math.abs
@@ -17,8 +17,9 @@ fun cashQuickDenominations(amountDue: Double, cashEnabled: Boolean = true): List
     if (!cashEnabled || amountDue <= 0.005) return emptyList()
     val bills = listOf(5, 10, 20, 50, 100)
     val start = bills.indexOfFirst { it >= amountDue - 0.001 }
-    if (start < 0) return listOf(100)
-    return bills.drop(start).take(3)
+    if (start >= 0) return bills.drop(start).take(3)
+    val base = (Math.ceil(amountDue / 10.0) * 10).toInt()
+    return listOf(base, base + 10, base + 20)
 }
 
 /** When no customer discount, reset lines to public shelf prices (fixes stale discounted lines). */

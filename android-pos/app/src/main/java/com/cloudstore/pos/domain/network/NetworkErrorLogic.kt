@@ -1,4 +1,4 @@
-package com.cloudstore.pos.ui
+package com.cloudstore.pos.domain.network
 
 import retrofit2.HttpException
 import java.io.IOException

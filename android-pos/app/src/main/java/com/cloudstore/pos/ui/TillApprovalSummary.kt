@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.cloudstore.pos.domain.pricing.formatMoney
 import com.cloudstore.pos.ui.theme.PosCardDefaults
 import kotlin.math.abs
 
