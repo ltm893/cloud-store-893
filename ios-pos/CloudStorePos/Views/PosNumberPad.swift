@@ -12,6 +12,7 @@ struct PosNumberPad: View {
     let onDigit: (Character) -> Void
     let onClear: () -> Void
     let onBackspace: () -> Void
+    let onDecimal: (() -> Void)?
     let onUp: (() -> Void)?
     let onDown: (() -> Void)?
 
@@ -20,6 +21,7 @@ struct PosNumberPad: View {
         onDigit: @escaping (Character) -> Void,
         onClear: @escaping () -> Void,
         onBackspace: @escaping () -> Void,
+        onDecimal: (() -> Void)? = nil,
         onUp: (() -> Void)? = nil,
         onDown: (() -> Void)? = nil
     ) {
@@ -27,6 +29,7 @@ struct PosNumberPad: View {
         self.onDigit = onDigit
         self.onClear = onClear
         self.onBackspace = onBackspace
+        self.onDecimal = onDecimal
         self.onUp = onUp
         self.onDown = onDown
     }
@@ -45,7 +48,11 @@ struct PosNumberPad: View {
                     }
                 }
                 keyRow {
-                    padKey("C", action: onClear)
+                    if let onDecimal {
+                        padKey(".", action: onDecimal)
+                    } else {
+                        padKey("C", action: onClear)
+                    }
                     padKey("0") { onDigit("0") }
                     padKey("⌫", action: onBackspace)
                 }

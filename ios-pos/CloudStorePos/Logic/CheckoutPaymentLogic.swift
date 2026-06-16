@@ -105,13 +105,12 @@ enum CashEntryLogic {
         if trimmed == "." { return "0." }
         if trimmed.contains(".") {
             let parts = trimmed.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
-            let whole = String(parts[0]).trimmingCharacters(in: CharacterSet(charactersIn: "0")).isEmpty
-                ? "0"
-                : String(parts[0]).trimmingCharacters(in: CharacterSet(charactersIn: "0"))
+            let wholeStripped = String(String(parts[0]).drop(while: { $0 == "0" }))
+            let whole = wholeStripped.isEmpty ? "0" : wholeStripped
             let frac = parts.count > 1 ? String(parts[1]) : ""
             return frac.isEmpty ? "\(whole)." : "\(whole).\(frac)"
         }
-        let stripped = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "0"))
+        let stripped = String(trimmed.drop(while: { $0 == "0" }))
         return stripped.isEmpty ? "0" : stripped
     }
 

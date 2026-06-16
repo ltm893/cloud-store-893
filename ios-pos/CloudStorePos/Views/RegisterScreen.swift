@@ -31,12 +31,17 @@ struct RegisterScreen: View {
                 PosRegisterTopBar(user: user) {
                     drawerOpen = true
                 }
-                HStack(alignment: .top, spacing: PosLayoutMetrics.registerCenterGutter) {
-                    mainColumn
-                    rightColumn
+                GeometryReader { geo in
+                    let gutter = PosLayoutMetrics.registerCenterGutter
+                    let hPad = PosLayoutMetrics.registerSideGutter * 2
+                    let available = geo.size.width - hPad - gutter
+                    HStack(alignment: .top, spacing: gutter) {
+                        mainColumn.frame(width: (available * 0.52).rounded())
+                        rightColumn.frame(width: (available * 0.48).rounded())
+                    }
+                    .padding(.horizontal, PosLayoutMetrics.registerSideGutter)
+                    .padding(.vertical, 8)
                 }
-                .padding(.horizontal, PosLayoutMetrics.registerSideGutter)
-                .padding(.vertical, 8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(PosColors.cream)
@@ -263,20 +268,18 @@ struct RegisterScreen: View {
                     onPrint: { viewModel.printReceipt() },
                     printEnabled: viewModel.receiptPrintMessage == nil
                 )
-                .frame(width: PosLayoutMetrics.numpadColumnWidth)
-                .frame(maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 8) {
                     Spacer(minLength: 0)
                     registerInputPanel
                 }
-                .frame(width: PosLayoutMetrics.numpadColumnWidth)
+                .frame(maxWidth: .infinity)
                 .posPanelStyle()
                 .frame(maxHeight: .infinity)
             }
         }
-        .frame(width: PosLayoutMetrics.numpadColumnWidth)
-        .frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var registerInputPanel: some View {
@@ -294,6 +297,7 @@ struct RegisterScreen: View {
                     onAmountDigit: { viewModel.appendCheckoutDigit($0) },
                     onAmountClear: { viewModel.clearCheckoutAmount() },
                     onAmountBackspace: { viewModel.backspaceCheckoutAmount() },
+                    onAmountDecimal: { viewModel.appendCheckoutDigit(".") },
                     onFillRemaining: { viewModel.fillRemainingBalance() },
                     onQuickBill: { viewModel.applyQuickBill($0) },
                     onApplyCash: { viewModel.applyPayment(method: "cash") },

@@ -12,6 +12,7 @@ struct CheckoutPaymentPanel: View {
     let onAmountDigit: (Character) -> Void
     let onAmountClear: () -> Void
     let onAmountBackspace: () -> Void
+    let onAmountDecimal: () -> Void
     let onFillRemaining: () -> Void
     let onQuickBill: (Int) -> Void
     let onApplyCash: () -> Void
@@ -101,7 +102,8 @@ struct CheckoutPaymentPanel: View {
                 layout: .compact,
                 onDigit: onAmountDigit,
                 onClear: onAmountClear,
-                onBackspace: onAmountBackspace
+                onBackspace: onAmountBackspace,
+                onDecimal: onAmountDecimal
             )
 
             if cashEnabled && !creditOnlyPayments {
