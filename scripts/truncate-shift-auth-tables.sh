@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Truncate login_approval_requests and register_shifts (plus register_shift_closes).
+# Truncate till/session approval tables (pos_sessions, tills, till_open_approvals, till_close_approvals).
 #
-# Use between test runs to clear stale pending approvals and open shifts.
+# Use between test runs to clear stale pending approvals and active tills.
 # Does NOT delete products, sales, cart items, or customers.
 #
 # Usage:
@@ -27,15 +27,16 @@ Usage:
   ./scripts/truncate-shift-auth-tables.sh [--yes]
 
 Truncates (empties):
-  - login_approval_requests
-  - register_shifts
-  - register_shift_closes  (required before register_shifts; FK)
+  - till_open_approvals
+  - pos_sessions
+  - tills
+  - till_close_approvals
 
 Leaves products, customers, sales, cart, and inventory unchanged.
 
 After running:
-  - Active cashier sessions on the server are stale; sign out on tablets / admin.
-  - Next cashier sign-in needs a fresh supervisor approval (if Model B is on).
+  - Active cashier sessions on the server are stale; sign out on tablets / iPad.
+  - Next cashier sign-in needs a fresh supervisor approval and opening till (if configured).
 EOF
 }
 
@@ -101,9 +102,10 @@ DB_SERVICE="${ADB_DB_SERVICE:-${DB_NAME_LOWER}_high}"
 
 if [[ "${CONFIRMED}" -eq 0 ]]; then
   warn "This will DELETE all rows in:"
-  warn "  - login_approval_requests"
-  warn "  - register_shifts"
-  warn "  - register_shift_closes"
+  warn "  - till_close_approvals"
+  warn "  - tills"
+  warn "  - till_open_approvals"
+  warn "  - pos_sessions"
   read -r -p "Continue? [y/N] " reply
   case "${reply}" in
     y|Y|yes|YES) ;;

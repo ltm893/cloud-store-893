@@ -17,6 +17,7 @@ struct SaleReceiptInfo: Equatable {
     let savings: Double
     let tax: Double
     let grandTotal: Double
+    let collectedTotal: Double
     let payments: [CheckoutPayment]
     let changeTotal: Double
     var queuedOffline: Bool = false
@@ -56,6 +57,7 @@ enum SaleReceiptLogic {
         let taxable = totals.itemPreTax + salesFee
         let taxAmount = CartTotalsLogic.roundMoney(taxable * taxRate)
         let grandTotal = CartTotalsLogic.roundMoney(taxable + taxAmount)
+        let collectedTotal = CartTotalsLogic.roundMoney(payments.reduce(0) { $0 + $1.amount })
 
         return SaleReceiptInfo(
             orderNumber: orderNumber,
@@ -74,6 +76,7 @@ enum SaleReceiptLogic {
             savings: totals.saleSavings,
             tax: taxAmount,
             grandTotal: grandTotal,
+            collectedTotal: collectedTotal,
             payments: payments,
             changeTotal: CheckoutPaymentLogic.checkoutChangeTotal(payments),
             queuedOffline: queuedOffline

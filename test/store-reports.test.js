@@ -31,15 +31,20 @@ test('resolveReportRange monthly covers calendar month', () => {
 
 test('summarizeSalesRows totals transactions and payment split', () => {
   const summary = summarizeSalesRows(
-    [{ total: 10, order_number: 'A' }, { total: 5, order_number: 'B', member_discount_pre_tax: 1 }],
+    [
+      { total: 21.25, register_total: 21.26, order_number: 'A' },
+      { total: 5, order_number: 'B', member_discount_pre_tax: 1 },
+    ],
     new Map([
-      ['A', [{ payment_method: 'cash', amount: 10 }]],
+      ['A', [{ payment_method: 'cash', amount: 21.25 }]],
       ['B', [{ payment_method: 'card', amount: 5 }]],
     ]),
   );
   assert.equal(summary.transaction_count, 2);
-  assert.equal(summary.sales_total, 15);
-  assert.equal(summary.cash_total, 10);
+  assert.equal(summary.sales_total, 26.25);
+  assert.equal(summary.register_total, 26.26);
+  assert.equal(summary.cash_rounding_total, 0.01);
+  assert.equal(summary.cash_total, 21.25);
   assert.equal(summary.credit_total, 5);
   assert.equal(summary.member_discount_total, 1);
 });

@@ -100,6 +100,7 @@ fun PaymentsReceivedSection(
 fun CheckoutPaymentPanel(
     saleTotal: Double,
     balanceDue: Double,
+    cashAmountDue: Double = balanceDue,
     payments: List<CheckoutPayment>,
     backEnabled: Boolean,
     cashEnabled: Boolean = true,
@@ -115,10 +116,12 @@ fun CheckoutPaymentPanel(
 ) {
     val changeTotal = checkoutChangeTotal(payments)
     val nextAmount = parseCashTendered(amountInput)
-    val canPayCash = cashEnabled && balanceDue > 0.005 && nextAmount != null && nextAmount > 0.0
+    val tenderTarget = if (cashEnabled && cashAmountDue + 0.005 < balanceDue) cashAmountDue else balanceDue
+    val canPayCash = cashEnabled && balanceDue > 0.005
     val canPayCard = balanceDue > 0.005 && nextAmount != null && nextAmount > 0.0 &&
         nextAmount <= balanceDue + 0.005
-    val quickBills = cashQuickDenominations(balanceDue, cashEnabled = !creditOnlyPayments)
+    val quickBillTarget = if (cashEnabled && !creditOnlyPayments) cashAmountDue else balanceDue
+    val quickBills = cashQuickDenominations(quickBillTarget, cashEnabled = !creditOnlyPayments)
     val maxCardEntry = if (creditOnlyPayments && balanceDue > 0.005) balanceDue else null
 
     Column(
@@ -148,6 +151,14 @@ fun CheckoutPaymentPanel(
             label = "Sale total",
             value = formatMoney(saleTotal),
         )
+        val collectedSaleTotal = roundToNickel(saleTotal)
+        if (collectedSaleTotal + 0.005 < saleTotal) {
+            CashAmountRow(
+                label = "Payable (nickels)",
+                value = formatMoney(collectedSaleTotal),
+                valueColor = MaterialTheme.colorScheme.tertiary,
+            )
+        }
         CashAmountRow(
             label = "Balance due",
             value = formatMoney(balanceDue),
@@ -158,6 +169,13 @@ fun CheckoutPaymentPanel(
                 MaterialTheme.colorScheme.tertiary
             },
         )
+        if (cashEnabled && cashAmountDue + 0.005 < balanceDue) {
+            CashAmountRow(
+                label = "Cash due (no pennies)",
+                value = formatMoney(cashAmountDue),
+                valueColor = MaterialTheme.colorScheme.tertiary,
+            )
+        }
         if (changeTotal > 0.005) {
             CashAmountRow(
                 label = "Change from payments",
@@ -167,11 +185,11 @@ fun CheckoutPaymentPanel(
         }
         CashAmountRow(
             label = "Amount entered",
-            value = if (amountInput.isBlank()) "—" else "\$$amountInput",
+            value = displayCashEntry(amountInput),
             modifier = Modifier.padding(top = 2.dp),
         )
         nextAmount?.let { tendered ->
-            val changeDelta = roundMoney(tendered - balanceDue)
+            val changeDelta = roundMoney(tendered - tenderTarget)
             val changeLabel = when {
                 changeDelta < -0.005 -> "Still need"
                 changeDelta < 0.005 -> "Change"
@@ -219,7 +237,7 @@ fun CheckoutPaymentPanel(
                         contentColor = PosText,
                     ),
                 ) {
-                    Text(formatMoney(balanceDue), style = MaterialTheme.typography.labelMedium)
+                    Text(formatMoney(tenderTarget), style = MaterialTheme.typography.labelMedium)
                 }
                 quickBills.forEach { bill ->
                     OutlinedButton(
@@ -244,8 +262,8 @@ fun CheckoutPaymentPanel(
                     onDigit = { d ->
                         onAmountChange(appendCashDigitLimited(amountInput, d, maxCardEntry))
                     },
-                    onClear = { onAmountChange("") },
-                    onBackspace = { onAmountChange(amountInput.dropLast(1)) },
+                    onClear = { onAmountChange("0") },
+                    onBackspace = { onAmountChange(backspaceCashEntry(amountInput)) },
                     onDecimal = {
                         onAmountChange(appendCashDigitLimited(amountInput, '.', maxCardEntry))
                     },

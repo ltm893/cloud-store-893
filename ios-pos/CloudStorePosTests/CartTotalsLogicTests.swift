@@ -55,6 +55,23 @@ final class CartTotalsLogicTests: XCTestCase {
         XCTAssertEqual(CheckoutPaymentLogic.checkoutFinalizeMethod(payments), "split")
     }
 
+    func testIsCheckoutCompleteWithNickelCashRemainder() {
+        let registerTotal = 10.06
+        let payments = [
+            CheckoutPayment(method: "card", amount: 5, tenderedAmount: 5, changeGiven: nil),
+            CheckoutPayment(method: "cash", amount: 5.05, tenderedAmount: 5.05, changeGiven: nil),
+        ]
+        XCTAssertTrue(CheckoutPaymentLogic.isCheckoutComplete(registerTotal: registerTotal, payments: payments))
+    }
+
+    func testRemainingCashAmountDueRoundsSplitRemainder() {
+        XCTAssertEqual(
+            CartTotalsLogic.remainingCashAmountDue(registerTotal: 10.06, nonCashPaid: 5),
+            5.05,
+            accuracy: 0.001
+        )
+    }
+
     func testAppendQuantityDigitCapsAtFourDigits() {
         XCTAssertEqual(CashEntryLogic.appendQuantityDigit(current: "123", digit: "4"), "1234")
         XCTAssertEqual(CashEntryLogic.appendQuantityDigit(current: "1234", digit: "5"), "1234")

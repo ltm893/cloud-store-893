@@ -36,6 +36,7 @@ final class SaleReceiptLogicTests: XCTestCase {
         XCTAssertEqual(receipt.subtotal, 20)
         XCTAssertEqual(receipt.tax, 1.2)
         XCTAssertEqual(receipt.grandTotal, 21.2)
+        XCTAssertEqual(receipt.collectedTotal, 21.2)
         XCTAssertEqual(receipt.changeTotal, 3.8)
         XCTAssertEqual(receipt.orderLabel, "ORD-42")
     }

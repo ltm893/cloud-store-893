@@ -92,6 +92,7 @@ data class SubmitOpeningTillRequest(
     @Json(name = "cashMode") val cashMode: String,
     val denominations: Map<String, Int>? = null,
     @Json(name = "countedTotal") val countedTotal: Double? = null,
+    @Json(name = "awaitingTillToken") val awaitingTillToken: String? = null,
 )
 
 data class CloseTillPreviewResponse(
@@ -145,6 +146,7 @@ data class SubmitOpeningTillResponse(
     val ok: Boolean = false,
     val pending: Boolean = false,
     @Json(name = "awaitingTill") val awaitingTill: Boolean = false,
+    @Json(name = "requestToken") val requestToken: String? = null,
     @Json(name = "cashMode") val cashMode: String? = null,
     @Json(name = "cashEnabled") val cashEnabled: Boolean? = null,
     @Json(name = "openingCountedFloat") val openingCountedFloat: Double? = null,
@@ -164,8 +166,9 @@ data class CashierSessionResponse(
     @Json(name = "supervisorApprovalRequired") val supervisorApprovalRequired: Boolean = false,
     @Json(name = "idpEnabled") val idpEnabled: Boolean = false,
     @Json(name = "idpLoginUrl") val idpLoginUrl: String? = null,
-    @Json(name = "pinAllowed") val pinAllowed: Boolean = true,
+    @Json(name = "pinAllowed") val pinAllowed: Boolean = false,
     @Json(name = "awaitingTill") val awaitingTill: Boolean = false,
+    @Json(name = "awaitingTillToken") val awaitingTillToken: String? = null,
     @Json(name = "cashTillEnabled") val cashTillEnabled: Boolean = false,
     @Json(name = "cashEnabled") val cashEnabled: Boolean? = null,
     @Json(name = "cashMode") val cashMode: String? = null,

@@ -82,6 +82,27 @@ const {
   getActiveCashierSession,
   sessionAllowsCashPayments,
 } = require('./lib/cashier-auth');
+const {
+  resolveCheckoutSettlement,
+  normalizePaymentMethod,
+} = require('./lib/checkout-settlement');
+const { posRatesFromEnv } = require('./lib/pos-pricing');
+
+const POS_RATES = posRatesFromEnv();
+
+/** Post sales row; retry without cash-rounding columns when DB migration is not applied yet. */
+async function postSaleRow(payload) {
+  try {
+    await ordsPost('sales/', payload);
+  } catch (err) {
+    const msg = String(err?.message || err);
+    const missingRoundingColumns = /00904|invalid identifier|register_total|cash_due/i.test(msg);
+    if (!missingRoundingColumns || payload.register_total == null) throw err;
+    const { register_total, cash_due, ...legacy } = payload;
+    await ordsPost('sales/', legacy);
+  }
+}
+
 const { registerAdminAuth, requireAdminSession, protectAdminPages } = require('./lib/admin-auth');
 registerCashierAuth(app, { loginApprovalStore, tillStore, posSessionStore, shiftCloseStore, ordsGet });
 registerAdminAuth(app);
@@ -105,11 +126,6 @@ function roundMoney(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
-function normalizePaymentMethod(method) {
-  const normalized = String(method || 'card').trim().toLowerCase();
-  return normalized || 'card';
-}
-
 function normalizeCheckoutTotal(rawTotal) {
   if (rawTotal == null) return null;
   const checkoutTotal = roundMoney(rawTotal);
@@ -117,55 +133,6 @@ function normalizeCheckoutTotal(rawTotal) {
     return { error: 'checkoutTotal must be greater than zero' };
   }
   return { checkoutTotal };
-}
-
-function normalizeCheckoutPayments(rawPayments, totalAmount) {
-  if (rawPayments == null) return null;
-  if (!Array.isArray(rawPayments) || rawPayments.length === 0) {
-    return { error: 'payments must be a non-empty array' };
-  }
-
-  const payments = [];
-  for (const rawPayment of rawPayments) {
-    const method = normalizePaymentMethod(rawPayment?.method);
-    const amount = roundMoney(rawPayment?.amount);
-    const tenderedAmount =
-      rawPayment?.tenderedAmount == null ? amount : roundMoney(rawPayment.tenderedAmount);
-    const changeGiven =
-      rawPayment?.changeGiven == null ? 0 : roundMoney(rawPayment.changeGiven);
-    if (!['card', 'cash'].includes(method)) {
-      return { error: `Unsupported payment method: ${method}` };
-    }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return { error: 'Each split payment amount must be greater than zero' };
-    }
-    if (!Number.isFinite(tenderedAmount) || tenderedAmount <= 0 || tenderedAmount + 0.009 < amount) {
-      return { error: 'tenderedAmount must be at least the applied payment amount' };
-    }
-    if (!Number.isFinite(changeGiven) || changeGiven < 0) {
-      return { error: 'changeGiven cannot be negative' };
-    }
-    const expectedChange = roundMoney(tenderedAmount - amount);
-    if (Math.abs(expectedChange - changeGiven) > 0.009) {
-      return { error: 'changeGiven must equal tenderedAmount minus amount' };
-    }
-    if (method === 'card' && changeGiven > 0.009) {
-      return { error: 'Card payments cannot include change' };
-    }
-    payments.push({
-      method,
-      amount,
-      tenderedAmount,
-      changeGiven: changeGiven > 0.009 ? changeGiven : null,
-    });
-  }
-
-  const totalPaid = roundMoney(payments.reduce((sum, payment) => sum + payment.amount, 0));
-  const normalizedTotal = totalAmount == null ? totalPaid : roundMoney(totalAmount);
-  if (Math.abs(totalPaid - normalizedTotal) > 0.009) {
-    return { error: `Split payments must equal total ${normalizedTotal.toFixed(2)}` };
-  }
-  return { payments };
 }
 
 function serializePaymentMethod(paymentMethod, payments) {
@@ -530,7 +497,7 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
   if (checkoutTotalResult?.error) {
     return res.status(400).json({ error: checkoutTotalResult.error });
   }
-  const checkoutTotal = checkoutTotalResult?.checkoutTotal ?? null;
+  const clientCheckoutTotal = checkoutTotalResult?.checkoutTotal ?? null;
   const cartRows = await ordsGet('cart_view/');
   const rows = Array.isArray(cartRows) ? cartRows : [];
 
@@ -559,32 +526,40 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
   }
   const { productsById, rulesByType } = validation;
 
-  const recordedTotal = checkoutTotal ?? summary.subtotalPayable;
-  const paymentResult = normalizeCheckoutPayments(req.body?.payments, recordedTotal);
-  if (paymentResult?.error) {
-    return res.status(400).json({ error: paymentResult.error });
+  const settlement = resolveCheckoutSettlement({
+    subtotalPayable: summary.subtotalPayable,
+    paymentMethod,
+    rawPayments: req.body?.payments ?? null,
+    clientCheckoutTotal,
+    salesFeeRate: POS_RATES.salesFeeRate,
+    taxRate: POS_RATES.taxRate,
+  });
+  if (settlement.error) {
+    return res.status(400).json({ error: settlement.error });
   }
+
+  const {
+    registerTotal,
+    cashDue,
+    recordedTotal,
+    payments: persistedPayments,
+  } = settlement;
 
   const cashierSession = getActiveCashierSession(req);
   const cashAllowed = sessionAllowsCashPayments(cashierSession);
-  const cashPayments = (paymentResult?.payments || []).filter((p) => p.method === 'cash');
+  const cashPayments = persistedPayments.filter((p) => p.method === 'cash');
   const singleCash = paymentMethod === 'cash';
   if (!cashAllowed && (cashPayments.length > 0 || singleCash)) {
     return res.status(403).json({ error: 'Cash payments are not enabled for this shift' });
   }
-  const payments = paymentResult?.payments || null;
-  const persistedPayments = payments || [{
-    method: paymentMethod,
-    amount: recordedTotal,
-    tenderedAmount: recordedTotal,
-    changeGiven: null,
-  }];
-  const recordedPaymentMethod = serializePaymentMethod(paymentMethod, payments);
+  const recordedPaymentMethod = serializePaymentMethod(paymentMethod, persistedPayments);
   const orderNumber = `POS-${Date.now()}`;
 
-  await ordsPost('sales/', {
+  await postSaleRow({
     order_number: orderNumber,
     total: recordedTotal,
+    register_total: registerTotal,
+    cash_due: cashDue,
     payment_method: recordedPaymentMethod,
     customer_id: customerId,
     subtotal_pre_member: summary.subtotalPreMember,
@@ -653,6 +628,8 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
     orderNumber,
     paymentMethod: recordedPaymentMethod,
     total: recordedTotal,
+    registerTotal,
+    cashDue,
     subtotalPreMember: summary.subtotalPreMember,
     memberDiscountPreTax: summary.memberDiscountPreTax,
     linked893,
@@ -674,6 +651,8 @@ app.get('/api/sales/recent', asyncHandler(async (req, res) => {
     id: Number(s.id),
     orderNumber: s.order_number,
     total: Number(s.total),
+    registerTotal: s.register_total != null ? Number(s.register_total) : Number(s.total),
+    cashDue: s.cash_due != null ? Number(s.cash_due) : null,
     paymentMethod: s.payment_method,
     linked893: Number(s.linked_893) === 1,
     memberDiscountPreTax: s.member_discount_pre_tax != null ? Number(s.member_discount_pre_tax) : 0,

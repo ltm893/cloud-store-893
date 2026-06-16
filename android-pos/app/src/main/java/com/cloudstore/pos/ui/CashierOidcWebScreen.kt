@@ -64,6 +64,7 @@ fun CashierOidcWebScreen(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
                 WebView(context).apply {
+                    configureForPosAutofill()
                     settings.configureForPosWebView()
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -105,6 +106,9 @@ fun CashierOidcWebScreen(
                                 finishOidc(url)
                                 return
                             }
+                            if (shouldInjectPosLoginAutofill(url, base)) {
+                                view?.injectPosLoginAutofillHints()
+                            }
                             view?.evaluateJavascript(
                                 "(document.body && document.body.innerText) || ''",
                             ) { raw ->
@@ -121,6 +125,7 @@ fun CashierOidcWebScreen(
                     loadUrl(loginUrl)
                 }
             },
+            update = { webView -> webView.configureForPosAutofill() },
             onRelease = { webView -> webView.destroy() },
         )
     }

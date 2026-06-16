@@ -100,6 +100,13 @@ fun computeCashAmountDue(
     customerDiscount: Boolean,
     salesFeeRate: Double,
     taxRate: Double,
-): Double = roundToNickel(
+): Double = collectedTotal(
     computeSaleGrandTotal(cart, customerLinked, customerDiscount, salesFeeRate, taxRate),
 )
+
+fun collectedTotal(registerTotal: Double): Double = roundToNickel(registerTotal)
+
+fun remainingCashAmountDue(registerTotal: Double, nonCashPaid: Double): Double {
+    val collected = collectedTotal(registerTotal)
+    return roundToNickel(roundMoney((collected - nonCashPaid).coerceAtLeast(0.0)))
+}

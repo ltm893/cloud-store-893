@@ -4,24 +4,28 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 
+private val AUTH_COOKIE_NAMES = setOf(
+    "cashier_session",
+    "cashier_pending",
+    "cashier_awaiting_till",
+)
+
 /**
  * In-memory cookie jar for POS API calls.
  * Prefer over [okhttp3.JavaNetCookieJar] on Android — Java's CookieManager often
  * drops HttpOnly session cookies for LAN IP hosts.
  *
- * [pinnedPendingToken] is set from the OIDC redirect URL and must not be overwritten
- * by stale WebView cookie sync while waiting for supervisor approval.
+ * Pinned tokens survive [loadForRequest] when bucket sync is incomplete; bucket
+ * cookies are used as fallback when pins are unset.
  */
 class MemoryCookieJar : CookieJar {
     private val store = mutableMapOf<String, MutableList<Cookie>>()
 
-    /** Pending token from ?request_token= on OIDC redirect; wins over WebView sync. */
     var pinnedPendingToken: String? = null
         set(value) {
             field = value?.trim()?.takeIf { it.isNotEmpty() }
         }
 
-    /** Opening-till token from cashier_awaiting_till cookie after OIDC. */
     var pinnedAwaitingTillToken: String? = null
         set(value) {
             field = value?.trim()?.takeIf { it.isNotEmpty() }
@@ -42,14 +46,16 @@ class MemoryCookieJar : CookieJar {
                 "cashier_pending" -> {
                     if (cookie.expiresAt != 0L && cookie.expiresAt <= now) {
                         if (pinnedPendingToken == cookie.value) pinnedPendingToken = null
-                    } else if (pinnedPendingToken == null) {
+                    } else {
+                        pinnedAwaitingTillToken = null
                         pinnedPendingToken = cookie.value
                     }
                 }
                 "cashier_awaiting_till" -> {
                     if (cookie.expiresAt != 0L && cookie.expiresAt <= now) {
                         if (pinnedAwaitingTillToken == cookie.value) pinnedAwaitingTillToken = null
-                    } else if (pinnedAwaitingTillToken == null) {
+                    } else {
+                        pinnedPendingToken = null
                         pinnedAwaitingTillToken = cookie.value
                     }
                 }
@@ -66,6 +72,24 @@ class MemoryCookieJar : CookieJar {
             bucket.removeAll { it.name == cookie.name }
             if (cookie.expiresAt != 0L && cookie.expiresAt <= now) continue
             bucket.add(cookie)
+        }
+    }
+
+    fun clearPinnedPendingToken() {
+        pinnedPendingToken = null
+        val now = System.currentTimeMillis()
+        for ((host, bucket) in store) {
+            bucket.removeAll { it.name == "cashier_pending" }
+            store[host] = bucket.filter { it.expiresAt == 0L || it.expiresAt > now }.toMutableList()
+        }
+    }
+
+    fun clearPinnedAwaitingTillToken() {
+        pinnedAwaitingTillToken = null
+        val now = System.currentTimeMillis()
+        for ((host, bucket) in store) {
+            bucket.removeAll { it.name == "cashier_awaiting_till" }
+            store[host] = bucket.filter { it.expiresAt == 0L || it.expiresAt > now }.toMutableList()
         }
     }
 
@@ -90,20 +114,35 @@ class MemoryCookieJar : CookieJar {
         val valid = bucket.filter { it.matches(url) && (it.expiresAt == 0L || it.expiresAt > now) }
         store[hostKey] = valid.toMutableList()
 
-        val merged = valid.toMutableList()
-        merged.removeAll { it.name == "cashier_pending" || it.name == "cashier_awaiting_till" }
-        pinnedPendingToken?.let { token ->
-            merged.add(buildCookie(url, "cashier_pending", token))
+        val merged = valid.filter { it.name !in AUTH_COOKIE_NAMES }.toMutableList()
+
+        resolveAuthCookie(url, valid, "cashier_awaiting_till", pinnedAwaitingTillToken)?.let {
+            merged.add(it)
         }
-        pinnedAwaitingTillToken?.let { token ->
-            merged.add(buildCookie(url, "cashier_awaiting_till", token))
-        }
-        manualSessionId?.let { sessionId ->
-            if (merged.none { it.name == "cashier_session" }) {
-                merged.add(buildCookie(url, "cashier_session", sessionId))
+
+        if (pinnedAwaitingTillToken == null) {
+            resolveAuthCookie(url, valid, "cashier_pending", pinnedPendingToken)?.let {
+                merged.add(it)
             }
         }
+
+        resolveAuthCookie(url, valid, "cashier_session", manualSessionId)?.let {
+            merged.add(it)
+        }
+
         return merged
+    }
+
+    private fun resolveAuthCookie(
+        url: HttpUrl,
+        bucket: List<Cookie>,
+        name: String,
+        pinnedValue: String?,
+    ): Cookie? {
+        if (!pinnedValue.isNullOrBlank()) {
+            return buildCookie(url, name, pinnedValue)
+        }
+        return bucket.firstOrNull { it.name == name }
     }
 
     private fun buildCookie(url: HttpUrl, name: String, value: String): Cookie =

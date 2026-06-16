@@ -44,7 +44,7 @@ sealed class CashierAuthGate {
     data object SignedIn : CashierAuthGate()
     data object OidcSignIn : CashierAuthGate()
     data class PinSignIn(
-        val pinAllowed: Boolean = true,
+        val pinAllowed: Boolean = false,
     ) : CashierAuthGate()
     data class WaitingApproval(
         val email: String? = null,
@@ -107,14 +107,16 @@ data class PosUiState(
     val loggedInUser: String? = null,
     val authGate: CashierAuthGate = CashierAuthGate.Checking,
     val idpLoginUrl: String? = null,
-    val pinAllowed: Boolean = true,
-    val supervisorApprovalRequired: Boolean = false,
+    val pinAllowed: Boolean = false,
+    val supervisorApprovalRequired: Boolean = true,
     val idpEnabled: Boolean = false,
     val pinInput: String = "",
     val queuedCheckoutCount: Int = 0,
     val queueSyncing: Boolean = false,
     val cashEnabled: Boolean = true,
     val cashMode: String? = null,
+    val tillId: Int? = null,
+    val posSessionId: Int? = null,
     val receipt: SaleReceipt? = null,
     val receiptPrintMessage: String? = null,
     val receiptPrintProgress: Float = 0f,
@@ -161,6 +163,8 @@ class PosViewModel(
     private var approvalPollJob: Job? = null
     private var closePollJob: Job? = null
     private var oidcCompleting = false
+    /** True only after Oracle WebView finishes in this app session — blocks stale till resume on launch. */
+    private var oidcAuthStepCompletedThisSession = false
 
     init {
         val storedUser = userStore.get()
@@ -234,7 +238,10 @@ class PosViewModel(
 
     fun openCheckout() {
         cancelQuantityEdit()
-        _checkoutState.value = CheckoutUiState(open = true)
+        _checkoutState.value = CheckoutUiState(
+            open = true,
+            amountInput = "0",
+        )
     }
 
     private fun registerTotal(): Double {
@@ -251,18 +258,28 @@ class PosViewModel(
     fun applyCheckoutPayment(method: String) {
         val current = _checkoutState.value
         val registerTotal = registerTotal()
-        val paidTotal = roundMoney(current.payments.sumOf { it.amount })
-        val remainingAmount = roundMoney((registerTotal - paidTotal).coerceAtLeast(0.0))
-        val enteredAmount = parseCashTendered(current.amountInput) ?: return
+        val remainingAmount = balanceDueForMethod(registerTotal, current.payments, method)
+        if (remainingAmount <= 0.005) return
+        val enteredAmount = parseCashTendered(current.amountInput) ?: run {
+            _state.update {
+                it.copy(status = "Enter a valid amount for ${paymentMethodLabel(method)}")
+            }
+            return
+        }
         applyCheckoutPayment(method = method, enteredAmount = enteredAmount, remainingAmount = remainingAmount)
     }
 
     fun applyCardOnFilePayment() {
         val current = _checkoutState.value
         val registerTotal = registerTotal()
-        val paidTotal = roundMoney(current.payments.sumOf { it.amount })
-        val remainingAmount = roundMoney((registerTotal - paidTotal).coerceAtLeast(0.0))
-        val enteredAmount = parseCashTendered(current.amountInput) ?: return
+        val remainingAmount = balanceDueForMethod(registerTotal, current.payments, "card")
+        if (remainingAmount <= 0.005) return
+        val enteredAmount = parseCashTendered(current.amountInput) ?: run {
+            _state.update {
+                it.copy(status = "Enter a valid amount for ${paymentMethodLabel("card")}")
+            }
+            return
+        }
         applyCheckoutPayment(method = "card", enteredAmount = enteredAmount, remainingAmount = remainingAmount)
     }
 
@@ -273,20 +290,23 @@ class PosViewModel(
     ) {
         val current = _checkoutState.value
         val registerTotal = registerTotal()
-        val payment = buildCheckoutPaymentLine(method, enteredAmount, remainingAmount) ?: return
+        val payment = buildCheckoutPaymentLine(method, enteredAmount, remainingAmount)
+        if (payment == null) {
+            _state.update {
+                it.copy(status = "Enter a valid amount for ${paymentMethodLabel(method)}")
+            }
+            return
+        }
         _checkoutState.update { it.copy(saleItemsLocked = true) }
         if (method == "card") {
             processCardPayment(payment)
         } else {
             val updatedPayments = current.payments + payment
-            val newRemaining = roundMoney(
-                (registerTotal - updatedPayments.sumOf { it.amount }).coerceAtLeast(0.0),
-            )
-            if (newRemaining <= 0.005) {
+            if (isCheckoutComplete(registerTotal, updatedPayments)) {
                 beginFinalize(updatedPayments, registerTotal)
             } else {
                 _checkoutState.update {
-                    it.copy(payments = updatedPayments, amountInput = "")
+                    it.copy(payments = updatedPayments, amountInput = "0")
                 }
             }
         }
@@ -310,10 +330,7 @@ class PosViewModel(
                 }
                 val updatedPayments = _checkoutState.value.payments + payment
                 val total = registerTotal()
-                val newRemaining = roundMoney(
-                    (total - updatedPayments.sumOf { it.amount }).coerceAtLeast(0.0),
-                )
-                if (newRemaining <= 0.005) {
+                if (isCheckoutComplete(total, updatedPayments)) {
                     finalizeAfterCard = true
                     _checkoutState.update {
                         it.copy(
@@ -326,7 +343,7 @@ class PosViewModel(
                     }
                 } else {
                     _checkoutState.update {
-                        it.copy(payments = updatedPayments, amountInput = "")
+                        it.copy(payments = updatedPayments, amountInput = "0")
                     }
                 }
             } finally {
@@ -374,12 +391,102 @@ class PosViewModel(
         }
         finalizeJob = viewModelScope.launch {
             _checkoutState.update {
-                it.copy(processingDialogMessage = null, paymentProcessingProgress = 0f)
+                it.copy(processingDialogMessage = finalizeProcessingMessage(payments))
             }
             setPaymentMethod(method)
-            checkout(payments = payments, checkoutTotal = registerTotal)
+            performCheckout(
+                payments = payments,
+                checkoutTotal = collectedTotal(registerTotal),
+            )
             resetCheckout()
         }
+    }
+
+    private suspend fun performCheckout(
+        payments: List<CheckoutPayment>? = null,
+        checkoutTotal: Double? = null,
+    ) {
+        if (_state.value.cart.isEmpty()) {
+            _state.value = _state.value.copy(status = "Cart is empty")
+            return
+        }
+
+        val snapshotState = _state.value
+        val paymentMethod = payments
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { checkoutFinalizeMethod(it) }
+            ?: snapshotState.paymentMethod
+        val customerId = snapshotState.selectedCustomerId
+        val paymentsUsed = payments.orEmpty()
+        val customerName = snapshotState.selectedCustomer()?.let { customer ->
+            customerDisplayName(customer, customer.id)
+        }
+        runCatching { repository.checkout(paymentMethod, customerId, payments, checkoutTotal) }
+            .onSuccess { response ->
+                val receipt = buildSaleReceipt(
+                    cart = snapshotState.cart,
+                    customerName = customerName,
+                    customerLinked = snapshotState.customerLinked(),
+                    customerDiscount = snapshotState.customerDiscountActive(),
+                    salesFeeRate = salesFeeRate,
+                    taxRate = taxRate,
+                    payments = paymentsUsed.ifEmpty {
+                        response.payments.orEmpty()
+                    },
+                    orderNumber = response.orderNumber,
+                )
+                setSelectedCustomerId(null)
+                _state.value = snapshotState.copy(
+                    receipt = receipt,
+                    status = "Ready",
+                    selectedCustomerId = null,
+                    selectedCustomerDiscount = false,
+                )
+                refresh()
+            }
+            .onFailure { err ->
+                val authLost = err is HttpException && err.code() == 401
+                if (authLost) {
+                    _state.value = _state.value.copy(
+                        isAuthenticated = false,
+                        status = "Session expired — sign in again",
+                    )
+                    return
+                }
+
+                if (!NetworkErrorLogic.isOfflineLike(err)) {
+                    val serverMsg = when (err) {
+                        is HttpException -> NetworkErrorLogic.httpErrorMessage(err, "Checkout failed")
+                        else -> "Checkout failed: ${err.message ?: "Unknown error"}"
+                    }
+                    _state.value = _state.value.copy(status = serverMsg)
+                    return
+                }
+
+                val lines = _state.value.cart.map { QueuedCartLine(it.productId, it.quantity) }
+                val offlineSnapshot = _state.value
+                val offlineCustomerName = offlineSnapshot.selectedCustomer()?.let { customer ->
+                    customerDisplayName(customer, customer.id)
+                }
+                queueStore.enqueue(paymentMethod, customerId, lines, payments, checkoutTotal)
+                val receipt = buildSaleReceipt(
+                    cart = offlineSnapshot.cart,
+                    customerName = offlineCustomerName,
+                    customerLinked = offlineSnapshot.customerLinked(),
+                    customerDiscount = offlineSnapshot.customerDiscountActive(),
+                    salesFeeRate = salesFeeRate,
+                    taxRate = taxRate,
+                    payments = paymentsUsed,
+                    queuedOffline = true,
+                )
+                _state.value = offlineSnapshot.copy(
+                    receipt = receipt,
+                    status = "Sale queued offline — tap Sync queued when online",
+                    queuedCheckoutCount = queueStore.all().size,
+                    selectedCustomerId = null,
+                    selectedCustomerDiscount = false,
+                )
+            }
     }
 
     fun syncCashierIdentity() {
@@ -413,6 +520,8 @@ class PosViewModel(
                             loggedInUser = user?.takeIf { name -> !name.isBlank() } ?: it.loggedInUser,
                             cashEnabled = resolveCashEnabled(session),
                             cashMode = session.cashMode,
+                            tillId = session.tillId,
+                            posSessionId = session.posSessionId,
                         )
                     }
                 }
@@ -526,6 +635,7 @@ class PosViewModel(
         if (requireFreshIdpLogin) {
             repository.clearWebViewIdpSession()
         }
+        repository.clearPinnedPendingRequest()
         _state.update {
             it.copy(
                 authGate = CashierAuthGate.OidcSignIn,
@@ -536,8 +646,15 @@ class PosViewModel(
     }
 
     fun cancelOidcSignIn() {
+        oidcAuthStepCompletedThisSession = false
         _state.update {
-            val pinOk = it.pinAllowed && !it.supervisorApprovalRequired
+            val idpUrl = it.idpLoginUrl ?: resolveIdpLoginUrl("/oauth/login")
+            val pinOk = effectivePinAllowedCached(
+                pinAllowed = it.pinAllowed,
+                supervisorApprovalRequired = it.supervisorApprovalRequired,
+                idpEnabled = it.idpEnabled || idpUrl != null,
+                idpLoginUrl = idpUrl,
+            )
             it.copy(
                 authGate = CashierAuthGate.PinSignIn(pinAllowed = pinOk),
                 status = "Ready",
@@ -549,7 +666,15 @@ class PosViewModel(
         if (oidcCompleting) return
         oidcCompleting = true
         val isResume = isCashierResumeRedirect(completionUrl)
-        val pendingToken = if (isResume) null else parsePendingRequestToken(completionUrl)
+        val awaitingTill = isAwaitingTillRedirect(completionUrl)
+        val pendingToken = when {
+            isResume || awaitingTill -> null
+            else -> parsePendingRequestToken(completionUrl)
+        }
+        oidcAuthStepCompletedThisSession = awaitingTill || isResume || !pendingToken.isNullOrBlank()
+        if (awaitingTill) {
+            repository.clearPinnedPendingRequest()
+        }
         if (!pendingToken.isNullOrBlank()) {
             repository.rememberPendingRequestToken(pendingToken)
         }
@@ -564,11 +689,24 @@ class PosViewModel(
         viewModelScope.launch {
             try {
                 syncWebViewCookiesWithRetry()
-                if (!pendingToken.isNullOrBlank()) {
+                if (awaitingTill) {
+                    repository.clearPinnedPendingRequest()
+                    repository.pinAwaitingTillFromWebView()
+                } else if (!pendingToken.isNullOrBlank()) {
                     repository.rememberPendingRequestToken(pendingToken)
                 }
                 runCatching { repository.cashierSession() }
-                    .onSuccess { session -> applySessionProbe(session) }
+                    .onSuccess { session ->
+                        repository.applySessionAuth(session)
+                        if (awaitingTill && session.pending) {
+                            repository.clearPinnedPendingRequest()
+                            repository.pinAwaitingTillFromWebView()
+                            val retry = runCatching { repository.cashierSession() }.getOrNull()
+                            applySessionProbe(retry ?: session)
+                        } else {
+                            applySessionProbe(session)
+                        }
+                    }
                     .onFailure { err ->
                         showSignInGateFromCachedAuth(connectivityMessage(err))
                     }
@@ -621,8 +759,10 @@ class PosViewModel(
                 "probeCashierSession hasSessionCookie=${repository.hasCashierSessionCookie()} " +
                     "storedUser=${userStore.get() ?: "null"}",
             )
+            repository.syncWebViewCookies()
             runCatching { repository.cashierSession() }
                 .onSuccess { session ->
+                    repository.applySessionAuth(session)
                     PosIdentityLog.session("probeCashierSession", session)
                     applySessionProbe(session)
                 }
@@ -631,6 +771,12 @@ class PosViewModel(
                     showSignInGateFromCachedAuth(connectivityMessage(err))
                 }
         }
+    }
+
+    private suspend fun clearStaleSignInState(status: String) {
+        oidcAuthStepCompletedThisSession = false
+        repository.clearStaleSignInCookies()
+        showSignInGateFromCachedAuth(status)
     }
 
     private fun resolveLoggedInUser(session: CashierSessionResponse, current: PosUiState): String? {
@@ -820,8 +966,10 @@ class PosViewModel(
     fun cancelOpeningTill() {
         viewModelScope.launch {
             stopApprovalPoll()
+            oidcAuthStepCompletedThisSession = false
             runCatching { repository.cancelOpeningTill() }
             repository.clearCashierCookies()
+            repository.clearWebViewIdpSession()
             showSignInGateFromCachedAuth("Sign-in cancelled")
         }
     }
@@ -836,16 +984,10 @@ class PosViewModel(
                 val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@launch
                 state.copy(authGate = gate.copy(submitting = true), status = "Submitting till count…")
             }
-            runCatching {
-                repository.submitOpeningTill(
-                    SubmitOpeningTillRequest(
-                        cashMode = cashMode,
-                        denominations = denominations,
-                        countedTotal = countedTotal,
-                    ),
-                )
-            }.onSuccess { response ->
+            val result = runCatching { postOpeningTillWithRetry(cashMode, denominations, countedTotal) }
+            result.onSuccess { response ->
                 if (response.pending) {
+                    oidcAuthStepCompletedThisSession = false
                     val gate = openingTillGate()
                     val counted = gate?.let { sumTillCounts(it.denominations, it.counts) }
                     _state.update {
@@ -870,7 +1012,19 @@ class PosViewModel(
                 }
                 if (response.ok) {
                     runCatching { repository.cashierSession() }
-                        .onSuccess { session -> applySessionProbe(session) }
+                        .onSuccess { session ->
+                            repository.applySessionAuth(session)
+                            applySessionProbe(session)
+                        }
+                        .onFailure { err ->
+                            _state.update { state ->
+                                val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@onFailure
+                                state.copy(
+                                    authGate = gate.copy(submitting = false),
+                                    status = connectivityMessage(err),
+                                )
+                            }
+                        }
                 } else {
                     _state.update { state ->
                         val gate = state.authGate as? CashierAuthGate.OpeningTill ?: return@onSuccess
@@ -882,7 +1036,6 @@ class PosViewModel(
                 }
             }.onFailure { err ->
                 if (err is HttpException && err.code() == 401) {
-                    repository.clearCashierCookies()
                     showSignInGateFromCachedAuth("Sign-in expired — sign in with Oracle again")
                     return@onFailure
                 }
@@ -902,13 +1055,45 @@ class PosViewModel(
         }
     }
 
+    private suspend fun postOpeningTillWithRetry(
+        cashMode: String,
+        denominations: Map<String, Int>?,
+        countedTotal: Double?,
+    ): com.cloudstore.pos.data.SubmitOpeningTillResponse {
+        repository.prepareForTillSubmit()
+        val body = com.cloudstore.pos.data.SubmitOpeningTillRequest(
+            cashMode = cashMode,
+            denominations = denominations,
+            countedTotal = countedTotal,
+            awaitingTillToken = repository.awaitingTillTokenForSubmit(),
+        )
+        return try {
+            repository.submitOpeningTill(body)
+        } catch (err: HttpException) {
+            if (err.code() != 401) throw err
+            repository.prepareForTillSubmit()
+            repository.submitOpeningTill(
+                body.copy(awaitingTillToken = repository.awaitingTillTokenForSubmit()),
+            )
+        }
+    }
+
     private fun applySessionProbe(session: CashierSessionResponse) {
         val idpUrl = if (session.idpEnabled) resolveIdpLoginUrl(session.idpLoginUrl) else null
         when {
             session.awaitingTill -> {
-                loadOpeningTillGate()
+                if (oidcAuthStepCompletedThisSession) {
+                    oidcAuthStepCompletedThisSession = false
+                    repository.applySessionAuth(session)
+                    loadOpeningTillGate()
+                } else {
+                    viewModelScope.launch {
+                        clearStaleSignInState("Sign in with Oracle to open your till")
+                    }
+                }
             }
             session.ok -> {
+                oidcAuthStepCompletedThisSession = false
                 requireFreshIdpLogin = false
                 stopApprovalPoll()
                 val resolvedUser = rememberCashierUserFromSession(session, _state.value)
@@ -932,6 +1117,8 @@ class PosViewModel(
                         pinInput = "",
                         cashEnabled = resolveCashEnabled(session),
                         cashMode = session.cashMode,
+                        tillId = session.tillId,
+                        posSessionId = session.posSessionId,
                         status = "Signed in",
                     )
                 }
@@ -940,24 +1127,32 @@ class PosViewModel(
                 flushOfflineQueue()
             }
             session.pending -> {
-                rememberCashierUserFromApproval(
-                    session.approval?.cashierEmail,
-                    session.approval?.cashierName,
-                )
-                _state.update {
-                    it.copy(
-                        isAuthenticated = false,
-                        authGate = waitingApprovalFromSession(session),
-                        idpLoginUrl = idpUrl,
-                        pinAllowed = effectivePinAllowed(session),
-                        supervisorApprovalRequired = session.supervisorApprovalRequired,
-                        idpEnabled = session.idpEnabled,
-                        status = "Waiting for supervisor approval",
+                if (oidcAuthStepCompletedThisSession) {
+                    oidcAuthStepCompletedThisSession = false
+                    rememberCashierUserFromApproval(
+                        session.approval?.cashierEmail,
+                        session.approval?.cashierName,
                     )
+                    _state.update {
+                        it.copy(
+                            isAuthenticated = false,
+                            authGate = waitingApprovalFromSession(session),
+                            idpLoginUrl = idpUrl,
+                            pinAllowed = effectivePinAllowed(session),
+                            supervisorApprovalRequired = session.supervisorApprovalRequired,
+                            idpEnabled = session.idpEnabled,
+                            status = "Waiting for supervisor approval",
+                        )
+                    }
+                    startApprovalPoll()
+                } else {
+                    viewModelScope.launch {
+                        clearStaleSignInState("Sign in with Oracle to continue")
+                    }
                 }
-                startApprovalPoll()
             }
             else -> {
+                oidcAuthStepCompletedThisSession = false
                 val baseStatus = when {
                     _state.value.status.startsWith("Signed off") -> _state.value.status
                     _state.value.status == "Signed out" ->
@@ -976,6 +1171,17 @@ class PosViewModel(
     private fun effectivePinAllowed(session: CashierSessionResponse): Boolean =
         session.pinAllowed && !session.supervisorApprovalRequired
 
+    /** Cached/error paths — hide PIN when Model B / IdP sign-in is required. */
+    private fun effectivePinAllowedCached(
+        pinAllowed: Boolean,
+        supervisorApprovalRequired: Boolean,
+        idpEnabled: Boolean,
+        idpLoginUrl: String?,
+    ): Boolean {
+        if (supervisorApprovalRequired || idpEnabled || !idpLoginUrl.isNullOrBlank()) return false
+        return pinAllowed
+    }
+
     private fun configureSignInGateFromSession(session: CashierSessionResponse, status: String) {
         val idpUrl = if (session.idpEnabled) resolveIdpLoginUrl(session.idpLoginUrl) else null
         showSignInGate(
@@ -989,19 +1195,25 @@ class PosViewModel(
 
     private fun showSignInGateFromCachedAuth(status: String) {
         val current = _state.value
-        val pinOk = current.pinAllowed && !current.supervisorApprovalRequired
         val idpUrl = when {
             current.idpLoginUrl != null -> current.idpLoginUrl
             current.idpEnabled || current.supervisorApprovalRequired ->
                 resolveIdpLoginUrl("/oauth/login")
             else -> null
         }
+        val idpEnabled = current.idpEnabled || idpUrl != null
+        val pinOk = effectivePinAllowedCached(
+            pinAllowed = current.pinAllowed,
+            supervisorApprovalRequired = current.supervisorApprovalRequired,
+            idpEnabled = idpEnabled,
+            idpLoginUrl = idpUrl,
+        )
         showSignInGate(
             pinAllowed = pinOk,
             idpLoginUrl = idpUrl,
             status = status,
             supervisorApprovalRequired = current.supervisorApprovalRequired,
-            idpEnabled = current.idpEnabled || idpUrl != null,
+            idpEnabled = idpEnabled,
         )
     }
 
@@ -1746,88 +1958,7 @@ class PosViewModel(
         checkoutTotal: Double? = null,
     ) {
         viewModelScope.launch {
-            if (_state.value.cart.isEmpty()) {
-                _state.value = _state.value.copy(status = "Cart is empty")
-                return@launch
-            }
-
-            val snapshotState = _state.value
-            val paymentMethod = payments
-                ?.takeIf { it.isNotEmpty() }
-                ?.let { checkoutFinalizeMethod(it) }
-                ?: snapshotState.paymentMethod
-            val customerId = snapshotState.selectedCustomerId
-            val paymentsUsed = payments.orEmpty()
-            val customerName = snapshotState.selectedCustomer()?.let { customer ->
-                customerDisplayName(customer, customer.id)
-            }
-            runCatching { repository.checkout(paymentMethod, customerId, payments, checkoutTotal) }
-                .onSuccess { response ->
-                    val receipt = buildSaleReceipt(
-                        cart = snapshotState.cart,
-                        customerName = customerName,
-                        customerLinked = snapshotState.customerLinked(),
-                        customerDiscount = snapshotState.customerDiscountActive(),
-                        salesFeeRate = salesFeeRate,
-                        taxRate = taxRate,
-                        payments = paymentsUsed.ifEmpty {
-                            response.payments.orEmpty()
-                        },
-                        orderNumber = response.orderNumber,
-                    )
-                    setSelectedCustomerId(null)
-                    _state.value = snapshotState.copy(
-                        receipt = receipt,
-                        status = "Ready",
-                        selectedCustomerId = null,
-                        selectedCustomerDiscount = false,
-                    )
-                    refresh()
-                }
-                .onFailure { err ->
-                    val authLost = err is HttpException && err.code() == 401
-                    if (authLost) {
-                        _state.value = _state.value.copy(
-                            isAuthenticated = false,
-                            status = "Session expired — sign in again",
-                        )
-                        return@onFailure
-                    }
-
-                    val isOfflineLike = err is IOException
-                    if (!isOfflineLike) {
-                        val serverMsg = when (err) {
-                            is HttpException -> "Checkout failed (${err.code()})"
-                            else -> "Checkout failed: ${err.message ?: "Unknown error"}"
-                        }
-                        _state.value = _state.value.copy(status = serverMsg)
-                        return@onFailure
-                    }
-
-                    val lines = _state.value.cart.map { QueuedCartLine(it.productId, it.quantity) }
-                    val snapshotState = _state.value
-                    val customerName = snapshotState.selectedCustomer()?.let { customer ->
-                        customerDisplayName(customer, customer.id)
-                    }
-                    queueStore.enqueue(paymentMethod, customerId, lines, payments, checkoutTotal)
-                    val receipt = buildSaleReceipt(
-                        cart = snapshotState.cart,
-                        customerName = customerName,
-                        customerLinked = snapshotState.customerLinked(),
-                        customerDiscount = snapshotState.customerDiscountActive(),
-                        salesFeeRate = salesFeeRate,
-                        taxRate = taxRate,
-                        payments = paymentsUsed,
-                        queuedOffline = true,
-                    )
-                    _state.value = snapshotState.copy(
-                        receipt = receipt,
-                        status = "Ready",
-                        queuedCheckoutCount = queueStore.all().size,
-                        selectedCustomerId = null,
-                        selectedCustomerDiscount = false,
-                    )
-                }
+            performCheckout(payments = payments, checkoutTotal = checkoutTotal)
         }
     }
 
@@ -1864,16 +1995,16 @@ class PosViewModel(
                 if (result.isSuccess) {
                     synced++
                 } else {
-                    val err = result.exceptionOrNull()
-                    val retryable = err is IOException
+                    val err = result.exceptionOrNull() ?: continue
+                    val retryable = NetworkErrorLogic.isRetryableSyncError(err)
                     if (retryable) {
                         remaining.add(pending)
                     } else {
                         droppedPermanent++
                     }
                     lastError = when (err) {
-                        is HttpException -> "HTTP ${err.code()}"
-                        else -> err?.message
+                        is HttpException -> NetworkErrorLogic.httpErrorMessage(err, "Server error")
+                        else -> err.message
                     }
                 }
             }

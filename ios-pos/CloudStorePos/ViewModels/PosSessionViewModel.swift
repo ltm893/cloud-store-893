@@ -60,6 +60,9 @@ final class PosSessionViewModel {
     private var approvalPollTask: Task<Void, Never>?
     private var closePollTask: Task<Void, Never>?
 
+    var activeTillId: Int? { lastSession?.tillId }
+    var activePosSessionId: Int? { lastSession?.posSessionId }
+
     init(
         apiBaseURL: URL = AppConfig.apiBaseURL,
         registerId: String = AppConfig.registerId,

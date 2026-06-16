@@ -61,6 +61,16 @@ detect_lan_ip() {
 
 if [[ -n "${LAN_IP:-}" ]]; then
   API_HOST="$LAN_IP"
+elif [[ -n "${LAN_IP+x}" && -z "$LAN_IP" ]]; then
+  # e.g. LAN_IP=$(ipconfig getifaddr en0) when en0 has no address — do not silently use OCI
+  API_HOST="$(detect_lan_ip)"
+  if [[ -z "$API_HOST" ]]; then
+    echo "error: LAN_IP is empty (en0/en1 have no address). Set LAN_IP explicitly, e.g.:" >&2
+    echo "  LAN_IP=\$(ipconfig getifaddr en1) ./RebuildReinstall.sh" >&2
+    echo "  USE_LOCAL=1 ./RebuildReinstall.sh" >&2
+    exit 1
+  fi
+  echo "==> LAN_IP was empty; using detected Mac IP $API_HOST"
 elif [[ "${USE_LOCAL:-}" == "1" ]]; then
   API_HOST="$(detect_lan_ip)"
   if [[ -z "$API_HOST" ]]; then
@@ -103,6 +113,8 @@ echo "==> API_BASE_URL=${RELEASE_API_BASE_URL}"
 if [[ "$API_HOST" == "$OCI_API_HOST" && "${USE_LOCAL:-}" != "1" ]]; then
   echo "    (OCI HTTPS — local dev: USE_LOCAL=1 or LAN_IP=192.168.x.x ./RebuildReinstall.sh)"
 fi
+echo "==> ./gradlew --stop (refresh API_BASE_URL in BuildConfig)"
+./gradlew --stop >/dev/null 2>&1 || true
 echo "==> ./gradlew :app:assembleDebug"
 ./gradlew :app:assembleDebug
 

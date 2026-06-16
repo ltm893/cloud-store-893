@@ -87,7 +87,9 @@
 
       renderSummaryGrid(salesSummaryEl, [
         ['Transactions', int(sales.summary.transaction_count)],
-        ['Sales total', money(sales.summary.sales_total)],
+        ['Collected', money(sales.summary.sales_total)],
+        ['Register total', money(sales.summary.register_total)],
+        ['Cash rounding', money(sales.summary.cash_rounding_total)],
         ['Cash', money(sales.summary.cash_total)],
         ['Card', money(sales.summary.credit_total)],
         ['Items sold', int(sales.summary.items_sold)],

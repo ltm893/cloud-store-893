@@ -493,18 +493,21 @@ scripts/reset-db.sh
 
 - If ORDS is still slow to come up, inspect `terraform output -raw ords_base_url`, ADB status in OCI, and whether the ORDS endpoint is reachable before debugging the split-tender flow further.
 
-### Cash rounding (TODO)
+### Cash rounding
 
-**Done (tablet UI):** Cash due, **Exact**, and change round **down** to **$0.05** (`roundToNickel` / `computeCashAmountDue` in `android-pos/.../CartTotals.kt`). Sale bar still shows the full register total; cash panel shows **Register total** vs **Cash due (no pennies)** when they differ.
+**Done end-to-end:** Tablets round cash **down** to **$0.05** (`roundToNickel` in `CartTotals.kt` / `CartTotalsLogic.swift`). Checkout uses `lib/pos-pricing.js` + `lib/checkout-settlement.js` on the server:
 
-**Not done — pick up later:**
+- **`register_total`** — exact tax-inclusive total (register / receipt subtotal).
+- **`cash_due`** — nickel-rounded cash portion (full sale if cash-only, or remainder after card in split).
+- **`sales.total`** — amount collected (nickel-adjusted when cash is involved).
 
-- [ ] **`POST /api/checkout`** — when `paymentMethod === 'cash'`, compute tax-inclusive total (same formula as tablet), apply nickel rounding, persist on `sales` (e.g. `total`, `cash_due`, optional `cash_tendered` / `cash_change` / `register_total`).
-- [ ] **ORDS / `sales` table** — columns or documented fields for cash-rounded amount vs pre-tax subtotal (today checkout stores **pre-tax** `subtotalPayable` only).
-- [ ] **Web POS** — if cash tender UI is added, reuse same rounding; web cart today has no tax line like the tablet.
-- [ ] **Admin / reports** — show cash-rounded total for cash sales; align with drawer/accounting.
-- [ ] **Receipts / exports** — amount collected = nickel-rounded cash due, not raw register total.
-- [ ] **Offline queue (tablet)** — optional: store tendered/rounded due if server will validate on sync.
+**Schema:** `scripts/seed.sql` + `scripts/migrate-sales-cash-rounding.sql` add `register_total`, `cash_due` on `sales`. Run migration on existing OCI DB before redeploying server code that POSTs those fields.
+
+**Admin reports:** Collected, register total, and cash rounding adjustment on the Reports tab.
+
+**Env:** `POS_TAX_RATE` / `POS_SALES_FEE_RATE` in `.env` (default `0.06` / `0.0`) — must match tablet build config.
+
+**Not done:** Web POS cash tender UI (web cart has no tax line today). Offline queue stores `checkoutTotal` (register total) for server validation on sync.
 
 Ref: `android-pos/README.md` (Cash — no pennies).
 

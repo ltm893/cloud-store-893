@@ -3,6 +3,7 @@ import SwiftUI
 struct CheckoutPaymentPanel: View {
     let saleTotal: Double
     let balanceDue: Double
+    let cashAmountDue: Double
     let payments: [CheckoutPayment]
     let cashEnabled: Bool
     let creditOnlyPayments: Bool
@@ -19,10 +20,17 @@ struct CheckoutPaymentPanel: View {
     let onBack: () -> Void
 
     private var quickBills: [Int] {
-        CartTotalsLogic.cashQuickDenominations(
-            amountDue: balanceDue,
+        let target = (!creditOnlyPayments && cashEnabled && cashAmountDue + 0.005 < balanceDue)
+            ? cashAmountDue
+            : balanceDue
+        return CartTotalsLogic.cashQuickDenominations(
+            amountDue: target,
             cashEnabled: !creditOnlyPayments && cashEnabled
         )
+    }
+
+    private var tenderTarget: Double {
+        (cashEnabled && cashAmountDue + 0.005 < balanceDue) ? cashAmountDue : balanceDue
     }
 
     var body: some View {
@@ -40,8 +48,12 @@ struct CheckoutPaymentPanel: View {
             }
 
             amountRow("Sale total", CartTotalsLogic.formatMoney(saleTotal))
+            let collectedSale = CartTotalsLogic.collectedTotal(saleTotal)
+            if collectedSale + 0.005 < saleTotal {
+                amountRow("Payable (nickels)", CartTotalsLogic.formatMoney(collectedSale))
+            }
             amountRow("Balance due", CartTotalsLogic.formatMoney(balanceDue), bold: true)
-            amountRow("Amount entered", amountInput.isEmpty ? "—" : "$\(amountInput)")
+            amountRow("Amount entered", CashEntryLogic.displayCashEntry(amountInput))
 
             if !payments.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
@@ -72,7 +84,7 @@ struct CheckoutPaymentPanel: View {
                     Button {
                         onFillRemaining()
                     } label: {
-                        Text(CartTotalsLogic.formatMoney(balanceDue))
+                        Text(CartTotalsLogic.formatMoney(tenderTarget))
                     }
                     .buttonStyle(PosOutlinedQuickButtonStyle())
                     .frame(maxWidth: .infinity)

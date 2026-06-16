@@ -101,4 +101,13 @@ enum CartTotalsLogic {
             )
         )
     }
+
+    static func collectedTotal(_ registerTotal: Double) -> Double {
+        roundToNickel(registerTotal)
+    }
+
+    static func remainingCashAmountDue(registerTotal: Double, nonCashPaid: Double) -> Double {
+        let collected = collectedTotal(registerTotal)
+        return roundToNickel(roundMoney(max(0, collected - nonCashPaid)))
+    }
 }

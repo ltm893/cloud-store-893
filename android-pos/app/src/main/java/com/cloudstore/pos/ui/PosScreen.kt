@@ -677,6 +677,8 @@ fun PosScreen(viewModel: PosViewModel) {
                     ) {
                         RegisterStatusPanel(
                             apiBaseUrl = BuildConfig.API_BASE_URL,
+                            tillId = state.tillId,
+                            posSessionId = state.posSessionId,
                             status = state.status,
                             queuedCount = state.queuedCheckoutCount,
                             syncing = state.queueSyncing,
@@ -737,8 +739,12 @@ fun PosScreen(viewModel: PosViewModel) {
                             salesFeeRate = salesFeeRate,
                             taxRate = taxRate,
                         )
-                        val paidTotal = roundMoney(checkout.payments.sumOf { it.amount })
-                        val remainingAmount = roundMoney((registerTotal - paidTotal).coerceAtLeast(0.0))
+                        val remainingAmount = exactBalanceDue(registerTotal, checkout.payments)
+                        val cashAmountDue = if (state.cashEnabled && !state.creditOnlyPayments()) {
+                            cashBalanceDue(registerTotal, checkout.payments)
+                        } else {
+                            remainingAmount
+                        }
                         val linkedCustomer = state.selectedCustomer()
                         val allowPaymentBack =
                             !checkout.payments.any { it.method == "card" } &&
@@ -746,6 +752,7 @@ fun PosScreen(viewModel: PosViewModel) {
                         CheckoutPaymentPanel(
                             saleTotal = registerTotal,
                             balanceDue = remainingAmount,
+                            cashAmountDue = cashAmountDue,
                             payments = checkout.payments,
                             backEnabled = allowPaymentBack,
                             cashEnabled = state.cashEnabled,
@@ -753,11 +760,18 @@ fun PosScreen(viewModel: PosViewModel) {
                             showCardOnFileButton = linkedCustomer?.hasCardOnFile == true,
                             amountInput = checkout.amountInput,
                             onAmountChange = { amount ->
-                                viewModel.updateCheckout { it.copy(amountInput = amount) }
+                                viewModel.updateCheckout {
+                                    it.copy(amountInput = normalizeCashEntryInput(amount))
+                                }
                             },
                             onFillRemaining = {
+                                val fillAmount = if (state.cashEnabled && !state.creditOnlyPayments()) {
+                                    cashAmountDue
+                                } else {
+                                    remainingAmount
+                                }
                                 viewModel.updateCheckout {
-                                    it.copy(amountInput = formatCashEntry(remainingAmount))
+                                    it.copy(amountInput = normalizeCashEntryInput(formatCashEntry(fillAmount)))
                                 }
                             },
                             onApplyPayment = viewModel::applyCheckoutPayment,
@@ -911,6 +925,8 @@ private fun DrawerMenuButton(
 @Composable
 private fun RegisterStatusPanel(
     apiBaseUrl: String,
+    tillId: Int?,
+    posSessionId: Int?,
     status: String,
     queuedCount: Int,
     syncing: Boolean,
@@ -937,8 +953,24 @@ private fun RegisterStatusPanel(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 2.dp, bottom = 6.dp),
+                .padding(top = 2.dp),
         )
+        if (tillId != null || posSessionId != null) {
+            val sessionLine = buildList {
+                tillId?.let { add("Till #$it") }
+                posSessionId?.let { add("POS session #$it") }
+            }.joinToString(" · ")
+            Text(
+                text = sessionLine,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp, bottom = 6.dp),
+            )
+        } else {
+            Spacer(modifier = Modifier.height(6.dp))
+        }
         if (status.isNotBlank()) {
             Text(
                 text = status,

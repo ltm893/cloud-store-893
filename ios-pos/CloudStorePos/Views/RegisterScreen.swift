@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RegisterScreen: View {
     let user: String
+    let session: PosSessionViewModel
     let onBreak: () -> Void
     let onCloseTill: () -> Void
     @State private var viewModel: PosRegisterViewModel
@@ -16,6 +17,7 @@ struct RegisterScreen: View {
         onCloseTill: @escaping () -> Void
     ) {
         self.user = user
+        self.session = session
         self.onBreak = onBreak
         self.onCloseTill = onCloseTill
         _viewModel = State(initialValue: session.makeRegisterViewModel())
@@ -246,6 +248,8 @@ struct RegisterScreen: View {
             if showStatusPanel {
                 RegisterStatusPanel(
                     apiBaseURL: AppConfig.apiBaseURL.absoluteString,
+                    tillId: session.activeTillId,
+                    posSessionId: session.activePosSessionId,
                     statusMessage: viewModel.status,
                     queuedCount: viewModel.queuedCheckoutCount,
                     syncing: viewModel.queueSyncing,
@@ -281,6 +285,7 @@ struct RegisterScreen: View {
                 CheckoutPaymentPanel(
                     saleTotal: viewModel.registerTotal,
                     balanceDue: viewModel.balanceDue,
+                    cashAmountDue: viewModel.cashBalanceDue,
                     payments: viewModel.checkoutPayments,
                     cashEnabled: viewModel.cashEnabled,
                     creditOnlyPayments: viewModel.creditOnlyPayments,

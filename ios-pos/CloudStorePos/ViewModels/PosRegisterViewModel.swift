@@ -74,8 +74,11 @@ final class PosRegisterViewModel {
     }
 
     var balanceDue: Double {
-        let paid = CartTotalsLogic.roundMoney(checkoutPayments.reduce(0) { $0 + $1.amount })
-        return CartTotalsLogic.roundMoney(max(0, registerTotal - paid))
+        CheckoutPaymentLogic.exactBalanceDue(registerTotal: registerTotal, payments: checkoutPayments)
+    }
+
+    var cashBalanceDue: Double {
+        CheckoutPaymentLogic.cashBalanceDue(registerTotal: registerTotal, payments: checkoutPayments)
     }
 
     var quantityEditing: Bool { quantityEditCartItemId != nil }
@@ -326,11 +329,7 @@ final class PosRegisterViewModel {
         checkoutOpen = true
         checkoutPayments = []
         saleItemsLocked = false
-        if registerTotal > 0.005 {
-            checkoutAmountInput = String(format: "%.2f", registerTotal)
-        } else {
-            checkoutAmountInput = ""
-        }
+        checkoutAmountInput = "0"
     }
 
     func closeCheckout() {
@@ -350,29 +349,39 @@ final class PosRegisterViewModel {
     }
 
     func clearCheckoutAmount() {
-        checkoutAmountInput = ""
+        checkoutAmountInput = "0"
     }
 
     func backspaceCheckoutAmount() {
-        checkoutAmountInput = String(checkoutAmountInput.dropLast())
+        checkoutAmountInput = CashEntryLogic.backspaceCashEntry(checkoutAmountInput)
     }
 
     func fillRemainingBalance() {
-        let remaining = balanceDue
+        let remaining = (cashEnabled && !creditOnlyPayments) ? cashBalanceDue : balanceDue
         if remaining <= 0.005 { return }
-        checkoutAmountInput = String(format: "%.2f", remaining)
+        checkoutAmountInput = CashEntryLogic.normalizeCashEntryInput(
+            CashEntryLogic.formatCashEntry(remaining)
+        )
     }
 
     func applyQuickBill(_ amount: Int) {
-        checkoutAmountInput = String(amount)
+        checkoutAmountInput = CashEntryLogic.normalizeCashEntryInput(String(amount))
     }
 
     func applyPayment(method: String) {
-        guard let entered = CashEntryLogic.parseCashTendered(checkoutAmountInput) else { return }
+        guard let entered = CashEntryLogic.parseCashTendered(checkoutAmountInput) else {
+            status = "Enter a valid amount for \(CheckoutPaymentLogic.paymentMethodLabel(method))"
+            return
+        }
+        let due = CheckoutPaymentLogic.balanceDueForMethod(
+            registerTotal: registerTotal,
+            payments: checkoutPayments,
+            method: method
+        )
         guard let payment = CheckoutPaymentLogic.buildCheckoutPaymentLine(
             method: method,
             enteredAmount: entered,
-            balanceDue: balanceDue
+            balanceDue: due
         ) else { return }
 
         saleItemsLocked = true
@@ -380,8 +389,8 @@ final class PosRegisterViewModel {
             Task { await processCardPayment(payment) }
         } else {
             checkoutPayments.append(payment)
-            checkoutAmountInput = ""
-            if balanceDue <= 0.005 {
+            checkoutAmountInput = "0"
+            if CheckoutPaymentLogic.isCheckoutComplete(registerTotal: registerTotal, payments: checkoutPayments) {
                 Task { await finalizeCheckout() }
             }
         }
@@ -392,10 +401,10 @@ final class PosRegisterViewModel {
         processingMessage = "Sending \(CartTotalsLogic.formatMoney(payment.amount)) to terminal…"
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         checkoutPayments.append(payment)
-        checkoutAmountInput = ""
+        checkoutAmountInput = "0"
         processingCard = false
         processingMessage = nil
-        if balanceDue <= 0.005 {
+        if CheckoutPaymentLogic.isCheckoutComplete(registerTotal: registerTotal, payments: checkoutPayments) {
             await finalizeCheckout()
         }
     }
@@ -411,7 +420,7 @@ final class PosRegisterViewModel {
 
     private func finalizeCheckout() async {
         let payments = checkoutPayments
-        let total = registerTotal
+        let total = CartTotalsLogic.collectedTotal(registerTotal)
         let method = CheckoutPaymentLogic.checkoutFinalizeMethod(payments)
         let customerId = selectedCustomerId
         let cartSnapshot = cart
@@ -442,7 +451,7 @@ final class PosRegisterViewModel {
             )
             checkoutOpen = false
             checkoutPayments = []
-            checkoutAmountInput = ""
+            checkoutAmountInput = "0"
             saleItemsLocked = false
             selectedCustomerId = nil
             status = "Sale complete"

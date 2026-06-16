@@ -1,0 +1,54 @@
+Remove PIN only have OIDC
+
+POS Session :
+    Descripiton: As of now no UI, but permission is Inventory Lookup only,
+    Status: Active|  InProgress | Not Active,
+    StartTimeStamp,
+    EndTimeStame,
+   
+
+
+    Till Session:
+        
+        Descriptiption: Start and End requires a Supervisor Approval
+        Status: Active| InProgress | Closed,
+        Type: CashAndCard | CardOnly,
+        CashSales,
+        CreditSales,
+        StartTimeStamp,
+        EndTimeStame
+
+
+
+  
+AUTH Session : 
+    Descripiton: table and approval access
+
+
+
+In auth menu change Login Approval to POS Approvals, Shift closes to Till Appoval, Register shifts to Tills 
+
+
+
+
+1. Relationship
+Yes: Every Till Session require a POS Session first
+
+2. What is “POS Session” on the tablet today?
+Introduce POS Session as a parent wrappper for till but not for Admin 
+
+3. “POS Approvals”
+No POS Approvals. Only OIDC authentication. Supervisor approval now for till only, but in future could be more stuff
+
+4. Sign out vs Close till under new names:
+Only cashier_session cleared while till stays Active
+
+5. One till row per physical register?
+“Tills” table = history of till sessions (today register_shifts)
+
+6. AUTH Session
+Same as today’s admin login only
+
+7. Scope of this pass
+schema/rename (register_shifts → tills, new pos_sessions table)?
+

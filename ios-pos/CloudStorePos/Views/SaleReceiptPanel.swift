@@ -105,11 +105,23 @@ private struct ReceiptTotalsSection: View {
                 : CartTotalsLogic.formatMoney(0)
         )
         ReceiptTotalRow(label: "Tax", value: CartTotalsLogic.formatMoney(receipt.tax))
+        if receipt.grandTotal - receipt.collectedTotal > 0.005 {
+            ReceiptTotalRow(
+                label: "Cash rounding",
+                value: "−\(CartTotalsLogic.formatMoney(receipt.grandTotal - receipt.collectedTotal))"
+            )
+        }
         ReceiptTotalRow(
-            label: "Total",
-            value: CartTotalsLogic.formatMoney(receipt.grandTotal),
+            label: receipt.grandTotal - receipt.collectedTotal > 0.005 ? "Collected" : "Total",
+            value: CartTotalsLogic.formatMoney(receipt.collectedTotal),
             emphasize: true
         )
+        if receipt.grandTotal - receipt.collectedTotal > 0.005 {
+            ReceiptTotalRow(
+                label: "Register total",
+                value: CartTotalsLogic.formatMoney(receipt.grandTotal)
+            )
+        }
     }
 }
 

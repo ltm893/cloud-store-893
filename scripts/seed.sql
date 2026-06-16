@@ -154,6 +154,8 @@ CREATE TABLE sales (
   id                       NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   order_number             VARCHAR2(64)   NOT NULL UNIQUE,
   total                    NUMBER(10, 2)  NOT NULL,
+  register_total           NUMBER(10, 2),
+  cash_due                 NUMBER(10, 2),
   payment_method           VARCHAR2(50)   NOT NULL,
   customer_id              NUMBER         REFERENCES customers(id),
   subtotal_pre_member      NUMBER(10, 2)  NOT NULL,

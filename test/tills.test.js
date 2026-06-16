@@ -123,3 +123,78 @@ test('findResumableActiveTill resumes orphan active till for same cashier', asyn
   const backfilled = await store.backfillRegisterId(12, 'tablet-abc');
   assert.equal(backfilled.registerId, 'tablet-abc');
 });
+
+test('findResumableActiveTill blocks opening till on a different register', async () => {
+  const store = mockStore([
+    {
+      id: 64,
+      register_id: 'tablet-b11a3a902a0191cb',
+      cashier_sub: 'ltm893@icloud.com',
+      cashier_email: 'ltm893@icloud.com',
+      till_type: 'cash_and_credit',
+      status: 'active',
+    },
+  ]);
+
+  await assert.rejects(
+    () => store.findResumableActiveTill('tablet-8DA8BED7-ED2D-4F56-8E73-D6CE7328D55B', {
+      sub: 'oracle-sub-123',
+      email: 'ltm893@icloud.com',
+    }),
+    (err) => err.code === 'ACTIVE_TILL_EXISTS' && err.status === 409 && err.tillId === 64,
+  );
+});
+
+test('findResumableActiveTill blocks when cashier has multiple active tills', async () => {
+  const store = mockStore([
+    {
+      id: 60,
+      register_id: 'tablet-8DA8BED7-ED2D-4F56-8E73-D6CE7328D55B',
+      cashier_sub: 'ltm893@icloud.com',
+      cashier_email: 'ltm893@icloud.com',
+      status: 'active',
+    },
+    {
+      id: 64,
+      register_id: 'tablet-b11a3a902a0191cb',
+      cashier_sub: 'ltm893@icloud.com',
+      cashier_email: 'ltm893@icloud.com',
+      status: 'active',
+    },
+  ]);
+
+  await assert.rejects(
+    () => store.findResumableActiveTill('tablet-8DA8BED7-ED2D-4F56-8E73-D6CE7328D55B', {
+      email: 'ltm893@icloud.com',
+    }),
+    (err) => err.code === 'MULTIPLE_ACTIVE_TILLS' && err.status === 409,
+  );
+});
+
+test('createFromApproval does not open a second till for the same cashier', async () => {
+  const store = mockStore([
+    {
+      id: 64,
+      register_id: 'tablet-b11a3a902a0191cb',
+      cashier_sub: 'ltm893@icloud.com',
+      cashier_email: 'ltm893@icloud.com',
+      till_type: 'cash_and_credit',
+      status: 'active',
+      pos_session_id: 106,
+    },
+  ]);
+
+  await assert.rejects(
+    () => store.createFromApproval(
+      {
+        cashierSub: 'ltm893@icloud.com',
+        cashierEmail: 'ltm893@icloud.com',
+        cashMode: 'cash_and_credit',
+        registerId: 'tablet-8DA8BED7-ED2D-4F56-8E73-D6CE7328D55B',
+        requestToken: 'token-new',
+      },
+      110,
+    ),
+    (err) => err.code === 'ACTIVE_TILL_EXISTS',
+  );
+});

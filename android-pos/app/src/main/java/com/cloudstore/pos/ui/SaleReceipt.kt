@@ -24,6 +24,7 @@ data class SaleReceipt(
     val savings: Double,
     val tax: Double,
     val grandTotal: Double,
+    val collectedTotal: Double,
     val payments: List<CheckoutPayment>,
     val changeTotal: Double,
     val queuedOffline: Boolean = false,
@@ -67,6 +68,7 @@ fun buildSaleReceipt(
     val taxable = totals.itemPreTax + salesFee
     val taxAmt = roundMoney(taxable * taxRate)
     val grandTotal = roundMoney(taxable + taxAmt)
+    val collectedTotal = roundMoney(payments.sumOf { it.amount })
 
     return SaleReceipt(
         orderNumber = orderNumber,
@@ -85,6 +87,7 @@ fun buildSaleReceipt(
         savings = totals.saleSavings,
         tax = taxAmt,
         grandTotal = grandTotal,
+        collectedTotal = collectedTotal,
         payments = payments,
         changeTotal = checkoutChangeTotal(payments),
         queuedOffline = queuedOffline,

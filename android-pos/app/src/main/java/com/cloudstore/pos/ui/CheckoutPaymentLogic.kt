@@ -64,3 +64,32 @@ fun buildCheckoutPaymentLine(
         changeGiven = changeGiven.takeIf { it > 0.005 },
     )
 }
+
+fun exactBalanceDue(registerTotal: Double, payments: List<CheckoutPayment>): Double {
+    val paid = roundMoney(payments.sumOf { it.amount })
+    return roundMoney((collectedTotal(registerTotal) - paid).coerceAtLeast(0.0))
+}
+
+fun cashBalanceDue(registerTotal: Double, payments: List<CheckoutPayment>): Double {
+    val cardPaid = roundMoney(payments.filter { it.method == "card" }.sumOf { it.amount })
+    val cashPaid = roundMoney(payments.filter { it.method == "cash" }.sumOf { it.amount })
+    val cashDue = remainingCashAmountDue(registerTotal, cardPaid)
+    return roundMoney((cashDue - cashPaid).coerceAtLeast(0.0))
+}
+
+fun balanceDueForMethod(
+    registerTotal: Double,
+    payments: List<CheckoutPayment>,
+    method: String,
+): Double {
+    val exact = exactBalanceDue(registerTotal, payments)
+    return roundToNickel(exact)
+}
+
+fun expectedCollectedTotal(registerTotal: Double, payments: List<CheckoutPayment>): Double =
+    collectedTotal(registerTotal)
+
+fun isCheckoutComplete(registerTotal: Double, payments: List<CheckoutPayment>): Boolean {
+    val paid = roundMoney(payments.sumOf { it.amount })
+    return paid + 0.005 >= collectedTotal(registerTotal)
+}

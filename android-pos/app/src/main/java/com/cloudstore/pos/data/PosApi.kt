@@ -104,6 +104,8 @@ class PosRepository(baseUrl: String) {
     private val api: PosApi
     private val normalizedBaseUrl: String
     val cookieJar = MemoryCookieJar()
+    /** Echo of server awaiting-till token — cookie fallback for POST /approval/till. */
+    private var storedAwaitingTillToken: String? = null
 
     init {
         normalizedBaseUrl = baseUrl.trim().let { url ->
@@ -180,12 +182,76 @@ class PosRepository(baseUrl: String) {
 
     suspend fun tillConfig() = api.tillConfig()
 
-    suspend fun submitOpeningTill(body: SubmitOpeningTillRequest) = api.submitOpeningTill(body)
+    fun applySessionAuth(session: CashierSessionResponse) {
+        stashAwaitingTillToken(session.awaitingTillToken)
+    }
+
+    fun stashAwaitingTillToken(token: String?) {
+        val trimmed = token?.trim().orEmpty()
+        if (trimmed.isEmpty()) return
+        storedAwaitingTillToken = trimmed
+        pinAwaitingTillToken(trimmed)
+    }
+
+    fun awaitingTillTokenForSubmit(): String? = storedAwaitingTillToken?.trim()?.takeIf { it.isNotEmpty() }
+
+    fun prepareForTillSubmit() {
+        syncWebViewCookies()
+        pinAwaitingTillFromWebView()
+        awaitingTillTokenForSubmit()?.let { pinAwaitingTillToken(it) }
+    }
+
+    fun onTillSubmitSuccess(response: SubmitOpeningTillResponse) {
+        if (response.pending || response.ok) {
+            clearAwaitingTillAuth()
+        }
+        response.requestToken?.let { rememberPendingRequestToken(it) }
+    }
+
+    private fun pinAwaitingTillToken(token: String) {
+        val httpUrl = normalizedBaseUrl.toHttpUrlOrNull() ?: return
+        cookieJar.pinnedAwaitingTillToken = token
+        cookieJar.saveFromResponse(httpUrl, listOf(buildCookie(httpUrl, "cashier_awaiting_till", token)))
+    }
+
+    fun clearAwaitingTillAuth() {
+        storedAwaitingTillToken = null
+        cookieJar.clearPinnedAwaitingTillToken()
+    }
+
+    suspend fun submitOpeningTill(body: SubmitOpeningTillRequest): SubmitOpeningTillResponse {
+        val response = api.submitOpeningTill(body)
+        onTillSubmitSuccess(response)
+        return response
+    }
 
     suspend fun cancelOpeningTill() = api.cancelOpeningTill()
 
     fun syncWebViewCookies() {
         WebViewCookieSync.sync(normalizedBaseUrl, cookieJar)
+    }
+
+    fun pinAwaitingTillFromWebView(): Boolean {
+        val found = WebViewCookieSync.pinAwaitingTillFromWebView(normalizedBaseUrl, cookieJar)
+        cookieJar.pinnedAwaitingTillToken?.let { storedAwaitingTillToken = it }
+        return found
+    }
+
+    fun clearPinnedPendingRequest() {
+        cookieJar.clearPinnedPendingToken()
+    }
+
+    fun clearPinnedAwaitingTill() {
+        clearAwaitingTillAuth()
+    }
+
+    suspend fun clearStaleSignInCookies() {
+        runCatching { cancelOpeningTill() }
+        runCatching { cancelApproval() }
+        clearAwaitingTillAuth()
+        clearPinnedPendingRequest()
+        clearCashierCookies()
+        clearWebViewIdpSession()
     }
 
     /** WebView→Retrofit bridge: inject pending token when CookieManager sync is unreliable. */

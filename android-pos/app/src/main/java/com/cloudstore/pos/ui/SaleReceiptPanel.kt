@@ -135,11 +135,23 @@ private fun ReceiptTotalsSection(receipt: SaleReceipt) {
         value = if (receipt.savings > 0.005) "−${formatMoney(receipt.savings)}" else formatMoney(0.0),
     )
     ReceiptTotalRow(label = "Tax", value = formatMoney(receipt.tax))
+    if (receipt.grandTotal - receipt.collectedTotal > 0.005) {
+        ReceiptTotalRow(
+            label = "Cash rounding",
+            value = "−${formatMoney(receipt.grandTotal - receipt.collectedTotal)}",
+        )
+    }
     ReceiptTotalRow(
-        label = "Total",
-        value = formatMoney(receipt.grandTotal),
+        label = if (receipt.grandTotal - receipt.collectedTotal > 0.005) "Collected" else "Total",
+        value = formatMoney(receipt.collectedTotal),
         emphasize = true,
     )
+    if (receipt.grandTotal - receipt.collectedTotal > 0.005) {
+        ReceiptTotalRow(
+            label = "Register total",
+            value = formatMoney(receipt.grandTotal),
+        )
+    }
 }
 
 @Composable

@@ -4,6 +4,7 @@ const { test, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { isSupervisorApprovalEnabled } = require('../lib/login-approval');
 const { sessionStatusPayload } = require('../lib/cashier-auth');
+const { createAwaitingTill } = require('../lib/awaiting-till-store');
 
 const APPROVAL_KEY = 'CASHIER_SUPERVISOR_APPROVAL';
 const PIN_KEY = 'IDP_ALLOW_PIN';
@@ -126,4 +127,21 @@ test('sessionStatusPayload blocks PIN when Model B is on even if IDP_ALLOW_PIN i
   assert.equal(payload.supervisorApprovalRequired, true);
   assert.equal(payload.idpEnabled, true);
   assert.equal(payload.pinAllowed, false);
+});
+
+test('sessionStatusPayload echoes awaitingTillToken for native till submit fallback', async () => {
+  const token = createAwaitingTill({
+    claims: { sub: 'user-1', email: 'cashier@example.com' },
+    registerId: 'tablet-abc',
+    clientKind: 'tablet',
+    posSessionId: 42,
+  });
+  const payload = await sessionStatusPayload(
+    mockReq(`cashier_awaiting_till=${encodeURIComponent(token)}`),
+    mockRes(),
+    null,
+  );
+  assert.equal(payload.awaitingTill, true);
+  assert.equal(payload.awaitingTillToken, token);
+  assert.equal(payload.ok, false);
 });

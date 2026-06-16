@@ -62,6 +62,7 @@ fun AdminWebScreen(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
                 WebView(context).apply {
+                    configureForPosAutofill()
                     settings.configureForPosWebView()
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -87,11 +88,18 @@ fun AdminWebScreen(
                             }
                             return false
                         }
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            if (shouldInjectPosLoginAutofill(url, base)) {
+                                view?.injectPosLoginAutofillHints()
+                            }
+                        }
                     }
                     webViewClient = PocSelfSignedTls.wrapWebViewClient(client)
                     loadUrl(adminStartUrl)
                 }
             },
+            update = { webView -> webView.configureForPosAutofill() },
             onRelease = { webView -> webView.destroy() },
         )
     }
