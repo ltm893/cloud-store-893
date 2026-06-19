@@ -571,7 +571,8 @@ td.low-stock {
 }
 
 .reports-controls select,
-.reports-controls input[type="date"] {
+.reports-controls input[type="date"],
+.reports-controls input[type="text"] {
   min-width: 160px;
   padding: 6px 8px;
   border: 1px solid var(--border);

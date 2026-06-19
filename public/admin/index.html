@@ -82,6 +82,19 @@
       <div id="reportsLowStock" class="report-table-wrap"></div>
       <h4>Movements in period</h4>
       <div id="reportsMovements" class="report-table-wrap"></div>
+      <h3>OrderDetailsByOrdernumber</h3>
+      <p class="hint">All touchpoints for one sale — header, customer, lines, payments, inventory, till.</p>
+      <div class="reports-controls">
+        <label>
+          Order number
+          <input id="reportsOrderNumber" type="text" placeholder="0000001" autocomplete="off" inputmode="numeric" maxlength="7">
+        </label>
+        <button type="button" id="reportsOrderLookupBtn">Lookup</button>
+      </div>
+      <p id="reportsOrderLabel" class="reports-range-label hint"></p>
+      <div id="reportsOrderSummary" class="report-stats"></div>
+      <h4>Touchpoints</h4>
+      <div id="reportsOrderTouchpoints" class="report-table-wrap"></div>
     </section>
     <section id="tablePanel" class="table-panel">
       <h2 id="tableTitle">—</h2>
@@ -110,7 +123,7 @@
   <script src="/shared/dom-utils.js?v=20260611c"></script>
   <script src="/admin/admin-approvals.js?v=20260611d"></script>
   <script src="/admin/admin-shift-closes.js?v=20260611d"></script>
-  <script src="/admin/admin-reports.js?v=20260611d"></script>
+  <script src="/admin/admin-reports.js?v=20260618a"></script>
   <script src="/admin/admin.js?v=20260611d"></script>
 </body>
 </html>

@@ -23,6 +23,10 @@ wallet/
 *.p12
 *.sso
 
+# iOS build artifacts (archives and exported IPAs)
+build/archives/
+build/export/
+
 # Terraform - secrets and generated state
 terraform/terraform.tfvars
 terraform/container_env.auto.tfvars

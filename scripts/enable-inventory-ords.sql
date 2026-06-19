@@ -18,7 +18,7 @@ BEGIN
         delta           NUMBER NOT NULL,
         quantity_after  NUMBER NOT NULL,
         reason          VARCHAR2(50) NOT NULL,
-        order_number    VARCHAR2(64),
+        order_number    VARCHAR2(7),
         note            VARCHAR2(500),
         created_at      TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL
       )';

@@ -27,7 +27,10 @@
     "test:ios-pos": "./scripts/run-ios-pos-tests.sh",
     "ios-pos:local-config": "./scripts/sync-ios-pos-local-config.sh",
     "migrate-db:till": "./scripts/migrate-login-approval-till.sh",
-    "ios:local-config": "./scripts/sync-ios-local-config.sh"
+    "ios:local-config": "./scripts/sync-ios-local-config.sh",
+    "ios:testflight": "./scripts/ios/testflight-upload.sh both",
+    "ios:testflight:admin": "./scripts/ios/testflight-upload.sh admin",
+    "ios:testflight:pos": "./scripts/ios/testflight-upload.sh pos"
   },
   "keywords": [],
   "author": "",
