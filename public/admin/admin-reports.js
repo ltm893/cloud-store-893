@@ -13,6 +13,11 @@
   const lowStockEl = document.getElementById('reportsLowStock');
   const movementsEl = document.getElementById('reportsMovements');
   const rangeLabelEl = document.getElementById('reportsRangeLabel');
+  const orderNumberInputEl = document.getElementById('reportsOrderNumber');
+  const orderLookupBtnEl = document.getElementById('reportsOrderLookupBtn');
+  const orderLabelEl = document.getElementById('reportsOrderLabel');
+  const orderSummaryEl = document.getElementById('reportsOrderSummary');
+  const orderTouchpointsEl = document.getElementById('reportsOrderTouchpoints');
 
   let apiFetch = null;
   let setStatus = null;
@@ -62,6 +67,68 @@
       })
       .join('');
     el.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  }
+
+  function formatTimestamp(value) {
+    if (!value) return '—';
+    return String(value).replace('T', ' ').replace('Z', ' UTC');
+  }
+
+  async function loadOrderDetails() {
+    const orderNumber = orderNumberInputEl?.value?.trim();
+    if (!orderNumber) {
+      setStatus?.('Enter an order number', true);
+      return;
+    }
+    if (!apiFetch || !setStatus) return;
+
+    setStatus('Loading order details…');
+    try {
+      const qs = new URLSearchParams({ order_number: orderNumber });
+      const res = await apiFetch(`/api/admin/reports/OrderDetailsByOrdernumber?${qs}`);
+      const report = await res.json();
+      if (!res.ok) throw new Error(report.error || res.statusText);
+
+      if (orderLabelEl) {
+        orderLabelEl.textContent = `${report.query} — ${report.order_number}`;
+      }
+
+      renderSummaryGrid(orderSummaryEl, [
+        ['Sold at', formatTimestamp(report.sale?.created_at)],
+        ['Collected', money(report.sale?.total)],
+        ['Register total', money(report.sale?.register_total)],
+        ['Cash due', money(report.sale?.cash_due)],
+        ['Payment', report.sale?.payment_method ?? '—'],
+        ['Customer', report.customer?.name ?? '—'],
+        ['Till', report.till?.id != null ? `#${report.till.id}` : '—'],
+        ['Line items', int(report.items?.length ?? 0)],
+        ['Payments', int(report.payments?.length ?? 0)],
+        ['Inventory moves', int(report.inventory_movements?.length ?? 0)],
+      ]);
+
+      renderTable(
+        orderTouchpointsEl,
+        [
+          ['event_at', 'When'],
+          ['touchpoint', 'Touchpoint'],
+          ['detail', 'Detail'],
+        ],
+        (report.touchpoints || []).map((row) => ({
+          event_at: formatTimestamp(row.event_at),
+          touchpoint: row.touchpoint,
+          detail: row.detail,
+        })),
+      );
+
+      setStatus('Order details loaded');
+    } catch (err) {
+      if (orderLabelEl) orderLabelEl.textContent = '';
+      if (orderSummaryEl) orderSummaryEl.innerHTML = '';
+      if (orderTouchpointsEl) {
+        orderTouchpointsEl.innerHTML = '<p class="hint">No order loaded.</p>';
+      }
+      setStatus(err.message || 'Failed to load order details', true);
+    }
   }
 
   async function loadReports() {
@@ -204,6 +271,13 @@
   }
 
   loadBtnEl?.addEventListener('click', loadReports);
+  orderLookupBtnEl?.addEventListener('click', loadOrderDetails);
+  orderNumberInputEl?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      loadOrderDetails();
+    }
+  });
 
   window.AdminReports = {
     configure,
@@ -214,5 +288,6 @@
     closePanel,
     isActive: () => active,
     loadReports,
+    loadOrderDetails,
   };
 })();

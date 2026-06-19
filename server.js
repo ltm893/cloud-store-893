@@ -86,6 +86,10 @@ const {
   resolveCheckoutSettlement,
   normalizePaymentMethod,
 } = require('./lib/checkout-settlement');
+const {
+  allocateOrderNumber,
+  isDuplicateOrderNumberError,
+} = require('./lib/order-number');
 const { posRatesFromEnv } = require('./lib/pos-pricing');
 
 const POS_RATES = posRatesFromEnv();
@@ -553,21 +557,30 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'Cash payments are not enabled for this shift' });
   }
   const recordedPaymentMethod = serializePaymentMethod(paymentMethod, persistedPayments);
-  const orderNumber = `POS-${Date.now()}`;
 
-  await postSaleRow({
-    order_number: orderNumber,
-    total: recordedTotal,
-    register_total: registerTotal,
-    cash_due: cashDue,
-    payment_method: recordedPaymentMethod,
-    customer_id: customerId,
-    subtotal_pre_member: summary.subtotalPreMember,
-    member_discount_pre_tax: summary.memberDiscountPreTax,
-    linked_893: linked893 ? 1 : 0,
-    till_id: cashierSession?.tillId ?? cashierSession?.shiftId ?? null,
-    created_at: ordsTimestamp(),
-  });
+  let orderNumber;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    orderNumber = await allocateOrderNumber({ ordsGet });
+    try {
+      await postSaleRow({
+        order_number: orderNumber,
+        total: recordedTotal,
+        register_total: registerTotal,
+        cash_due: cashDue,
+        payment_method: recordedPaymentMethod,
+        customer_id: customerId,
+        subtotal_pre_member: summary.subtotalPreMember,
+        member_discount_pre_tax: summary.memberDiscountPreTax,
+        linked_893: linked893 ? 1 : 0,
+        till_id: cashierSession?.tillId ?? cashierSession?.shiftId ?? null,
+        created_at: ordsTimestamp(),
+      });
+      break;
+    } catch (err) {
+      if (isDuplicateOrderNumberError(err) && attempt < 4) continue;
+      throw err;
+    }
+  }
 
   for (const item of summary.items) {
     const quantity = Number(item.quantity);

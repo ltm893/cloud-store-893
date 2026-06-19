@@ -113,7 +113,7 @@ CREATE TABLE inventory_movements (
   delta           NUMBER NOT NULL,
   quantity_after  NUMBER NOT NULL,
   reason          VARCHAR2(50) NOT NULL,
-  order_number    VARCHAR2(64),
+  order_number    VARCHAR2(7),
   note            VARCHAR2(500),
   created_at      TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
   CONSTRAINT inventory_movements_target_ck CHECK (
@@ -152,7 +152,7 @@ CREATE TABLE cart_items (
 
 CREATE TABLE sales (
   id                       NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  order_number             VARCHAR2(64)   NOT NULL UNIQUE,
+  order_number             VARCHAR2(7)    NOT NULL UNIQUE,
   total                    NUMBER(10, 2)  NOT NULL,
   register_total           NUMBER(10, 2),
   cash_due                 NUMBER(10, 2),
@@ -170,7 +170,7 @@ CREATE TABLE sales (
 
 CREATE TABLE sale_items (
   id           NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  order_number VARCHAR2(64)   NOT NULL,
+  order_number VARCHAR2(7)   NOT NULL,
   product_id   NUMBER         NOT NULL REFERENCES products(id),
   quantity     NUMBER         NOT NULL,
   unit_price   NUMBER(10, 2)  NOT NULL,
@@ -182,7 +182,7 @@ CREATE TABLE sale_items (
 
 CREATE TABLE sale_payments (
   id              NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  order_number    VARCHAR2(64)   NOT NULL REFERENCES sales(order_number),
+  order_number    VARCHAR2(7)    NOT NULL REFERENCES sales(order_number),
   sequence_number NUMBER         NOT NULL,
   payment_method  VARCHAR2(50)   NOT NULL,
   amount          NUMBER(10, 2)  NOT NULL,
