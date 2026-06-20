@@ -5,12 +5,11 @@
 # (including a reserved IP) attached — unlike terraform apply on the container.
 #
 # Usage:
-#   ./scripts/oci/redeploy-app-code.sh
-#   ./scripts/oci/redeploy-app-code.sh my-feature-20260606
-#   ./scripts/oci/redeploy-app-code.sh --no-wait
-#   ./scripts/oci/redeploy-app-code.sh my-feature-20260606 --no-wait
+#   ./scripts/oci/redeploy-app-code.sh "short deploy description"
+#   ./scripts/oci/redeploy-app-code.sh "short deploy description" --no-wait
 #
-# BUILD_ID defaults to a timestamp; it is exposed at GET /api/build-info for verification.
+# BUILD_ID is always YYYYMMDDHHmmss. BUILD_LABEL is the required description shown in
+# GET /api/build-info and the Systems tab.
 #
 # For env var changes (replaces instance — may detach reserved IP):
 #   ./scripts/oci/sync-container-env-to-terraform.sh
@@ -25,19 +24,19 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TF_DIR="$PROJECT_ROOT/terraform"
 OCI_SCRIPTS="$PROJECT_ROOT/scripts/oci"
 
-BUILD_ID=""
+BUILD_LABEL=""
 RESTART_ARGS=()
 
 for arg in "$@"; do
   case "$arg" in
     --no-wait) RESTART_ARGS+=(--no-wait) ;;
     --help|-h)
-      sed -n '2,20p' "$0" | sed 's/^# \?//'
+      sed -n '2,22p' "$0" | sed 's/^# \?//'
       exit 0
       ;;
     *)
-      if [[ -z "$BUILD_ID" ]]; then
-        BUILD_ID="$arg"
+      if [[ -z "$BUILD_LABEL" ]]; then
+        BUILD_LABEL="$arg"
       else
         echo "error: unexpected argument: $arg" >&2
         exit 1
@@ -46,7 +45,14 @@ for arg in "$@"; do
   esac
 done
 
-BUILD_ID="${BUILD_ID:-deploy-$(date +%Y%m%d%H%M%S)}"
+if [[ -z "${BUILD_LABEL//[[:space:]]/}" ]]; then
+  echo "error: BUILD_LABEL required" >&2
+  echo "usage: $0 \"deploy description\" [--no-wait]" >&2
+  exit 1
+fi
+
+BUILD_ID="$(date +%Y%m%d%H%M%S)"
+GIT_SHA="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || true)"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "error: docker not found" >&2
@@ -56,12 +62,22 @@ fi
 IMAGE="$(cd "$TF_DIR" && terraform output -raw ocir_image_path)"
 
 echo "==> BUILD_ID=$BUILD_ID"
+echo "==> BUILD_LABEL=$BUILD_LABEL"
+echo "==> GIT_SHA=${GIT_SHA:-unknown}"
 echo "==> IMAGE=$IMAGE"
 echo ""
+
+if command -v oci >/dev/null 2>&1; then
+  echo "==> Refreshing Systems OCI manifest"
+  "$OCI_SCRIPTS/sync-systems-manifest.sh" || echo "warn: sync-systems-manifest.sh failed (continuing)" >&2
+  echo ""
+fi
 
 docker buildx build \
   --platform linux/arm64 \
   --build-arg BUILD_ID="$BUILD_ID" \
+  --build-arg BUILD_LABEL="$BUILD_LABEL" \
+  --build-arg GIT_SHA="${GIT_SHA:-unknown}" \
   -t "$IMAGE" \
   "$PROJECT_ROOT"
 
@@ -79,12 +95,12 @@ else
 fi
 
 echo ""
-echo "==> Verify build on running app:"
-APP="$("$OCI_SCRIPTS/confirm-public-url.sh" 2>/dev/null || true)"
-if [[ -n "$APP" ]]; then
-  curl -sS "${APP%/}/api/build-info" || true
-  echo ""
+if ((${#RESTART_ARGS[@]} > 0)); then
+  echo "==> Verify build (skipped — restart used --no-wait):"
+  echo "    $OCI_SCRIPTS/wait-for-app-health.sh --expected-build-id $BUILD_ID"
 else
-  echo "    APP=\$($OCI_SCRIPTS/confirm-public-url.sh)"
-  echo "    curl -s \"\$APP/api/build-info\""
+  echo "==> Waiting for app health (502 right after restart is normal until Node is up):"
+  if ! "$OCI_SCRIPTS/wait-for-app-health.sh" --expected-build-id "$BUILD_ID"; then
+    exit 1
+  fi
 fi

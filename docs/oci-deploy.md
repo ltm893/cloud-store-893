@@ -88,6 +88,17 @@ Optional read-only API smoke:
 BASE_URL="$APP" SKIP_DESTRUCTIVE=yes ./scripts/test-api-curl.sh
 ```
 
+### Prune stale OCIR images
+
+Repeated `docker push` leaves untagged manifests in the `cloud-store` repo. Dry-run first:
+
+```bash
+./scripts/oci/prune-ocir-images.sh
+./scripts/oci/prune-ocir-images.sh --apply
+```
+
+Keeps `latest`, `cert-renew`, the Terraform `ocir_image_tag`, and the three most recent deploy tags (override with `--keep-recent N` or `--keep <tag>`).
+
 ---
 
 ## 2. Environment variables (`.env` → OCI container)

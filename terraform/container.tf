@@ -33,6 +33,27 @@ locals {
     } : k => v if v != null && v != ""
   }
 
+  systems_container_env = {
+    SYSTEMS_REPO_URL           = "https://github.com/ltm893/cloud-store-893"
+    SYSTEMS_TLS_HOSTNAME       = var.lb_public_hostname != "" ? var.lb_public_hostname : ""
+    SYSTEMS_COMPARTMENT_NAME   = var.project_name
+    SYSTEMS_COMPARTMENT_OCID   = oci_identity_compartment.main.id
+    SYSTEMS_CONTAINER_OCID       = oci_container_instances_container_instance.main.id
+    SYSTEMS_CONTAINER_NAME       = "container-instance-${var.project_name}"
+    SYSTEMS_ADB_OCID             = oci_database_autonomous_database.main.id
+    SYSTEMS_ADB_NAME             = oci_database_autonomous_database.main.display_name
+    SYSTEMS_VCN_OCID             = oci_core_vcn.main.id
+    SYSTEMS_VCN_NAME             = oci_core_vcn.main.display_name
+    SYSTEMS_OCI_REGION           = var.region
+    SYSTEMS_LB_OCID = var.enable_load_balancer ? oci_load_balancer_load_balancer.main[0].id : ""
+    SYSTEMS_LB_NAME = var.enable_load_balancer ? "lb-${var.project_name}" : ""
+    SYSTEMS_LB_PUBLIC_IP = var.enable_load_balancer ? one([
+      for ip in oci_load_balancer_load_balancer.main[0].ip_address_details : ip.ip_address if ip.is_public
+    ]) : ""
+    SYSTEMS_LB_CERT_OCID = var.lb_certificate_ocid != "" ? var.lb_certificate_ocid : ""
+    SYSTEMS_LB_CERT_NAME = var.lb_certificate_ocid != "" ? "oci-cloudstore893-com" : ""
+  }
+
   container_environment_variables = merge(
     {
       PORT                   = tostring(var.app_port)
@@ -53,6 +74,7 @@ locals {
       IDP_SCOPES                  = var.idp_scopes
     },
     local.optional_app_env,
+    { for k, v in local.systems_container_env : k => v if v != "" },
   )
 }
 

@@ -34,7 +34,8 @@ for arg in "$@"; do
 done
 
 TAG="${TAG:-$(date +%Y%m%d%H%M%S)}"
-BUILD_ID="${TAG}"
+BUILD_ID="$(date +%Y%m%d%H%M%S)"
+GIT_SHA="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || true)"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "error: docker not found" >&2
@@ -47,11 +48,13 @@ IMAGE_TAGGED="${IMAGE_BASE}:${TAG}"
 IMAGE_LATEST="${IMAGE_BASE}:latest"
 
 echo "==> BUILD_ID=$BUILD_ID"
+echo "==> GIT_SHA=${GIT_SHA:-unknown}"
 echo "==> IMAGE_TAGGED=$IMAGE_TAGGED"
 
 docker buildx build \
   --platform linux/arm64 \
   --build-arg BUILD_ID="$BUILD_ID" \
+  --build-arg GIT_SHA="${GIT_SHA:-unknown}" \
   -t "$IMAGE_TAGGED" \
   -t "$IMAGE_LATEST" \
   "$PROJECT_ROOT"

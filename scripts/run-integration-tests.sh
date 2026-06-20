@@ -93,6 +93,7 @@ if [[ "$USE_EXISTING_SERVER" == "0" ]]; then
     export PORT="$TEST_PORT"
     export ORDS_BASE_URL
     export BUILD_ID="${BUILD_ID:-integration-test}"
+    export BUILD_LABEL="${BUILD_LABEL:-integration test}"
     export CASHIER_SUPERVISOR_APPROVAL="${CASHIER_SUPERVISOR_APPROVAL:-false}"
     export CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR="${CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR:-false}"
     export IDP_ALLOW_PIN="${IDP_ALLOW_PIN:-true}"
