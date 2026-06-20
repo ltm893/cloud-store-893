@@ -37,6 +37,9 @@ fun normalizeCartItems(items: List<CartItem>, customerDiscount: Boolean): List<C
     }
 }
 
+fun taxableSubtotalPayable(cart: List<CartItem>): Double =
+    roundMoney(cart.filter { !it.taxExempt }.sumOf { it.lineSubtotalPayable })
+
 data class CartTotals(
     val itemCount: Int,
     val shelfSubtotal: Double,
@@ -78,6 +81,20 @@ fun computeCartTotals(cart: List<CartItem>, customerDiscount: Boolean): CartTota
     )
 }
 
+fun computeTaxAmount(
+    cart: List<CartItem>,
+    customerLinked: Boolean,
+    customerDiscount: Boolean,
+    salesFeeRate: Double,
+    taxRate: Double,
+): Double {
+    val items = if (customerLinked) normalizeCartItems(cart, customerDiscount) else cart
+    val taxablePreTax = taxableSubtotalPayable(items)
+    val salesFee = taxablePreTax * salesFeeRate
+    val taxBase = taxablePreTax + salesFee
+    return roundMoney(taxBase * taxRate)
+}
+
 /** Grand total (pre-tax + sales fee + tax) for checkout / cash tendered. */
 fun computeSaleGrandTotal(
     cart: List<CartItem>,
@@ -88,10 +105,12 @@ fun computeSaleGrandTotal(
 ): Double {
     val items = if (customerLinked) normalizeCartItems(cart, customerDiscount) else cart
     val totals = computeCartTotals(items, customerLinked && customerDiscount)
-    val salesFee = totals.itemPreTax * salesFeeRate
-    val taxable = totals.itemPreTax + salesFee
-    val taxAmt = taxable * taxRate
-    return roundMoney(taxable + taxAmt)
+    val taxablePreTax = taxableSubtotalPayable(items)
+    val nonTaxablePreTax = roundMoney(totals.itemPreTax - taxablePreTax)
+    val salesFee = taxablePreTax * salesFeeRate
+    val taxBase = taxablePreTax + salesFee
+    val taxAmt = taxBase * taxRate
+    return roundMoney(nonTaxablePreTax + taxBase + taxAmt)
 }
 
 /** Tax-inclusive total rounded down to nickel — use for cash tendered / change only. */

@@ -9,6 +9,7 @@ data class Product(
     @Json(name = "regularPrice") val regularPrice: Double,
     @Json(name = "salePrice") val salePrice: Double? = null,
     @Json(name = "onSale") val onSale: Boolean = false,
+    @Json(name = "taxExempt") val taxExempt: Boolean = false,
     @Json(name = "inStock") val inStock: Boolean = true,
     @Json(name = "quantityOnHand") val quantityOnHand: Int? = null,
 )
@@ -31,6 +32,7 @@ data class CartItem(
     @Json(name = "regularPrice") val regularPrice: Double,
     @Json(name = "salePrice") val salePrice: Double? = null,
     @Json(name = "onSale") val onSale: Boolean = false,
+    @Json(name = "taxExempt") val taxExempt: Boolean = false,
     val quantity: Int,
     @Json(name = "unitPricePublic") val unitPricePublic: Double,
     @Json(name = "unitPricePayable") val unitPricePayable: Double,

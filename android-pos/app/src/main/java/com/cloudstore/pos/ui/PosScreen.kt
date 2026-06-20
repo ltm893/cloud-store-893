@@ -78,6 +78,7 @@ import com.cloudstore.pos.domain.checkout.formatCashEntry
 import com.cloudstore.pos.domain.checkout.normalizeCashEntryInput
 import com.cloudstore.pos.domain.pricing.computeCartTotals
 import com.cloudstore.pos.domain.pricing.computeSaleGrandTotal
+import com.cloudstore.pos.domain.pricing.computeTaxAmount
 import com.cloudstore.pos.domain.pricing.formatMoney
 import com.cloudstore.pos.domain.pricing.normalizeCartItems
 import com.cloudstore.pos.domain.receipt.customerDisplayName
@@ -1588,9 +1589,7 @@ private fun SaleTotalsPanel(
     )
     val items = if (customerLinked) normalizeCartItems(cart, customerDiscount) else cart
     val totals = computeCartTotals(items, customerLinked && customerDiscount)
-    val salesFee = totals.itemPreTax * salesFeeRate
-    val taxable = totals.itemPreTax + salesFee
-    val taxAmt = taxable * taxRate
+    val taxAmt = computeTaxAmount(cart, customerLinked, customerDiscount, salesFeeRate, taxRate)
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(

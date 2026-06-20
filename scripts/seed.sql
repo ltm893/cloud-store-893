@@ -65,7 +65,8 @@ CREATE TABLE products (
   manufacturer     VARCHAR2(200)  NOT NULL,
   price            NUMBER(10, 2)  NOT NULL,
   sale_price       NUMBER(10, 2),
-  track_inventory  NUMBER(1)      DEFAULT 0 NOT NULL
+  track_inventory  NUMBER(1)      DEFAULT 0 NOT NULL,
+  tax_exempt       NUMBER(1)      DEFAULT 0 NOT NULL
 );
 
 
@@ -310,6 +311,7 @@ CREATE OR REPLACE VIEW cart_view AS
     p.name,
     p.price,
     p.sale_price,
+    p.tax_exempt,
     ci.quantity
   FROM cart_items ci
   JOIN products p ON p.id = ci.product_id;

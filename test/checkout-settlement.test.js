@@ -6,9 +6,13 @@ const { resolveCheckoutSettlement } = require('../lib/checkout-settlement');
 
 const rates = { salesFeeRate: 0, taxRate: 0.06 };
 
+function cartLine(amount, taxExempt = false) {
+  return { lineSubtotalPayable: amount, taxExempt };
+}
+
 test('cash-only checkout records nickel-rounded total', () => {
   const result = resolveCheckoutSettlement({
-    subtotalPayable: 20,
+    cartItems: [cartLine(20)],
     paymentMethod: 'cash',
     rawPayments: null,
     clientCheckoutTotal: 21.2,
@@ -23,7 +27,7 @@ test('cash-only checkout records nickel-rounded total', () => {
 
 test('cash-only checkout rounds down when register total has pennies', () => {
   const result = resolveCheckoutSettlement({
-    subtotalPayable: 20.06,
+    cartItems: [cartLine(20.06)],
     paymentMethod: 'cash',
     rawPayments: null,
     clientCheckoutTotal: null,
@@ -36,7 +40,7 @@ test('cash-only checkout rounds down when register total has pennies', () => {
 
 test('card-only checkout rounds down when register total has pennies', () => {
   const result = resolveCheckoutSettlement({
-    subtotalPayable: 20.06,
+    cartItems: [cartLine(20.06)],
     paymentMethod: 'card',
     rawPayments: null,
     clientCheckoutTotal: null,
@@ -50,7 +54,7 @@ test('card-only checkout rounds down when register total has pennies', () => {
 
 test('card-only checkout stays exact when already on nickel', () => {
   const result = resolveCheckoutSettlement({
-    subtotalPayable: 20,
+    cartItems: [cartLine(20)],
     paymentMethod: 'card',
     rawPayments: null,
     clientCheckoutTotal: null,
@@ -63,7 +67,7 @@ test('card-only checkout stays exact when already on nickel', () => {
 
 test('split tender rounds cash remainder to nickel', () => {
   const result = resolveCheckoutSettlement({
-    subtotalPayable: 9.49,
+    cartItems: [cartLine(9.49)],
     paymentMethod: 'split',
     rawPayments: [
       { method: 'card', amount: 5, tenderedAmount: 5 },
@@ -79,7 +83,7 @@ test('split tender rounds cash remainder to nickel', () => {
 
 test('split payments must match expected collected total', () => {
   const result = resolveCheckoutSettlement({
-    subtotalPayable: 20.06,
+    cartItems: [cartLine(20.06)],
     paymentMethod: 'split',
     rawPayments: [
       { method: 'card', amount: 10, tenderedAmount: 10 },
@@ -89,4 +93,17 @@ test('split payments must match expected collected total', () => {
     ...rates,
   });
   assert.equal(result.error, 'Split payments must equal total 21.25');
+});
+
+test('mixed tax-exempt cart charges tax only on taxable lines', () => {
+  const result = resolveCheckoutSettlement({
+    cartItems: [cartLine(10), cartLine(5, true)],
+    paymentMethod: 'cash',
+    rawPayments: null,
+    clientCheckoutTotal: 15.6,
+    ...rates,
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.registerTotal, 15.6);
+  assert.equal(result.recordedTotal, 15.6);
 });

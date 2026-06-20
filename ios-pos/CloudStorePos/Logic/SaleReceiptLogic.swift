@@ -53,10 +53,20 @@ enum SaleReceiptLogic {
             ? CartTotalsLogic.normalizeCartItems(cart, customerDiscount: customerDiscount)
             : cart
         let totals = CartTotalsLogic.computeCartTotals(items, customerDiscount: customerLinked && customerDiscount)
-        let salesFee = totals.itemPreTax * salesFeeRate
-        let taxable = totals.itemPreTax + salesFee
-        let taxAmount = CartTotalsLogic.roundMoney(taxable * taxRate)
-        let grandTotal = CartTotalsLogic.roundMoney(taxable + taxAmount)
+        let taxAmount = CartTotalsLogic.computeTaxAmount(
+            cart: cart,
+            customerLinked: customerLinked,
+            customerDiscount: customerDiscount,
+            salesFeeRate: salesFeeRate,
+            taxRate: taxRate
+        )
+        let grandTotal = CartTotalsLogic.computeSaleGrandTotal(
+            cart: cart,
+            customerLinked: customerLinked,
+            customerDiscount: customerDiscount,
+            salesFeeRate: salesFeeRate,
+            taxRate: taxRate
+        )
         let collectedTotal = CartTotalsLogic.roundMoney(payments.reduce(0) { $0 + $1.amount })
 
         return SaleReceiptInfo(
