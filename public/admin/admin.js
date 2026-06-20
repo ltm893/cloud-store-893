@@ -25,8 +25,11 @@ const menuBtn = document.getElementById('menuBtn');
 const approvalsPanelEl = document.getElementById('approvalsPanel');
 const shiftClosesPanelEl = document.getElementById('shiftClosesPanel');
 const reportsPanelEl = document.getElementById('reportsPanel');
+const systemsPanelEl = document.getElementById('systemsPanel');
 const tablePanelEl = document.getElementById('tablePanel');
 const approvalsTabBtn = document.getElementById('approvalsTabBtn');
+
+const ADMIN_TAB_IDS = ['approvals', 'reports', 'systems', 'tables'];
 
 let tablesMeta = [];
 let activeTable = 'products';
@@ -105,6 +108,20 @@ menuBtn.addEventListener('click', () => {
   document.body.classList.toggle('nav-open');
 });
 
+function setPanelHidden(el, hidden) {
+  if (el) el.hidden = hidden;
+}
+
+function resolveInitialAdminTab(session) {
+  const requested = new URLSearchParams(window.location.search).get('tab');
+  let tab = requested && ADMIN_TAB_IDS.includes(requested) ? requested : null;
+  if (tab === 'approvals' && !session.supervisorApprovalEnabled) tab = null;
+  if (!tab) {
+    tab = session.supervisorApprovalEnabled && session.isSupervisor ? 'approvals' : 'tables';
+  }
+  return tab;
+}
+
 function setAdminTabButtonActive(tab) {
   document.querySelectorAll('.admin-tab-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
@@ -114,7 +131,7 @@ function setAdminTabButtonActive(tab) {
 function switchAdminTab(tab) {
   if (!tab || tab === activeAdminTab) return;
   activeAdminTab = tab;
-  document.body.classList.remove('tab-approvals', 'tab-reports', 'tab-tables');
+  document.body.classList.remove('tab-approvals', 'tab-reports', 'tab-systems', 'tab-tables');
   document.body.classList.add(`tab-${tab}`);
   setAdminTabButtonActive(tab);
 
@@ -122,22 +139,27 @@ function switchAdminTab(tab) {
     document.body.classList.remove('nav-open');
   }
 
-  approvalsPanelEl.hidden = true;
-  shiftClosesPanelEl.hidden = true;
-  reportsPanelEl.hidden = true;
-  tablePanelEl.hidden = true;
+  setPanelHidden(approvalsPanelEl, true);
+  setPanelHidden(shiftClosesPanelEl, true);
+  setPanelHidden(reportsPanelEl, true);
+  setPanelHidden(systemsPanelEl, true);
+  setPanelHidden(tablePanelEl, true);
 
   window.AdminApprovals?.deactivate?.();
   window.AdminShiftCloses?.deactivate?.();
   window.AdminReports?.deactivate?.();
+  window.AdminSystems?.deactivate?.();
 
   if (tab === 'approvals') {
     window.AdminApprovals?.activate?.();
     window.AdminShiftCloses?.activate?.();
   } else if (tab === 'reports') {
     window.AdminReports?.activate?.();
+  } else if (tab === 'systems') {
+    setPanelHidden(systemsPanelEl, false);
+    window.AdminSystems?.activate?.();
   } else if (tab === 'tables') {
-    tablePanelEl.hidden = false;
+    setPanelHidden(tablePanelEl, false);
     renderNav();
     loadTable(activeTable);
   }
@@ -402,12 +424,17 @@ async function loadTable(name) {
         setStatus,
       });
     }
+    if (window.AdminSystems) {
+      window.AdminSystems.configure({
+        apiFetch,
+        setStatus,
+      });
+    }
     if (!session.supervisorApprovalEnabled && approvalsTabBtn) {
       approvalsTabBtn.hidden = true;
     }
     await loadMeta();
-    const defaultTab =
-      session.supervisorApprovalEnabled && session.isSupervisor ? 'approvals' : 'tables';
+    const defaultTab = resolveInitialAdminTab(session);
     activeAdminTab = '';
     switchAdminTab(defaultTab);
     if (defaultTab === 'tables' && window.matchMedia('(min-width: 900px)').matches) {

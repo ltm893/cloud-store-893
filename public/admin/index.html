@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="screen-orientation" content="landscape">
   <title>Cloud Store 893 — Admin</title>
-  <link rel="stylesheet" href="/admin/admin.css?v=20260611d">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260620d">
   <script src="/admin/admin-orientation.js?v=20260611c"></script>
 </head>
 <body class="admin-landscape tab-tables">
@@ -23,6 +23,7 @@
   <nav class="admin-tabs" aria-label="Admin sections">
     <button type="button" class="admin-tab-btn" data-tab="approvals" id="approvalsTabBtn">Approvals</button>
     <button type="button" class="admin-tab-btn" data-tab="reports">Reports</button>
+    <button type="button" class="admin-tab-btn" data-tab="systems">Platform</button>
     <button type="button" class="admin-tab-btn active" data-tab="tables">Tables</button>
   </nav>
 
@@ -96,6 +97,30 @@
       <h4>Touchpoints</h4>
       <div id="reportsOrderTouchpoints" class="report-table-wrap"></div>
     </section>
+    <section id="systemsPanel" class="systems-panel" hidden>
+      <div class="systems-intro-row">
+        <div class="systems-description-card">
+          <h2 class="systems-card-title">Description</h2>
+          <p id="systemsOverview" class="systems-description-text"></p>
+        </div>
+        <div class="systems-updated-card">
+          <h2 class="systems-card-title">Updated</h2>
+          <div class="systems-updated-row">
+            <p id="systemsGeneratedAt" class="systems-updated-ts hint">—</p>
+            <button type="button" id="systemsRefreshBtn" class="systems-refresh-btn">Refresh</button>
+          </div>
+        </div>
+      </div>
+      <div class="systems-build-repo-row">
+        <div id="systemsRepo" class="systems-repo-block"></div>
+        <div id="systemsBuild" class="systems-build-block"></div>
+      </div>
+      <div id="systemsHost" class="systems-host-block"></div>
+      <div id="systemsClients" class="systems-clients-block"></div>
+      <div id="systemsRoutes" class="systems-routes-block"></div>
+      <div id="systemsCert" class="systems-cert-block"></div>
+      <div id="systemsOciResources" class="systems-oci-block"></div>
+    </section>
     <section id="tablePanel" class="table-panel">
       <h2 id="tableTitle">—</h2>
       <p id="tableHint" class="hint"></p>
@@ -124,6 +149,7 @@
   <script src="/admin/admin-approvals.js?v=20260611d"></script>
   <script src="/admin/admin-shift-closes.js?v=20260611d"></script>
   <script src="/admin/admin-reports.js?v=20260618a"></script>
-  <script src="/admin/admin.js?v=20260611d"></script>
+  <script src="/shared/admin-systems.js?v=20260620d"></script>
+  <script src="/admin/admin.js?v=20260619f"></script>
 </body>
 </html>

@@ -53,6 +53,7 @@ PY
     export PORT="$port"
     export ORDS_BASE_URL="$ords"
     export BUILD_ID="${BUILD_ID:-integration-test}"
+    export BUILD_LABEL="${BUILD_LABEL:-integration test}"
     export CASHIER_SUPERVISOR_APPROVAL="$supervisor_approval"
     export CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR="${CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR:-false}"
     export IDP_ALLOW_PIN="${IDP_ALLOW_PIN:-true}"
