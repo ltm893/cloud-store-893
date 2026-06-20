@@ -12,8 +12,13 @@ oci_ip_print_status() {
 
   if [[ -d "$tf_dir" ]] && command -v terraform >/dev/null 2>&1; then
     local tf_url ocid
-    tf_url="$(cd "$tf_dir" && terraform output -raw app_url 2>/dev/null || true)"
-    ocid="$(cd "$tf_dir" && terraform output -raw container_instance_ocid 2>/dev/null || true)"
+    if [[ -n "${CLOUD_STORE_TFVARS:-}" ]] && [[ -f "${CLOUD_STORE_TFVARS:-}" ]]; then
+      tf_url="$(cloud_store_tf_output app_url 2>/dev/null || true)"
+      ocid="$(cloud_store_tf_output container_instance_ocid 2>/dev/null || true)"
+    else
+      tf_url="$(cd "$tf_dir" && terraform output -raw app_url 2>/dev/null || true)"
+      ocid="$(cd "$tf_dir" && terraform output -raw container_instance_ocid 2>/dev/null || true)"
+    fi
     [[ -n "$tf_url" ]] && echo "  terraform app_url:     $tf_url"
     [[ -n "$ocid" ]] && echo "  container_instance:    $ocid"
   fi
@@ -45,8 +50,10 @@ oci_ip_print_status() {
 }
 
 # Run terraform plan; return 0 if container instance unchanged, 1 if replace/update/create, 2 on plan error.
+# Optional extra args are passed to terraform plan (e.g. -var=ocir_image_tag=...).
 oci_ip_terraform_plan_container_change() {
   local tf_dir="${1:?tf_dir required}"
+  shift
   local plan_file
   plan_file="$(mktemp "${TMPDIR:-/tmp}/cloud-store-tfplan.XXXXXX")"
 
@@ -57,7 +64,11 @@ oci_ip_terraform_plan_container_change() {
 
   local plan_out plan_ec=0
   set +e
-  plan_out="$(cd "$tf_dir" && terraform plan -no-color -out="$plan_file" 2>&1)"
+  if [[ -n "${CLOUD_STORE_TFVARS:-}" ]] && [[ -f "${CLOUD_STORE_TFVARS:-}" ]]; then
+    plan_out="$(cloud_store_tf plan -no-color -out="$plan_file" "$@" 2>&1)"
+  else
+    plan_out="$(cd "$tf_dir" && terraform plan -no-color -out="$plan_file" "$@" 2>&1)"
+  fi
   plan_ec=$?
   set -e
 
@@ -106,8 +117,8 @@ oci_ip_terraform_plan_container_change() {
   echo "  3. Update IdCS redirect URIs if using raw IPs — ./scripts/oci/idp-update-redirect-uris.sh"
   echo "  4. cloud-store-refresh-ocid  # or: export CLOUD_STORE_OCID=\$(cd terraform && terraform output -raw container_instance_ocid)"
   echo ""
-  echo "For app CODE only (no env change): docker push + ./scripts/oci/restart-container-instance.sh"
-  echo "  (does not replace the instance — reserved IP stays attached)"
+  echo "For app CODE only: ./scripts/oci/redeploy-app-code.sh \"label\""
+  echo "  (pushes a unique image tag + terraform apply — required for OCI to run new code)"
   echo ""
 
   return 1

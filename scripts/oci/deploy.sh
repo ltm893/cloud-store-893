@@ -1,9 +1,12 @@
 #!/bin/zsh
-# deploy.sh — Full Terraform + Docker deploy (single compartment: cloud-store)
+# deploy.sh — Full Terraform + Docker deploy
 #
-# Run this from the project root:
-#   chmod +x scripts/oci/deploy.sh   (first time only)
+# Prod (default):
 #   ./scripts/oci/deploy.sh
+# Dev pre-production:
+#   ./scripts/oci/deploy-dev.sh
+#
+# See docs/oci-deploy.md and docs/oci-dev-environment.md
 
 set -e
 
@@ -13,6 +16,11 @@ SCRIPT_DIR="${0:a:h}"
 PROJECT_ROOT="${SCRIPT_DIR}/../.."
 TF_DIR="${PROJECT_ROOT}/terraform"
 TFVARS="${TF_DIR}/terraform.tfvars"
+
+source "${PROJECT_ROOT}/scripts/oci/lib/terraform-env.sh"
+cloud_store_resolve_tf_env "${PROJECT_ROOT}"
+TF_DIR="${CLOUD_STORE_TF_DIR}"
+TFVARS="${CLOUD_STORE_TFVARS}"
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -42,7 +50,7 @@ run_terraform_apply() {
 run_terraform_init() {
   local logf
   logf=$(mktemp)
-  terraform init -upgrade -no-color 2>&1 | tee "$logf" | grep -E '(Initializing|provider|complete|Error|error)' || true
+  cloud_store_tf_init -no-color 2>&1 | tee "$logf" | grep -E '(Initializing|provider|complete|Error|error)' || true
   local ec=${pipestatus[1]}
   if [[ "$ec" -ne 0 ]]; then
     local tail_out
@@ -78,7 +86,7 @@ command -v terraform &>/dev/null || error "terraform not found. Run: brew tap ha
 command -v docker    &>/dev/null || error "docker not found."
 command -v oci       &>/dev/null || error "OCI CLI not found. Run: brew install oci-cli"
 docker info &>/dev/null          || error "Docker daemon not running. Run: colima start"
-[[ -f "${TFVARS}" ]]             || error "terraform/terraform.tfvars not found. Copy terraform.tfvars.example → terraform.tfvars and fill in your values."
+[[ -f "${TFVARS}" ]]             || error "Terraform var-file not found: ${TFVARS}.\nCopy terraform.tfvars.example → terraform.tfvars (prod) or terraform.dev.tfvars.example → terraform.dev.tfvars (dev)."
 
 # SQLcl — optional, needed for Phase 3 seed
 SQL_CMD=$(find_sqlcl || true)
@@ -107,7 +115,7 @@ IMAGE_TAG=$(tfvar "ocir_image_tag")
 [[ -z "$IMAGE_TAG" ]] && IMAGE_TAG="latest"
 [[ -z "$REGION_KEY" ]] && REGION_KEY="iad"
 [[ -z "$NAMESPACE" || "$NAMESPACE" == "your_namespace_here" ]] && \
-  error "object_storage_namespace not set in terraform.tfvars.\nFind it: OCI Console → Profile menu → Tenancy → Object Storage Namespace"
+  error "object_storage_namespace not set in ${TFVARS}.\nFind it: OCI Console → Profile menu → Tenancy → Object Storage Namespace\nFor dev: ./scripts/oci/bootstrap-dev-tfvars.sh (copies auth from prod tfvars)"
 
 IMAGE_PATH="${REGION_KEY}.ocir.io/${NAMESPACE}/${PROJECT}:${IMAGE_TAG}"
 REGISTRY="${REGION_KEY}.ocir.io"
@@ -117,14 +125,14 @@ info "Image path: ${IMAGE_PATH}"
 
 # ── Terraform init ─────────────────────────────────────────────────────────────
 divider
-info "Phase 0 — terraform init"
+info "Phase 0 — terraform init ($(cloud_store_env_label))"
 cd "${TF_DIR}"
 run_terraform_init
 
 # ── Phase 1: Create compartment + OCIR repo ────────────────────────────────────
 divider
 info "Phase 1 — Compartment and OCIR repo..."
-run_terraform_apply "Phase 1 (compartment + OCIR)" terraform apply \
+run_terraform_apply "Phase 1 (compartment + OCIR)" cloud_store_tf apply \
   -target=oci_identity_compartment.main \
   -target=oci_artifacts_container_repository.main \
   -auto-approve -compact-warnings -no-color
@@ -151,18 +159,19 @@ divider
 info "Phase 2 — VCN, ADB, and Container Instance..."
 warn "ADB provisioning takes 3–5 minutes on first run — this is normal."
 cd "${TF_DIR}"
-run_terraform_apply "Phase 2 (full stack)" terraform apply -auto-approve -compact-warnings -no-color
+run_terraform_apply "Phase 2 (full stack)" cloud_store_tf apply -auto-approve -compact-warnings -no-color
 
 # ── Print resource summary ─────────────────────────────────────────────────────
 divider
-info "Resource Summary"
+info "Resource Summary ($(cloud_store_env_label))"
 echo ""
-echo "  App URL:              $(terraform output -raw app_url              2>/dev/null || echo 'not available')"
-echo "  ORDS URL:             $(terraform output -raw ords_base_url        2>/dev/null || echo 'not available')"
-echo "  ADB OCID:             $(terraform output -raw adb_ocid             2>/dev/null || echo 'not available')"
-echo "  VCN OCID:             $(terraform output -raw vcn_ocid             2>/dev/null || echo 'not available')"
-echo "  Container OCID:       $(terraform output -raw container_instance_ocid 2>/dev/null || echo 'not available')"
-echo "  Compartment OCID:     $(terraform output -raw compartment_ocid    2>/dev/null || echo 'not available')"
+echo "  App URL:              $(cloud_store_tf_output app_url || echo 'not available')"
+echo "  App URL (HTTPS):      $(cloud_store_tf_output app_url_https || echo 'not available')"
+echo "  ORDS URL:             $(cloud_store_tf_output ords_base_url || echo 'not available')"
+echo "  ADB OCID:             $(cloud_store_tf_output adb_ocid || echo 'not available')"
+echo "  VCN OCID:             $(cloud_store_tf_output vcn_ocid || echo 'not available')"
+echo "  Container OCID:       $(cloud_store_tf_output container_instance_ocid || echo 'not available')"
+echo "  Compartment OCID:     $(cloud_store_tf_output compartment_ocid || echo 'not available')"
 echo ""
 
 # ── Phase 3: Seed the database ────────────────────────────────────────────────
@@ -174,14 +183,14 @@ if [[ -z "$SQL_CMD" ]]; then
   warn "Run manually: paste scripts/seed.sql into OCI Database Actions → SQL"
 else
   cd "${TF_DIR}"
-  ADB_OCID=$(terraform output -raw adb_ocid 2>/dev/null)
+  ADB_OCID=$(cloud_store_tf_output adb_ocid)
   ADB_PASSWORD=$(tfvar "adb_admin_password")
   DB_NAME=$(tfvar "adb_db_name")
   [[ -z "$DB_NAME" ]] && DB_NAME="CLOUDSTORE893"
   DB_SERVICE="${DB_NAME:l}_high"   # e.g. cloudstore893_high
 
   # Wait for ORDS to respond before connecting
-  ORDS_URL=$(terraform output -raw ords_base_url 2>/dev/null)
+  ORDS_URL=$(cloud_store_tf_output ords_base_url)
   info "Waiting for ORDS at ${ORDS_URL}..."
   ATTEMPT=0
   MAX_ATTEMPTS=12  # 12 × 10s = 2 minutes
@@ -215,10 +224,16 @@ fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 divider
-success "Deploy complete!"
-CONTAINER_OCID=$(cd "${TF_DIR}" && terraform output -raw container_instance_ocid 2>/dev/null || true)
+success "Deploy complete ($(cloud_store_env_label))!"
+CONTAINER_OCID=$(cloud_store_tf_output container_instance_ocid || true)
 if [[ -n "$CONTAINER_OCID" ]]; then
-  warn "Save to ~/.zshrc: export CLOUD_STORE_OCID=\"${CONTAINER_OCID}\""
+  if [[ "${CLOUD_STORE_ENV:-prod}" == "dev" ]]; then
+    warn "Save to ~/.zshrc: export CLOUD_STORE_DEV_OCID=\"${CONTAINER_OCID}\""
+    warn "Deploy app code: ./scripts/oci/redeploy-app-code-dev.sh \"label\""
+    warn "DNS A record:    CLOUD_STORE_ENV=dev ./scripts/oci/dev-dns-a-record.sh"
+  else
+    warn "Save to ~/.zshrc: export CLOUD_STORE_OCID=\"${CONTAINER_OCID}\""
+  fi
 fi
 warn "Container instance may take 1–2 minutes to become ACTIVE."
 info "Check status: ./scripts/oci/container.sh status"

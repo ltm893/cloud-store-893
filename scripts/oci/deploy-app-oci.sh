@@ -14,7 +14,10 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TF_DIR="$PROJECT_ROOT/terraform"
+# shellcheck source=lib/terraform-env.sh
+source "$PROJECT_ROOT/scripts/oci/lib/terraform-env.sh"
+cloud_store_resolve_tf_env "$PROJECT_ROOT"
+TF_DIR="$CLOUD_STORE_TF_DIR"
 OCI_SCRIPTS="$PROJECT_ROOT/scripts/oci"
 
 # shellcheck source=lib/oci-ip-warn.sh
@@ -42,7 +45,7 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-IMAGE_BASE="$(cd "$TF_DIR" && terraform output -raw ocir_image_path)"
+IMAGE_BASE="$(cloud_store_tf_output ocir_image_path)"
 IMAGE_BASE="${IMAGE_BASE%:*}"
 IMAGE_TAGGED="${IMAGE_BASE}:${TAG}"
 IMAGE_LATEST="${IMAGE_BASE}:latest"
@@ -64,7 +67,7 @@ docker push "$IMAGE_LATEST"
 
 echo ""
 set +e
-oci_ip_terraform_plan_container_change "$TF_DIR"
+oci_ip_terraform_plan_container_change "$TF_DIR" -var="ocir_image_tag=${TAG}"
 plan_signal=$?
 set -e
 if [[ "$plan_signal" -eq 2 ]]; then
@@ -72,9 +75,9 @@ if [[ "$plan_signal" -eq 2 ]]; then
   exit 1
 fi
 
-echo "==> terraform apply -var ocir_image_tag=${TAG}"
+echo "==> terraform apply -var ocir_image_tag=${TAG} ($(cloud_store_env_label))"
 cd "$TF_DIR"
-terraform apply -var="ocir_image_tag=${TAG}" -var="idp_signin_debug=true" -auto-approve
+cloud_store_tf apply -var="ocir_image_tag=${TAG}" -var="idp_signin_debug=true" -auto-approve
 
 echo ""
 echo "==> Verify build on running app:"
