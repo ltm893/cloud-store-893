@@ -288,11 +288,10 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 
 **Full guide:** [docs/oci-deploy.md](docs/oci-deploy.md) — decision table (code vs env vs DB vs IdP vs tablet), verify steps, troubleshooting.
 
-**App code only** (preferred — keeps public IP):
+**App code only** (preferred — keeps public IP). Requires a short deploy label; see [docs/versioning.md](docs/versioning.md) for PR → deploy workflow.
 
 ```bash
-./scripts/oci/redeploy-app-code.sh
-# optional BUILD_ID: ./scripts/oci/redeploy-app-code.sh my-change-20260606
+./scripts/oci/redeploy-app-code.sh "describe this deploy"
 ```
 
 Quick verify (expect **200**, not **404** on unlock):
@@ -486,11 +485,11 @@ allowing your user/group to read usage-report in the tenancy.
 
 ## Next Steps
 
-- [ ] HTTPS / Load Balancer in front of the container instance (required for production IdP)
-- [ ] Wire optional `IDP_*` / `APP_PUBLIC_URL` through Terraform for OCI deploys
-- [ ] CI/CD (GitHub Actions → OCIR → container refresh)
-- [ ] Restrict ingress (`ingress_allowed_cidrs` in `terraform.tfvars`) when not on public IP
-- [ ] Tablet: native OIDC or keep PIN-via-API; discard offline queue; snapshot cart on queue
-- [ ] **Cash rounding (server/books)** — tablet UI rounds to $0.05 today; persist on checkout, reports, web — see [CONTENTS.md](CONTENTS.md#cash-rounding-todo)
-- [ ] **Card terminal / payment pad** — no pad API today; Card is manual “paid” only — see [CONTENTS.md](CONTENTS.md#card-terminal--payment-pad-todo)
-- [ ] Receipt / print after **Complete Sale**
+- [x] HTTPS / Load Balancer in front of the container instance — live at `https://oci.cloudstore893.com/` (Let's Encrypt → OCI Certificates → LB :443). See [CONTENTS.md](CONTENTS.md#https--tls-oci).
+- [x] Wire optional `IDP_*` / `APP_PUBLIC_URL` through Terraform for OCI deploys — `terraform/container.tf` + `scripts/oci/sync-container-env-to-terraform.sh` (IdP live on OCI; `APP_PUBLIC_URL_FROM_REQUEST=true` for OAuth host).
+- [ ] CI/CD (GitHub Actions → OCIR → container refresh) — tests run in [`.github/workflows/test.yml`](.github/workflows/test.yml); deploy workflow not added yet.
+- [ ] Restrict ingress (`ingress_allowed_cidrs` in `terraform.tfvars`) when not on public IP — still default `0.0.0.0/0`; LB fronts the container but SSH/app rules remain open per [terraform/variables.tf](terraform/variables.tf).
+- [x] Tablet: OIDC sign-in (WebView), offline queue sync/discard, cart snapshot on queue — see `CashierOidcWebScreen`, `OfflineQueueStore.cartLines`, `clearOfflineQueue`.
+- [ ] **Cash rounding (web POS only)** — server, tablets, and admin reports persist `register_total` / `cash_due`; web cart still has no tax/cash tender UI — see [CONTENTS.md](CONTENTS.md#cash-rounding).
+- [ ] **Card terminal / payment pad** — no pad API today; Card is manual “paid” only — see [CONTENTS.md](CONTENTS.md#card-terminal--payment-pad-todo).
+- [ ] **Receipt / print after Complete Sale** — tablet shows `SaleReceipt` after checkout; `printReceipt()` is a UI stub (no hardware printer integration yet).

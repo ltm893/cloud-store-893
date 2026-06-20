@@ -12,20 +12,14 @@ if (!ORDS_BASE) {
 
 app.use(express.json());
 
-function buildInfoLabel(buildId) {
-  if (buildId === 'unknown' || buildId === 'dev') return buildId;
-  const stamp = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(buildId);
-  if (stamp) {
-    const [, y, mo, d, h, mi, s] = stamp;
-    return `deploy ${y}-${mo}-${d} ${h}:${mi}:${s} UTC`;
-  }
-  return buildId.replace(/-/g, ' ');
-}
+const { getBuildInfo } = require('./lib/build-info');
 
 app.get('/api/build-info', (req, res) => {
-  const buildId = process.env.BUILD_ID || 'unknown';
-  res.json({ buildId, label: buildInfoLabel(buildId) });
+  res.json(getBuildInfo());
 });
+
+const { registerSystemsRoutes } = require('./lib/systems-routes');
+registerSystemsRoutes(app);
 
 // ── ORDS client ───────────────────────────────────────────────────────────
 
