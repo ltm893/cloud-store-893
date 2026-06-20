@@ -43,6 +43,15 @@ With IdP configured, `IDP_ALLOW_PIN=true` (default) keeps PIN login available al
 
 ---
 
+## Development
+
+Cloud Store 893 is built and maintained by [ltm893](https://github.com/ltm893). Day-to-day
+architecture and implementation use [Cursor](https://cursor.com) as an AI-assisted editor:
+design decisions, review, and what ships are human-led; Cursor helps with code, refactors,
+tests, and documentation as a pair-programming partner.
+
+---
+
 ## Deploy from scratch
 
 ### Prerequisites
