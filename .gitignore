@@ -23,6 +23,9 @@ wallet/
 *.p12
 *.sso
 
+# Generated OCI inventory for admin Platform tab (scripts/oci/sync-systems-manifest.sh)
+data/systems-oci-resources.json
+
 # iOS build artifacts (archives and exported IPAs)
 build/archives/
 build/export/
