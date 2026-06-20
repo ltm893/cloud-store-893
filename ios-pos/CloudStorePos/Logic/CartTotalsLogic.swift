@@ -46,6 +46,10 @@ enum CartTotalsLogic {
         }
     }
 
+    static func taxableSubtotalPayable(_ cart: [CartItem]) -> Double {
+        roundMoney(cart.filter { !$0.taxExempt }.reduce(0.0) { $0 + $1.lineSubtotalPayable })
+    }
+
     static func computeSaleSavings(_ cart: [CartItem]) -> Double {
         let raw = cart
             .filter { $0.onSale && $0.salePrice != nil }
@@ -71,6 +75,20 @@ enum CartTotalsLogic {
         )
     }
 
+    static func computeTaxAmount(
+        cart: [CartItem],
+        customerLinked: Bool = false,
+        customerDiscount: Bool = false,
+        salesFeeRate: Double,
+        taxRate: Double
+    ) -> Double {
+        let items = customerLinked ? normalizeCartItems(cart, customerDiscount: customerDiscount) : cart
+        let taxablePreTax = taxableSubtotalPayable(items)
+        let salesFee = taxablePreTax * salesFeeRate
+        let taxBase = taxablePreTax + salesFee
+        return roundMoney(taxBase * taxRate)
+    }
+
     static func computeSaleGrandTotal(
         cart: [CartItem],
         customerLinked: Bool = false,
@@ -80,10 +98,12 @@ enum CartTotalsLogic {
     ) -> Double {
         let items = customerLinked ? normalizeCartItems(cart, customerDiscount: customerDiscount) : cart
         let totals = computeCartTotals(items, customerDiscount: customerLinked && customerDiscount)
-        let salesFee = totals.itemPreTax * salesFeeRate
-        let taxable = totals.itemPreTax + salesFee
-        let taxAmt = taxable * taxRate
-        return roundMoney(taxable + taxAmt)
+        let taxablePreTax = taxableSubtotalPayable(items)
+        let nonTaxablePreTax = roundMoney(totals.itemPreTax - taxablePreTax)
+        let salesFee = taxablePreTax * salesFeeRate
+        let taxBase = taxablePreTax + salesFee
+        let taxAmt = taxBase * taxRate
+        return roundMoney(nonTaxablePreTax + taxBase + taxAmt)
     }
 
     static func computeCashAmountDue(

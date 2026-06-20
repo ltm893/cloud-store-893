@@ -5,6 +5,8 @@ import com.cloudstore.pos.data.CheckoutPayment
 import com.cloudstore.pos.data.StoreCustomer
 import com.cloudstore.pos.domain.checkout.checkoutChangeTotal
 import com.cloudstore.pos.domain.pricing.computeCartTotals
+import com.cloudstore.pos.domain.pricing.computeSaleGrandTotal
+import com.cloudstore.pos.domain.pricing.computeTaxAmount
 import com.cloudstore.pos.domain.pricing.normalizeCartItems
 import com.cloudstore.pos.domain.pricing.roundMoney
 import java.time.Instant
@@ -68,10 +70,14 @@ fun buildSaleReceipt(
 ): SaleReceipt {
     val items = if (customerLinked) normalizeCartItems(cart, customerDiscount) else cart
     val totals = computeCartTotals(items, customerLinked && customerDiscount)
-    val salesFee = totals.itemPreTax * salesFeeRate
-    val taxable = totals.itemPreTax + salesFee
-    val taxAmt = roundMoney(taxable * taxRate)
-    val grandTotal = roundMoney(taxable + taxAmt)
+    val taxAmt = computeTaxAmount(cart, customerLinked, customerDiscount, salesFeeRate, taxRate)
+    val grandTotal = computeSaleGrandTotal(
+        cart = cart,
+        customerLinked = customerLinked,
+        customerDiscount = customerDiscount,
+        salesFeeRate = salesFeeRate,
+        taxRate = taxRate,
+    )
     val collectedTotal = roundMoney(payments.sumOf { it.amount })
 
     return SaleReceipt(
