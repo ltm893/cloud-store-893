@@ -271,7 +271,7 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 2. **`.env` for sync** — `APP_PUBLIC_URL_FROM_REQUEST=true`; keep `APP_PUBLIC_URL` for local dev only (same host as step 1 is optional on OCI).
 3. **Push env via Terraform (once per env change)** — `./scripts/oci/sync-container-env-to-terraform.sh` then `./scripts/oci/terraform-apply-container.sh` (warns before replace/new IP). Then run the **network recovery** steps in [docs/oci-network-recovery.md](docs/oci-network-recovery.md) — **do not** apply again just to “fix” the URL.
 4. **Oracle Identity** — prefer hostname redirect URIs on `oci.cloudstore893.com`; use `./scripts/oci/idp-update-redirect-uris.sh` when adding IPs or after hostname changes.
-5. **App code** — `./scripts/oci/redeploy-app-code.sh` (build, push, restart; does not change IP). Required for Model B fields on `/api/admin/session`.
+5. **App code** — `./scripts/oci/redeploy-app-code.sh "label"` (build, push unique tag, terraform apply). See [docs/oci-deploy.md](docs/oci-deploy.md). Pre-prod: `./scripts/oci/redeploy-app-code-dev.sh "label"`.
 6. **Verify:**
    ```bash
    APP=$(./scripts/oci/confirm-public-url.sh)
@@ -297,10 +297,14 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 
 **Full guide:** [docs/oci-deploy.md](docs/oci-deploy.md) — decision table (code vs env vs DB vs IdP vs tablet), verify steps, troubleshooting.
 
-**App code only** (preferred — keeps public IP). Requires a short deploy label; see [docs/versioning.md](docs/versioning.md) for PR → deploy workflow.
+**App code only.** Requires a short deploy label; see [docs/versioning.md](docs/versioning.md). Pre-prod: [docs/oci-dev-environment.md](docs/oci-dev-environment.md).
 
 ```bash
+# Production:
 ./scripts/oci/redeploy-app-code.sh "describe this deploy"
+
+# Pre-production (dev stack):
+./scripts/oci/redeploy-app-code-dev.sh "describe this deploy"
 ```
 
 Quick verify (expect **200**, not **404** on unlock):
@@ -315,12 +319,13 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 | What changed | Command |
 |--------------|---------|
-| Server / admin UI | `redeploy-app-code.sh` |
+| Server / admin UI (prod) | `redeploy-app-code.sh "label"` |
+| Server / admin UI (dev) | `redeploy-app-code-dev.sh "label"` |
 | `.env` / IdP / Model B flags | `sync-container-env-to-terraform.sh` → `terraform-apply-container.sh` |
 | DB schema | `reset-db.sh` or manual SQL — see [oci-deploy.md](docs/oci-deploy.md#3-database-schema) |
 | Tablet APK | `android-pos/RebuildReinstall.sh` |
 
-**Env apply** may replace the instance (detach reserved IP): [docs/oci-network-recovery.md](docs/oci-network-recovery.md). **New image tag via Terraform:** `./scripts/oci/deploy-app-oci.sh <tag>`.
+**Env apply** may replace the instance (detach reserved IP): [docs/oci-network-recovery.md](docs/oci-network-recovery.md). **App code deploy** also replaces the instance when the image tag changes; prod may need `reattach-reserved-ip.sh`, dev auto-syncs DNS.
 
 ---
 

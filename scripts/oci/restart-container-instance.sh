@@ -14,7 +14,10 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TF_DIR="$PROJECT_ROOT/terraform"
+# shellcheck source=lib/terraform-env.sh
+source "$PROJECT_ROOT/scripts/oci/lib/terraform-env.sh"
+cloud_store_resolve_tf_env "$PROJECT_ROOT"
+TF_DIR="$CLOUD_STORE_TF_DIR"
 WAIT_FOR_ACTIVE=true
 
 if [[ "${1:-}" == "--no-wait" ]]; then
@@ -38,19 +41,18 @@ fi
 
 cd "$TF_DIR"
 
-OCI_ID="$(terraform output -raw container_instance_ocid 2>/dev/null || true)"
+OCI_ID="$(cloud_store_tf_output container_instance_ocid || true)"
 if [[ -z "$OCI_ID" ]]; then
   echo "error: could not read terraform output 'container_instance_ocid'" >&2
   echo "hint: run this from a repo with initialized terraform state" >&2
   exit 1
 fi
 
-echo "Restarting OCI container instance:"
+echo "Restarting OCI container instance ($(cloud_store_env_label)):"
 echo "  $OCI_ID"
 echo ""
-echo "Note: restart pulls the latest :latest image but does NOT replace the instance."
-echo "      Public IP should stay the same (including a reserved IP if attached)."
-echo "      Use ./scripts/oci/terraform-apply-container.sh only for env changes — that can change IP."
+echo "Note: restart re-runs the same cached image digest — it does NOT pull a new :latest."
+echo "      For new app code use: ./scripts/oci/redeploy-app-code.sh \"label\""
 echo ""
 
 if command -v oci >/dev/null 2>&1 && [[ -n "${CLOUD_STORE_RESERVED_PUBLIC_IP_OCID:-}" ]]; then

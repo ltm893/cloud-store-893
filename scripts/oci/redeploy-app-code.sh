@@ -1,37 +1,46 @@
 #!/usr/bin/env bash
-# Build, push, and restart OCI app code without replacing the container instance.
+# Build, push, and deploy OCI app code with a unique image tag.
 #
-# Preferred path after changing server.js, lib/, or public/. Keeps the public IP
-# (including a reserved IP) attached — unlike terraform apply on the container.
+# OCI container instances cache the image digest at create time — restart alone does
+# not pull a new :latest. This script pushes BUILD_ID as the image tag and runs
+# terraform apply so the instance runs the new code.
 #
 # Usage:
 #   ./scripts/oci/redeploy-app-code.sh "short deploy description"
 #   ./scripts/oci/redeploy-app-code.sh "short deploy description" --no-wait
+#   AUTO_YES=1 ./scripts/oci/redeploy-app-code.sh "label"   # skip IP-change prompt
 #
 # BUILD_ID is always YYYYMMDDHHmmss. BUILD_LABEL is the required description shown in
 # GET /api/build-info and the Systems tab.
 #
-# For env var changes (replaces instance — may detach reserved IP):
+# For env var changes (no image tag change):
 #   ./scripts/oci/sync-container-env-to-terraform.sh
 #   ./scripts/oci/terraform-apply-container.sh
 #
-# For a new image tag + terraform apply (also may replace instance):
-#   ./scripts/oci/deploy-app-oci.sh <tag>
+# Legacy restart-only (does not update cached image):
+#   ./scripts/oci/restart-container-instance.sh
 
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TF_DIR="$PROJECT_ROOT/terraform"
+# shellcheck source=lib/terraform-env.sh
+source "$PROJECT_ROOT/scripts/oci/lib/terraform-env.sh"
+cloud_store_resolve_tf_env "$PROJECT_ROOT"
+TF_DIR="$CLOUD_STORE_TF_DIR"
 OCI_SCRIPTS="$PROJECT_ROOT/scripts/oci"
+# shellcheck source=lib/oci-ip-warn.sh
+source "$OCI_SCRIPTS/lib/oci-ip-warn.sh"
 
 BUILD_LABEL=""
 RESTART_ARGS=()
+APPLY_YES=""
 
 for arg in "$@"; do
   case "$arg" in
     --no-wait) RESTART_ARGS+=(--no-wait) ;;
+    --yes) APPLY_YES="--yes" ;;
     --help|-h)
-      sed -n '2,22p' "$0" | sed 's/^# \?//'
+      sed -n '2,24p' "$0" | sed 's/^# \?//'
       exit 0
       ;;
     *)
@@ -47,7 +56,7 @@ done
 
 if [[ -z "${BUILD_LABEL//[[:space:]]/}" ]]; then
   echo "error: BUILD_LABEL required" >&2
-  echo "usage: $0 \"deploy description\" [--no-wait]" >&2
+  echo "usage: $0 \"deploy description\" [--no-wait] [--yes]" >&2
   exit 1
 fi
 
@@ -59,12 +68,15 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-IMAGE="$(cd "$TF_DIR" && terraform output -raw ocir_image_path)"
+IMAGE_LATEST="$(cloud_store_tf_output ocir_image_path)"
+IMAGE_BASE="${IMAGE_LATEST%:*}"
+IMAGE_TAGGED="${IMAGE_BASE}:${BUILD_ID}"
 
 echo "==> BUILD_ID=$BUILD_ID"
 echo "==> BUILD_LABEL=$BUILD_LABEL"
 echo "==> GIT_SHA=${GIT_SHA:-unknown}"
-echo "==> IMAGE=$IMAGE"
+echo "==> ENV=$(cloud_store_env_label)"
+echo "==> IMAGE_TAGGED=$IMAGE_TAGGED"
 echo ""
 
 if command -v oci >/dev/null 2>&1; then
@@ -78,28 +90,50 @@ docker buildx build \
   --build-arg BUILD_ID="$BUILD_ID" \
   --build-arg BUILD_LABEL="$BUILD_LABEL" \
   --build-arg GIT_SHA="${GIT_SHA:-unknown}" \
-  -t "$IMAGE" \
+  -t "$IMAGE_TAGGED" \
+  -t "$IMAGE_LATEST" \
   "$PROJECT_ROOT"
 
 echo ""
-echo "==> Pushing $IMAGE"
-docker push "$IMAGE"
+echo "==> Pushing $IMAGE_TAGGED and :latest"
+docker push "$IMAGE_TAGGED"
+docker push "$IMAGE_LATEST"
 
 echo ""
-echo "==> Restarting container instance"
-# bash 3.2 + set -u treats empty "${RESTART_ARGS[@]}" as unbound on macOS
-if ((${#RESTART_ARGS[@]} > 0)); then
-  "$OCI_SCRIPTS/restart-container-instance.sh" "${RESTART_ARGS[@]}"
-else
-  "$OCI_SCRIPTS/restart-container-instance.sh"
+set +e
+oci_ip_terraform_plan_container_change "$TF_DIR" -var="ocir_image_tag=${BUILD_ID}"
+plan_signal=$?
+set -e
+if [[ "$plan_signal" -eq 2 ]]; then
+  echo "error: terraform plan failed" >&2
+  exit 1
+fi
+
+if [[ "$plan_signal" -eq 1 ]]; then
+  oci_ip_confirm_apply_or_exit "$APPLY_YES"
+fi
+
+echo "==> terraform apply -var ocir_image_tag=${BUILD_ID} ($(cloud_store_env_label))"
+cd "$TF_DIR"
+cloud_store_tf apply -var="ocir_image_tag=${BUILD_ID}" -auto-approve
+
+if [[ "$plan_signal" -eq 1 ]]; then
+  oci_ip_offer_recover_network "" "$OCI_SCRIPTS"
+  echo ""
+  echo "hint: export $(cloud_store_container_ocid_var)=\"\$(cloud_store_tf_output container_instance_ocid)\""
+  if [[ "$CLOUD_STORE_ENV" == "dev" ]]; then
+    echo ""
+    echo "==> Syncing dev DNS A record (LB IP may differ after container replace)"
+    "$OCI_SCRIPTS/dev-dns-a-record.sh" || echo "warn: dev-dns-a-record.sh failed — run manually" >&2
+  fi
 fi
 
 echo ""
 if ((${#RESTART_ARGS[@]} > 0)); then
-  echo "==> Verify build (skipped — restart used --no-wait):"
+  echo "==> Verify build (skipped — used --no-wait):"
   echo "    $OCI_SCRIPTS/wait-for-app-health.sh --expected-build-id $BUILD_ID"
 else
-  echo "==> Waiting for app health (502 right after restart is normal until Node is up):"
+  echo "==> Waiting for app health (502 right after apply is normal until Node is up):"
   if ! "$OCI_SCRIPTS/wait-for-app-health.sh" --expected-build-id "$BUILD_ID"; then
     exit 1
   fi
