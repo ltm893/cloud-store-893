@@ -232,9 +232,9 @@ class PosViewModel(
         if (_state.value.receipt == null || printReceiptJob?.isActive == true) return
         printReceiptJob = viewModelScope.launch {
             _state.update { it.copy(receiptPrintMessage = "Printing Receipt", receiptPrintProgress = 0f) }
-            repeat(25) { index ->
+            repeat(20) { index ->
                 delay(100)
-                _state.update { it.copy(receiptPrintProgress = (index + 1) / 25f) }
+                _state.update { it.copy(receiptPrintProgress = (index + 1) / 20f) }
             }
             dismissReceipt()
         }
@@ -340,9 +340,9 @@ class PosViewModel(
                         processingDialogMessage = cardTerminalMessage(payment.amount),
                     )
                 }
-                repeat(50) { index ->
+                repeat(20) { index ->
                     delay(100)
-                    _checkoutState.update { it.copy(paymentProcessingProgress = (index + 1) / 50f) }
+                    _checkoutState.update { it.copy(paymentProcessingProgress = (index + 1) / 20f) }
                 }
                 val updatedPayments = _checkoutState.value.payments + payment
                 val total = registerTotal()
