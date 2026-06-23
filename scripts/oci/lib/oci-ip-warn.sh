@@ -63,6 +63,7 @@ oci_ip_terraform_plan_container_change() {
   fi
 
   local plan_out plan_ec=0
+  # Keep errexit off for the whole function so callers can capture return 1 (container will change).
   set +e
   if [[ -n "${CLOUD_STORE_TFVARS:-}" ]] && [[ -f "${CLOUD_STORE_TFVARS:-}" ]]; then
     plan_out="$(cloud_store_tf plan -no-color -out="$plan_file" "$@" 2>&1)"
@@ -70,7 +71,6 @@ oci_ip_terraform_plan_container_change() {
     plan_out="$(cd "$tf_dir" && terraform plan -no-color -out="$plan_file" "$@" 2>&1)"
   fi
   plan_ec=$?
-  set -e
 
   if [[ "$plan_ec" -ne 0 && "$plan_ec" -ne 2 ]]; then
     echo "$plan_out" >&2

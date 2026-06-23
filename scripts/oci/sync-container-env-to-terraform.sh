@@ -123,7 +123,7 @@ source "$PROJECT_ROOT/scripts/oci/lib/oci-ip-warn.sh"
 
 echo "Checking whether terraform apply would replace the container instance..."
 set +e
-oci_ip_terraform_plan_container_change "$TF_DIR"
+oci_ip_terraform_plan_container_change "$CLOUD_STORE_TF_DIR"
 plan_signal=$?
 set -e
 

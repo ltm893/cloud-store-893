@@ -86,7 +86,18 @@ Follow [oci-load-balancer-https.md](oci-load-balancer-https.md) for `dev.oci.clo
 ./scripts/oci/terraform-apply-container-dev.sh
 ```
 
-### 5. IdP (optional)
+### 5. IdP (automated dev bootstrap)
+
+Creates a new **External Active User** domain `cloud-store-app-N` (auto-increment), user `ltm893@icloud.com` (override in `.env.dev`), and both OIDC apps:
+
+```bash
+cp .env.dev.example .env.dev   # optional
+./scripts/oci/idp/bootstrap-dev.sh --apply
+```
+
+Save the **generated password** printed at the end. Details: [scripts/oci/idp/README.md](../scripts/oci/idp/README.md).
+
+Manual redirect-only (existing domain):
 
 ```bash
 export IDP_DOMAIN_ENDPOINT="https://idcs-....identity.us-ashburn-1.oci.oraclecloud.com"
