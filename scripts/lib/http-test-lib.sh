@@ -1,5 +1,5 @@
 # http-test-lib.sh — shared curl helpers for integration test scripts.
-# Source from scripts/*.sh: source "$SCRIPT_DIR/lib/http-test-lib.sh"
+# Source from scripts/test/*.sh: source "$SCRIPT_DIR/../lib/http-test-lib.sh"
 
 http_test_project_root() {
   local lib_dir
