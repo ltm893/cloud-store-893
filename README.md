@@ -1,15 +1,13 @@
 # Cloud Store 893
 
-A containerized Node.js shopping cart deployed on Oracle Cloud Infrastructure (OCI).
+Is an open source containerized Node.js Point of Sale System running Oracle Cloud Infrastructure (OCI).
 
 
 ---
 
 ## Project Overview
 
-A simple Express.js shopping cart with product listing, cart management, and an
-Autonomous Database (ATP) backend via ORDS. The app is fully containerized with Docker
-and all OCI infrastructure is managed by Terraform.
+The Point of Sale system features an Android and Ipad cash register integrated with supervisor approvals via push notifications. Along with an Andorid, IOS and Web Admin console to access tables and predefined reports. The data flows through through Oracle Rest Data Service ORDS into am Autonomous Database and secured with Oracle Identity and Access Management (IAM).
 
 **Stack:**
 - Node.js + Express (backend)
@@ -17,6 +15,7 @@ and all OCI infrastructure is managed by Terraform.
 - Kotlin + Jetpack Compose (Samsung tablet POS in `android-pos/`)
 - Docker / Colima (containerization)
 - Terraform (infrastructure as code)
+- OCI Identity and Access Management
 - OCI Container Registry (image storage)
 - OCI Container Instances — CI.Standard.A1.Flex (Always Free, ARM64)
 - OCI Autonomous Database ATP (Always Free, ORDS API)
@@ -45,10 +44,8 @@ With IdP configured, `IDP_ALLOW_PIN=true` (default) keeps PIN login available al
 
 ## Development
 
-Cloud Store 893 is built and maintained by [ltm893](https://github.com/ltm893). Day-to-day
-architecture and implementation use [Cursor](https://cursor.com) as an AI-assisted editor:
-design decisions, review, and what ships are human-led; Cursor helps with code, refactors,
-tests, and documentation as a pair-programming partner.
+Cloud Store 893 is built and maintained by [ltm893](https://github.com/ltm893) with the assitance of 
+[Cursor](https://cursor.com) AI agent. What ships are human-led. Cursor helps with architecture options,code, refactors, tests, and documentation as a pair-programming partner.
 
 ---
 
@@ -74,7 +71,6 @@ Full Terraform documentation (file layout, dependency graph, outputs, workload t
 ### 2. Run the deploy script
 
 ```bash
-chmod +x scripts/oci/deploy.sh   # first time only
 ./scripts/oci/deploy.sh
 ```
 
@@ -116,7 +112,6 @@ this automatically.
 ### Install
 
 ```bash
-chmod +x scripts/install-sqlcl.sh   # first time only
 ./scripts/install-sqlcl.sh
 ```
 
