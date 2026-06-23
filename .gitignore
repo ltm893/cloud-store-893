@@ -49,6 +49,9 @@ terraform/terraform.dev.tfstate.*.backup
 # Dev OCI env (local ORDS pointer — optional)
 .env.dev
 
+# IdP dev bootstrap state (domain OCIDs — no passwords)
+scripts/oci/idp/state/
+
 # Stray Terraform state outside terraform/ (never commit)
 scripts/*.tfstate
 scripts/*.tfstate.*

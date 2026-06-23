@@ -14,7 +14,8 @@ scripts/
 ├── ios/                # iOS local config + TestFlight + XCTest
 ├── tls/                # self-signed certs (local + LB POC)
 ├── tools/              # one-off utilities
-├── oci/                # OCI deploy, container, network, IdP, certs (see docs/oci-deploy.md)
+├── oci/                # OCI deploy, container, network, certs (see docs/oci-deploy.md)
+│   └── idp/            # Dev IdP bootstrap — scripts/oci/idp/README.md
 └── docker-entrypoint.sh
 ```
 
