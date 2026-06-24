@@ -2,7 +2,7 @@
 
 How automated and manual tests are organized, how to run them, and what each layer covers.
 
-**Related:** root [README.md](../README.md), [cashier-supervisor-approval.md](cashier-supervisor-approval.md) (Model B flows).
+**Related:** root [README.md](../README.md), [cashier-supervisor-approval.md](cashier-supervisor-approval.md) (Model B flows), [oci-dev-environment.md](oci-dev-environment.md) (dev OCI), [developer-handoff.md](developer-handoff.md) (onboard another developer).
 
 ---
 
@@ -26,7 +26,7 @@ flowchart TB
 
   subgraph local ["Local with ORDS"]
     test_all["npm run test:all"]
-    integ["run-integration-tests.sh"]
+    integ["scripts/test/run-integration-tests.sh"]
     auth["test-auth-protection.sh"]
     api["test-api-curl.sh"]
     test_all --> unit
@@ -62,7 +62,7 @@ npm run test:all
 npm run test:all:destructive
 ```
 
-Every `npm test` / `run-tests.sh` run ends with a **summary report**:
+Every `npm test` / `scripts/test/run-tests.sh` run ends with a **summary report**:
 
 ```
 ================================================================
@@ -70,7 +70,7 @@ Every `npm test` / `run-tests.sh` run ends with a **summary report**:
 ================================================================
   Suite                    Pass   Fail   Skip    Time
   ----------------------------------------------------------------
-  unit                       32      0      0      0s  PASS
+  unit                       152      0      0      0s  PASS
   auth                       55      0      0      2s  PASS
   api                        12      0      0      1s  PASS
   ----------------------------------------------------------------
@@ -83,9 +83,9 @@ Exit code `0` = all suites passed; `1` = at least one failure.
 Equivalent shell entry points:
 
 ```bash
-./scripts/run-tests.sh
-./scripts/run-tests.sh --integration
-./scripts/run-tests.sh --integration --destructive
+./scripts/test/run-tests.sh
+./scripts/test/run-tests.sh --integration
+./scripts/test/run-tests.sh --integration --destructive
 ```
 
 ---
@@ -114,20 +114,40 @@ Equivalent shell entry points:
 
 ## Unit tests
 
-**Location:** `test/*.test.js`  
+**Location:** `test/*.test.js` (29 files, **152** cases as of last `npm test`)  
 **Runner:** Node.js built-in [`node:test`](https://nodejs.org/api/test.html) (no Jest/Mocha dependency).
 
-| File | Module under test |
-|------|-------------------|
-| `session-store.test.js` | `lib/session-store.js` — cookies, TTL, `appendHeader`, secure flag |
-| `session-cookies.test.js` | `lib/session-cookies.js` — `parseCookies` |
-| `ords-client.test.js` | `lib/ords-client.js` — timestamp format, URL normalization, fetch errors |
+| File | Module / area under test |
+|------|-------------------------|
+| `admin-index.test.js` | `public/admin/index.html` — Platform tab wiring |
+| `admin-orientation.test.js` | `lib/admin-orientation.js` — portrait vs landscape, `client_kind=ios` |
 | `approval-errors.test.js` | `lib/approval-errors.js` |
+| `awaiting-till-store.test.js` | `lib/awaiting-till-store.js` — dev persistence reload |
+| `build-info.test.js` | `lib/build-info.js` — `BUILD_ID`, label, `GIT_SHA`, display format |
+| `cash-till.test.js` | `lib/cash-till-config.js` — opening float, till submit, credit-only shift |
+| `cashier-identity.test.js` | `lib/login-approval.js` — claim / approval identity helpers |
+| `cashier-identity-match.test.js` | `lib/cashier-identity-match.js` — `cashierMatchesShift` |
+| `checkout-settlement.test.js` | `lib/checkout-settlement.js` — nickel rounding, split tender, tax-exempt |
+| `host-info.test.js` | `lib/host-info.js` — Systems tab host overview |
+| `inventory.test.js` | `lib/inventory.js` — retail qty, bulk consumption, `mapProductForCashier` |
+| `ios-admin-portrait.test.js` | `lib/ios-admin-portrait-scripts.js` + synced `ios-admin/.../Resources/*` (runs `scripts/ios/sync-portrait-resources.js` in `before`) |
+| `oidc-flow-store.test.js` | `lib/oidc-flow-store.js` — OAuth state, `client_kind` round-trip |
+| `order-number.test.js` | `lib/order-number.js` — 7-digit order numbers, allocation |
+| `ords-client.test.js` | `lib/ords-client.js` — timestamps, URL normalization, fetch errors |
+| `pos-client-kind.test.js` | `lib/pos-client-kind.js` — tablet/ios register validation |
+| `pos-pricing.test.js` | `lib/pos-pricing.js` — fees, tax, nickel rounding, env rates |
+| `session-cookies.test.js` | `lib/session-cookies.js` — `parseCookies` |
+| `session-store.test.js` | `lib/session-store.js` — cookies, TTL, `appendHeader`, secure flag |
+| `shift-close-cash.test.js` | `lib/shift-close-cash.js` — expected close total |
+| `shift-close-store.test.js` | `lib/shift-close-store.js` — pending vs approved close requests |
+| `shift-sales-stats.test.js` | `lib/shift-sales-stats.js` — per-shift sales summaries |
+| `store-clients.test.js` | `lib/store-clients.js` — register / admin device groups |
+| `store-reports.test.js` | `lib/store-reports.js`, `lib/order-number.js` — report ranges, order details |
+| `supervisor-approval.test.js` | `lib/login-approval.js`, `lib/cashier-auth.js` — Model B flags, `sessionStatusPayload`, `awaitingTillToken` |
+| `supervisor-auth.test.js` | `lib/supervisor-auth.js` — OIDC groups vs PIN fallback |
 | `supervisor-config.test.js` | `lib/supervisor-config.js` — `isSupervisorPinFallbackEnabled` |
-| `supervisor-approval.test.js` | `lib/login-approval.js` — `isSupervisorApprovalEnabled`; `lib/cashier-auth.js` — `sessionStatusPayload` / `pinAllowed` |
-| `supervisor-auth.test.js` | `lib/supervisor-auth.js` — `isSupervisorIdentity` (OIDC groups vs PIN fallback) |
-| `inventory.test.js` | `lib/inventory.js` — retail qty, `mapProductForCashier`, bulk `aggregateBulkConsumption`, `canFulfillBulkConsumption` |
-| `cashier-identity.test.js` | `lib/login-approval.js` — `identityFromCashierSub`, `identityFromApproval`, claim helpers |
+| `systems-status.test.js` | `lib/systems-status.js` — cert expiry, OCI resource manifest |
+| `tills.test.js` | `lib/tills.js` — register lock, resume, `createFromApproval` |
 
 Run directly:
 
@@ -137,11 +157,13 @@ node --test test/*.test.js
 
 Add new pure-logic tests here as shared `lib/*` helpers grow. Keep Express route tests in the integration layer unless you introduce a lightweight HTTP mock.
 
+**iOS admin portrait:** if `ios-admin-portrait.test.js` fails on sync, ensure the test calls `scripts/ios/sync-portrait-resources.js` (not the bash wrapper at `scripts/sync-ios-portrait-resources.js`).
+
 ---
 
 ## Integration tests
 
-**Orchestrator:** `scripts/run-integration-tests.sh`  
+**Orchestrator:** `scripts/test/run-integration-tests.sh`  
 **Requires:** `ORDS_BASE_URL` in `.env` or environment; `curl`, `python3`, `node`.
 
 ### Ephemeral test server
@@ -166,7 +188,7 @@ When `BASE_URL` is not preset, the script:
 Use an **existing** server instead:
 
 ```bash
-BASE_URL=http://127.0.0.1:3000 ./scripts/run-integration-tests.sh
+BASE_URL=http://127.0.0.1:3000 ./scripts/test/run-integration-tests.sh
 ```
 
 ### Sub-suite: auth (`test-auth-protection.sh`)
@@ -273,7 +295,7 @@ npm run test:cashier-approval-poll
 
 | Job | Trigger | Command |
 |-----|---------|---------|
-| **unit** | Every push/PR to `main` or `dev` | `npm run test:unit` |
+| **unit** | Every push/PR to `dev` | `npm run test:unit` |
 | **integration** | Push when `ORDS_BASE_URL` secret is set, or manual **workflow_dispatch** | `npm run test:integration` (read-only API) |
 
 ### Optional repo secrets (integration job)
@@ -322,6 +344,25 @@ BASE_URL="$APP" SKIP_DESTRUCTIVE=yes ./scripts/test-api-curl.sh
 
 See also [README.md](../README.md#update-the-oci-container-after-code-changes) and [oci-network-recovery.md](oci-network-recovery.md).
 
+### Dev OCI + IdP (manual)
+
+Not in `npm test`. After `./scripts/oci/idp/bootstrap-dev.sh --apply` or a dev redeploy:
+
+```bash
+APP=$(CLOUD_STORE_ENV=dev ./scripts/oci/confirm-public-url.sh)
+curl -s "$APP/api/build-info" | jq .
+curl -sk "$APP/oauth/login" -I | grep -i location   # dev issuer + client_id, not prod
+```
+
+Tablet against dev cloud (bakes URL into APK):
+
+```bash
+cd android-pos
+API_BASE_URL=https://dev.oci.cloudstore893.com/ ./RebuildReinstall.sh
+```
+
+IdP bootstrap scripts (`scripts/oci/idp/*`) and Terraform wrappers have **no** automated tests — validate with the curls above and web/tablet sign-in. See [developer-handoff.md](developer-handoff.md) and [scripts/oci/idp/README.md](../scripts/oci/idp/README.md).
+
 ---
 
 ## Local dev + tablet (manual)
@@ -330,9 +371,11 @@ See also [README.md](../README.md#update-the-oci-container-after-code-changes) a
 |-------|---------|-------|
 | Server | `npm run dev:up` | Probes ORDS; prints Mac LAN URL for tablet |
 | Unit + integration | `npm test` / `npm run test:all` | Integration uses ephemeral server + dev ADB |
-| Tablet APK | `cd android-pos && USE_LOCAL=1 ./RebuildReinstall.sh` | Bakes `API_BASE_URL` to Mac LAN IP |
-| Oracle sign-in on tablet | `./scripts/oci/idp-update-redirect-uris.sh` | Register `http://<LAN_IP>:3000/oauth/callback` — not `localhost` |
-| PIN-only local dev | `CASHIER_SUPERVISOR_APPROVAL=false` in `.env` | Avoids IdP redirect setup when testing cart flows |
+| Tablet → local Mac | `cd android-pos && USE_LOCAL=1 ./RebuildReinstall.sh` | Bakes `http://<LAN_IP>:3000/` |
+| Tablet → dev OCI | `cd android-pos && API_BASE_URL=https://dev.oci.cloudstore893.com/ ./RebuildReinstall.sh` | Default `./RebuildReinstall.sh` is **prod** |
+| Oracle sign-in (local) | `./scripts/oci/idp-update-redirect-uris.sh` | `APP_PUBLIC_HOST=<Mac LAN IP>`, `APP_PUBLIC_SCHEME=http` |
+| Oracle sign-in (dev OCI) | Redirect URIs seeded by `bootstrap-dev.sh`; refresh with `idp-update-redirect-uris-dev.sh` if hostname changed |
+| PIN-only local dev | `CASHIER_SUPERVISOR_APPROVAL=false` in `.env` | Avoids IdP when testing cart flows only |
 
 Integration tests do **not** cover Android UI (e.g. add-item error display); validate tablet behavior manually.
 
@@ -340,10 +383,12 @@ Integration tests do **not** cover Android UI (e.g. add-item error display); val
 
 ## What is not covered
 
-- **Android POS** (`android-pos/`) — no JVM/instrumented tests yet
+- **Android POS** (`android-pos/`) — no JVM/instrumented tests yet (Kotlin UI manual only)
 - **Web POS / admin UI** — integration tests hit APIs and static admin pages, not browser JS
 - **OCI deploy / Terraform** — [oci-deploy.md](oci-deploy.md); not in `npm test`
-- **IdP OAuth redirect flows** — auth tests only check redirect status codes, not full Oracle login
+- **Dev IdP bootstrap** (`scripts/oci/idp/bootstrap-dev.sh`, OCI CLI domain create) — manual + curl OAuth check
+- **IdP OAuth redirect flows** — integration auth tests check redirect status codes only, not full Oracle login
+- **Shell wrappers** (`terraform-apply-container*.sh`, `RebuildReinstall.sh`, etc.) — not unit-tested
 - **Production OCI** — run integration against local ephemeral server + dev ADB, not `oci.cloudstore893.com`, unless you point `BASE_URL` there deliberately
 
 ---
@@ -359,7 +404,9 @@ Integration tests do **not** cover Android UI (e.g. add-item error display); val
 | `POST /api/cart/barcode → 404` on unknown barcode | Expected | Non-destructive API test uses `does-not-exist-xyz` |
 | Auth passes, API cart routes → 500 | ORDS down or schema not enabled | `npm run dev:up` probe; fix ORDS enablement |
 | Summary shows `integration 0 1` | Sub-suite crashed before `== done (auth/api):` | Scroll up for server startup or ORDS errors |
-| `invalid_redirect_uri` on tablet Oracle sign-in | LAN IP not in IdP redirect list | Run `idp-update-redirect-uris.sh` with `APP_PUBLIC_HOST=<Mac LAN IP>` |
+| `invalid_redirect_uri` on tablet Oracle sign-in | Wrong host in APK or missing redirect URI | Dev OCI: rebuild with `API_BASE_URL=https://dev.oci.cloudstore893.com/`; local: `idp-update-redirect-uris.sh` + `APP_PUBLIC_HOST=<LAN IP>` |
+| Tablet hits prod IdP (`cloud-store-apps`) | APK built without dev `API_BASE_URL` | `API_BASE_URL=https://dev.oci.cloudstore893.com/ ./RebuildReinstall.sh` |
+| `ios-admin-portrait.test.js` sync SyntaxError | `node` invoked on bash wrapper | Use `scripts/ios/sync-portrait-resources.js` in test `before` hook |
 | `curl build-info` shows `unknown` locally | No `BUILD_ID` at start | Normal for `npm run dev:up`; set `BUILD_ID=…` when testing deploy parity |
 | Destructive test aborts | Interactive prompt | Use `SKIP_CONFIRM=yes` or `SKIP_DESTRUCTIVE=yes` |
 
@@ -370,7 +417,7 @@ Integration tests do **not** cover Android UI (e.g. add-item error display); val
 1. **Pure functions in `lib/`** → add `test/<module>.test.js`, run `npm test`.
 2. **New HTTP route** → extend `scripts/test-auth-protection.sh` and/or `scripts/test-api-curl.sh` (prefer non-destructive checks in the read-only section). Inventory/stock behavior → `scripts/test-inventory-api.sh`.
 3. **Model B behavior** → extend the opt-in scripts under `scripts/test-cashier-approval-*.sh`.
-4. **OCI deploy** → [oci-deploy.md](oci-deploy.md); verify with curl / optional `test-api-curl.sh` against live URL.
+4. **OCI deploy / dev IdP** → [oci-deploy.md](oci-deploy.md), [oci-dev-environment.md](oci-dev-environment.md); verify with curl + optional `test-api-curl.sh` against live URL.
 5. **CI** → unit tests run automatically; integration picks up changes to curl scripts when secrets are configured.
 
 Keep destructive DB writes out of the default `npm run test:all` path so daily runs stay safe against shared dev ADB.
