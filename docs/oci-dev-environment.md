@@ -88,20 +88,37 @@ Follow [oci-load-balancer-https.md](oci-load-balancer-https.md) for `dev.oci.clo
 
 ### 5. IdP (automated dev bootstrap)
 
-Creates a new **External Active User** domain `cloud-store-app-N` (auto-increment), user `ltm893@icloud.com` (override in `.env.dev`), and both OIDC apps:
+Creates a new **External Active User** domain `cloud-store-app-N` (auto-increment) in compartment **`cloud-store-dev`**, user `ltm893@icloud.com` (override in `.env.dev`), groups, and both OIDC apps. Writes `.env.dev` and can push IdP env to the dev container.
 
 ```bash
 cp .env.dev.example .env.dev   # optional
 ./scripts/oci/idp/bootstrap-dev.sh --apply
 ```
 
-Save the **generated password** printed at the end. Details: [scripts/oci/idp/README.md](../scripts/oci/idp/README.md).
+Save the **generated password** printed at the end (or reset via Oracle later). Details: [scripts/oci/idp/README.md](../scripts/oci/idp/README.md).
 
-Manual redirect-only (existing domain):
+**Manual step (if `groups` claim missing):** OCI Console → domain → token issuance → include `groups` in the ID token.
+
+**After workload destroy:** Identity Domains are **not** Terraform-managed — `cloud-store-app-1` survives `./scripts/oci/terraform-destroy-workloads-dev.sh`. Rebuild infra, then reuse the domain:
+
+```bash
+./scripts/oci/deploy-dev.sh
+CLOUD_STORE_ENV=dev ./scripts/oci/dev-dns-a-record.sh
+./scripts/sync-env-dev.sh
+./scripts/oci/idp/bootstrap-dev.sh --resume --apply
+```
+
+Manual redirect-only (existing domain, URIs out of date):
 
 ```bash
 export IDP_DOMAIN_ENDPOINT="https://idcs-....identity.us-ashburn-1.oci.oraclecloud.com"
 ./scripts/oci/idp-update-redirect-uris-dev.sh
+```
+
+Verify OAuth uses the **dev** issuer (not prod `cloud-store-apps`):
+
+```bash
+curl -sk "https://dev.oci.cloudstore893.com/oauth/login" -I | grep -i location
 ```
 
 ### 6. Tablet
@@ -162,7 +179,11 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder   # macOS local ca
 | Task | Dev command |
 |------|-------------|
 | App code deploy | `./scripts/oci/redeploy-app-code-dev.sh "what changed"` |
+| IdP bootstrap (greenfield) | `./scripts/oci/idp/bootstrap-dev.sh --apply` |
+| IdP after destroy (reuse domain) | `./scripts/oci/idp/bootstrap-dev.sh --resume --apply` |
 | Env / IdP flags | `./scripts/oci/sync-container-env-to-terraform-dev.sh` → `./scripts/oci/terraform-apply-container-dev.sh` |
+| Destroy workloads (keep compartment + IdP) | `./scripts/oci/terraform-destroy-workloads-dev.sh` |
+| List compartment resources | `./scripts/oci/list-resources.sh --dev` |
 | DNS A record | `CLOUD_STORE_ENV=dev ./scripts/oci/dev-dns-a-record.sh` |
 | Live URL | `CLOUD_STORE_ENV=dev ./scripts/oci/confirm-public-url.sh` |
 | Promote to prod | `./scripts/oci/redeploy-app-code.sh "same label"` |

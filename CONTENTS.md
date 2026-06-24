@@ -413,7 +413,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 ## Security / IdP roadmap
 
 - **Phase 1 (in repo):** Cashier session cookies + optional ingress CIDR lockdown — see [docs/idp-setup.md](docs/idp-setup.md).
-- **Phase 2 (OCI Console):** Separate Identity Domain + OIDC clients for POS and admin.
+- **Phase 2 (IdP):** **Dev** — automated via `./scripts/oci/idp/bootstrap-dev.sh` ([scripts/oci/idp/README.md](scripts/oci/idp/README.md), [docs/oci-dev-environment.md](docs/oci-dev-environment.md)). **Prod** — separate Identity Domain + OIDC clients in OCI Console ([docs/idp-setup.md](docs/idp-setup.md)).
 - **Phase 3 (feature branch `feature/cashier-supervisor-approval`):** IdP cashier login + **supervisor approval** before session — **steps 1–8 implemented** (server, web POS, admin panel, Android tablet). Living doc: [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md). **Remaining:** OCI IdM group claims in console (step 9). Automated tests + CI: [docs/testing.md](docs/testing.md) (step 10).
 - **Start over (Level 1):** [docs/idp-level1-reset.md](docs/idp-level1-reset.md) — delete/recreate integrated apps only.
 

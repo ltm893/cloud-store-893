@@ -28,6 +28,7 @@ Terraform state and `terraform/terraform.tfvars` must already exist (greenfield:
 | `.env` flags (Model B, IdP, session secure, TTL) | `sync-container-env-to-terraform.sh` → `terraform-apply-container.sh` | `sync-container-env-to-terraform-dev.sh` → `terraform-apply-container-dev.sh` |
 | PINs only | Edit `terraform/terraform.tfvars` → `terraform apply` | Edit `terraform/terraform.dev.tfvars` → dev apply script |
 | New DB tables / ORDS endpoints | Schema step below, then redeploy app | Same DDL on **dev ADB first**, then redeploy dev, then prod |
+| Oracle IdP (greenfield) | Manual Console — [idp-setup.md](idp-setup.md) | `./scripts/oci/idp/bootstrap-dev.sh --apply` |
 | Oracle IdP redirect URIs | `./scripts/oci/idp-update-redirect-uris.sh` | `./scripts/oci/idp-update-redirect-uris-dev.sh` |
 | Tablet Kotlin UI or API client | Rebuild APK + redeploy server if APIs changed | Point APK at dev URL (see [oci-dev-environment.md](oci-dev-environment.md)) |
 
