@@ -2,7 +2,7 @@
 
 Pre-production stack at **`https://dev.oci.cloudstore893.com/`** — separate compartment, ADB, VCN, and load balancer from prod (`oci.cloudstore893.com`).
 
-Related: [oci-deploy.md](oci-deploy.md) (prod + shared deploy procedures), [oci-load-balancer-https.md](oci-load-balancer-https.md) (TLS), [versioning.md](versioning.md) (promote dev → prod).
+Related: [oci-deploy.md](oci-deploy.md) (prod + shared deploy procedures), [oci-load-balancer-https.md](oci-load-balancer-https.md) (TLS), [versioning.md](versioning.md) (promote dev → prod), [developer-handoff.md](developer-handoff.md) (onboard a second developer).
 
 ---
 
