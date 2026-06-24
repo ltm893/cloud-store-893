@@ -36,7 +36,7 @@ Two **separate** app sessions — cashier (POS) and admin — each with its own 
 - **Public:** `GET /api/products` (catalog only).
 - **Local dev:** PINs and IdP settings in **`.env`** (see `.env.example`).
 - **OCI container:** PINs from **`terraform.tfvars`** (`cashier_pin`, `admin_pin`); IdP vars are **not** copied from `.env` automatically — add them via Terraform or the container console, then re-apply/restart.
-- **IdP:** Optional Oracle Identity Domain confidential clients; redirect URIs must match `APP_PUBLIC_URL` / callback paths on the host you deploy. Details: [docs/idp-setup.md](docs/idp-setup.md), app reset: [docs/idp-level1-reset.md](docs/idp-level1-reset.md).
+- **IdP:** Oracle Identity Domain confidential clients; redirect URIs must match deploy hostname. **Prod:** manual setup — [docs/idp-setup.md](docs/idp-setup.md). **Dev:** automated bootstrap — [docs/oci-dev-environment.md](docs/oci-dev-environment.md) § IdP, [scripts/oci/idp/README.md](scripts/oci/idp/README.md). App reset: [docs/idp-level1-reset.md](docs/idp-level1-reset.md).
 
 With IdP configured, `IDP_ALLOW_PIN=true` (default) keeps PIN login available alongside Oracle sign-in. With Model B enabled, PIN unlock is blocked (`403`) and IdP sign-in is required.
 
@@ -163,11 +163,21 @@ The username format is: `<object_storage_namespace>/<your_email>`
 
 ## Tear down workloads (compartment kept)
 
+**Prod:**
+
 ```bash
 ./scripts/oci/terraform-destroy-workloads.sh
 ```
 
-Removes Terraform-managed **workloads** in the `cloud-store` compartment (default
+**Dev:**
+
+```bash
+./scripts/oci/terraform-destroy-workloads-dev.sh
+```
+
+Identity Domains (e.g. `cloud-store-app-1`) are **not** removed by these scripts. See [docs/oci-dev-environment.md](docs/oci-dev-environment.md) for dev rebuild with `--resume`.
+
+Removes Terraform-managed **workloads** in the project compartment (default
 `project_name`; change in `terraform.tfvars` if needed). The **compartment is not
 destroyed** (`lifecycle { prevent_destroy = true }` in `terraform/compartment.tf`).
 Targets are derived from `terraform state list`, so you do not maintain a static

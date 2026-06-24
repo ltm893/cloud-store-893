@@ -145,6 +145,10 @@ See [docs/oci-deploy.md](../docs/oci-deploy.md) for the full decision table. Qui
 | `wait-for-app-health.sh` | Poll until `GET /api/build-info` returns 200 |
 | `idp-update-redirect-uris.sh` | Add OAuth redirect URIs for prod hostname |
 | `idp-update-redirect-uris-dev.sh` | Add dev hostname URIs (keeps prod intact) |
+| `idp/bootstrap-dev.sh` | Automated dev Identity Domain + OIDC apps + `.env.dev` |
+| `idp-bootstrap-dev.sh` | Wrapper for `idp/bootstrap-dev.sh` |
+| `terraform-destroy-workloads-dev.sh` | Destroy dev workloads; keep compartment (+ IdP domain) |
+| `list-resources-dev.sh` | List resources in `cloud-store-dev` compartment |
 | `deploy-cert-renew-function.sh` | Build/push cert-renew OCI Function image |
 | `seed-certbot-state.sh` | Upload local certbot state to Object Storage |
 | `invoke-cert-renew-function.sh` | Invoke cert renew (smoke/dry-run/force) |
@@ -152,7 +156,7 @@ See [docs/oci-deploy.md](../docs/oci-deploy.md) for the full decision table. Qui
 | `terraform-destroy-workloads.sh` | Destroy workloads; keep compartment |
 | `terraform-recover-workload-state.sh` | Remove stuck workload addresses from TF state |
 | `oci-costs.sh` | OCI spend by service/compartment/date range |
-| `list-resources.sh` | List all resources in project compartment |
+| `list-resources.sh` | List resources in project compartment (prompts prod/dev) |
 | `prune-ocir-images.sh` | Delete stale OCIR images (dry-run by default) |
 | `sync-systems-manifest.sh` | Write `data/systems-oci-resources.json` for Systems tab |
 | `bootstrap-dev-tfvars.sh` | Copy OCI auth from prod tfvars into dev tfvars |
