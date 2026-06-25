@@ -19,9 +19,13 @@ struct SaleTotalsPanel: View {
     }
 
     private var taxAmount: Double {
-        let salesFee = totals.itemPreTax * salesFeeRate
-        let taxable = totals.itemPreTax + salesFee
-        return CartTotalsLogic.roundMoney(taxable * taxRate)
+        CartTotalsLogic.computeTaxAmount(
+            cart: cart,
+            customerLinked: customerLinked,
+            customerDiscount: customerDiscount,
+            salesFeeRate: salesFeeRate,
+            taxRate: taxRate
+        )
     }
 
     private var grandTotal: Double {

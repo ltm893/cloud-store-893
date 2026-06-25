@@ -38,7 +38,8 @@ locals {
     SYSTEMS_TLS_HOSTNAME       = var.lb_public_hostname != "" ? var.lb_public_hostname : ""
     SYSTEMS_COMPARTMENT_NAME   = var.project_name
     SYSTEMS_COMPARTMENT_OCID   = oci_identity_compartment.main.id
-    SYSTEMS_CONTAINER_OCID       = oci_container_instances_container_instance.main.id
+    # Container OCID omitted — referencing main.id here creates a Terraform cycle
+    # (env vars are inputs to the same resource). Name is enough for /admin systems UI.
     SYSTEMS_CONTAINER_NAME       = "container-instance-${var.project_name}"
     SYSTEMS_ADB_OCID             = oci_database_autonomous_database.main.id
     SYSTEMS_ADB_NAME             = oci_database_autonomous_database.main.display_name
@@ -51,7 +52,7 @@ locals {
       for ip in oci_load_balancer_load_balancer.main[0].ip_address_details : ip.ip_address if ip.is_public
     ]) : ""
     SYSTEMS_LB_CERT_OCID = var.lb_certificate_ocid != "" ? var.lb_certificate_ocid : ""
-    SYSTEMS_LB_CERT_NAME = var.lb_certificate_ocid != "" ? "oci-cloudstore893-com" : ""
+    SYSTEMS_LB_CERT_NAME = var.lb_certificate_ocid != "" ? replace(var.lb_public_hostname, ".", "-") : ""
   }
 
   container_environment_variables = merge(

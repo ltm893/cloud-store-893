@@ -7,72 +7,156 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="topbar">
-    <button type="button" id="menuBtn" class="menu-btn" aria-label="Menu">☰</button>
-    <h1>Cloud Store 893 POS</h1>
-    <nav id="appMenu" class="app-menu" hidden>
-      <button type="button" id="toggleStatusBtn">Show status</button>
-      <a href="/admin/">Admin</a>
-    </nav>
-    <div id="status" class="status">Ready</div>
-  </header>
-
-  <div id="pinGate" class="pin-gate" hidden>
-    <div class="pin-card">
+  <div id="pinGate" class="auth-overlay" hidden>
+    <div class="auth-card auth-card--narrow">
       <h2>Cashier sign-in</h2>
       <div id="pinSignInBlock">
-        <p class="pin-hint">Enter store PIN</p>
-        <input id="pinInput" type="password" inputmode="numeric" autocomplete="off" maxlength="8" />
-        <button type="button" id="pinSubmitBtn">Sign in</button>
+        <p class="auth-hint">Enter store PIN</p>
+        <div id="pinDisplay" class="pin-display" aria-live="polite">••••</div>
+        <div id="pinNumpad" class="numpad numpad--compact"></div>
+        <button type="button" id="pinSubmitBtn" class="btn btn-teal">Done</button>
       </div>
-      <p id="signInIdpHint" class="pin-hint" hidden>Sign in with your store account to open the register.</p>
-      <p class="pin-hint"><a id="idpLoginLink" href="/oauth/login" hidden>Sign in with store account (Oracle)</a></p>
-      <p id="pinError" class="pin-error" hidden></p>
+      <p id="signInIdpHint" class="auth-hint" hidden>Sign in with your store account to open the register.</p>
+      <p class="auth-hint"><a id="idpLoginLink" href="/oauth/login" hidden>Sign in with store account (Oracle)</a></p>
+      <p id="pinError" class="auth-error" hidden></p>
     </div>
   </div>
 
-  <div id="approvalGate" class="pin-gate" hidden>
-    <div class="pin-card approval-card">
+  <div id="tillGate" class="auth-overlay" hidden>
+    <div class="auth-card till-card">
+      <h2>Count opening till</h2>
+      <p id="tillTarget" class="auth-hint"></p>
+      <div id="tillDenomList" class="till-denom-list"></div>
+      <p id="tillSummary" class="till-summary"></p>
+      <button type="button" id="tillSubmitBtn" class="btn btn-teal">Submit for approval</button>
+      <button type="button" id="tillCreditOnlyBtn" class="btn btn-outline">Credit cards only</button>
+      <button type="button" id="tillCancelBtn" class="btn btn-outline">Cancel</button>
+      <p id="tillError" class="auth-error" hidden></p>
+    </div>
+  </div>
+
+  <div id="approvalGate" class="auth-overlay" hidden>
+    <div class="auth-card approval-card">
       <h2>Waiting for supervisor</h2>
-      <p id="approvalLead" class="pin-hint">Your login request was sent. A supervisor must approve before you can use the register.</p>
-      <p id="approvalCashier" class="pin-hint"></p>
-      <p id="approvalTimer" class="pin-hint"></p>
-      <p id="approvalPollStatus" class="pin-hint approval-poll-status">Checking approval status…</p>
-      <button type="button" id="approvalCancelBtn" class="btn-secondary">Cancel request</button>
-      <p id="approvalError" class="pin-error" hidden></p>
+      <p id="approvalLead" class="auth-hint">Your login request was sent. A supervisor must approve before you can use the register.</p>
+      <p id="approvalCashier" class="auth-hint"></p>
+      <p id="approvalTimer" class="auth-hint"></p>
+      <p id="approvalPollStatus" class="auth-hint approval-poll-status">Checking approval status…</p>
+      <button type="button" id="approvalCancelBtn" class="btn btn-outline">Cancel request</button>
+      <p id="approvalError" class="auth-error" hidden></p>
     </div>
   </div>
 
-  <main class="pos-layout">
-    <section>
-      <h2>Products</h2>
-      <div id="products" class="products-grid"></div>
-    </section>
-
-    <aside class="cart-panel">
-      <h2>Current Sale</h2>
-      <label for="customerSelect" class="field-label">Customer</label>
-      <select id="customerSelect" class="customer-select"></select>
-      <div id="cart"></div>
-      <div class="cart-footer">
-        <div id="total" class="total"></div>
-        <label for="paymentMethod">Payment</label>
-        <select id="paymentMethod">
-          <option value="card">Card</option>
-          <option value="cash">Cash</option>
-          <option value="mobile">Mobile Pay</option>
-        </select>
-        <button id="checkoutBtn" class="checkout">Complete Sale</button>
+  <div id="appShell" class="app-shell" hidden>
+    <header class="pos-header">
+      <button type="button" id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
+      <h1 class="pos-title">Cloud Store 893 POS</h1>
+      <div class="pos-header-meta">
+        <span id="headerUser" class="header-user"></span>
+        <span id="headerBuild" class="header-build"></span>
       </div>
-    </aside>
-  </main>
+    </header>
 
-  <section class="history-wrap">
-    <h2>Recent Sales</h2>
-    <div id="salesHistory"></div>
-  </section>
+    <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
+    <nav id="drawer" class="drawer" hidden aria-label="Menu">
+      <h2 class="drawer-title">Menu</h2>
+      <button type="button" id="toggleStatusBtn" class="drawer-btn">Show status</button>
+      <button type="button" id="findCustomerBtn" class="drawer-btn">Find customer</button>
+      <button type="button" id="signOutBtn" class="drawer-btn">Sign out</button>
+      <a href="/admin/" class="drawer-btn drawer-link">Admin</a>
+    </nav>
+
+    <main class="pos-main">
+      <section class="pos-left card-content">
+        <div id="salePanel">
+          <label class="field-label" for="barcodeInput">Scan / Add Id</label>
+          <input id="barcodeInput" class="barcode-input" type="text" inputmode="numeric" autocomplete="off" />
+          <div class="scan-row">
+            <button type="button" id="scanBtn" class="btn btn-teal btn-half" disabled>Scan</button>
+            <button type="button" id="addBarcodeBtn" class="btn btn-teal btn-half" disabled>Add</button>
+          </div>
+          <p id="addItemError" class="inline-error" hidden></p>
+          <hr class="divider" />
+          <h2 class="section-title">Current Sale</h2>
+          <div id="linkedCustomerRow" class="linked-customer" hidden>
+            <span id="linkedCustomerName"></span>
+            <button type="button" id="unlinkCustomerBtn" class="text-btn">Unlink</button>
+          </div>
+          <div id="cart" class="cart-list"></div>
+          <div id="paymentsReceived" class="payments-received" hidden></div>
+          <div class="totals-strip">
+            <h3 class="section-title">Sale Total</h3>
+            <div id="saleTotals" class="sale-totals"></div>
+          </div>
+        </div>
+        <div id="receiptPanel" class="receipt-panel" hidden>
+          <h2 class="section-title">Sale complete</h2>
+          <div id="receiptBody"></div>
+          <button type="button" id="newSaleBtn" class="btn btn-teal">New sale</button>
+        </div>
+      </section>
+
+      <aside class="pos-right">
+        <div id="statusPanel" class="card-numpad status-panel" hidden>
+          <h3 class="section-title">Register status</h3>
+          <div id="statusPanelBody" class="status-body"></div>
+        </div>
+
+        <div id="rightPanel" class="card-numpad right-panel">
+          <div id="barcodeNumpadPanel">
+            <div id="qtyEditHeader" class="qty-edit-header" hidden></div>
+            <div id="saleNumpad" class="numpad"></div>
+          </div>
+          <div id="customerFindPanel" class="customer-find" hidden>
+            <div class="panel-head">
+              <button type="button" id="customerFindBackBtn" class="text-btn">Back</button>
+              <span class="panel-head-title">Find customer</span>
+            </div>
+            <input id="customerSearchInput" class="barcode-input" type="search" placeholder="Name, email, phone, or ID" />
+            <div id="customerResults" class="customer-results"></div>
+          </div>
+          <div id="checkoutPanel" class="checkout-panel" hidden>
+            <div class="panel-head">
+              <button type="button" id="checkoutBackBtn" class="text-btn">Back</button>
+              <span class="panel-head-title">Payment</span>
+            </div>
+            <div id="checkoutAmounts" class="checkout-amounts"></div>
+            <div id="quickBills" class="quick-bills"></div>
+            <div id="checkoutNumpad" class="numpad numpad--checkout"></div>
+            <div class="checkout-actions">
+              <button type="button" id="payCashBtn" class="btn btn-teal">Cash</button>
+              <button type="button" id="payCardBtn" class="btn btn-teal">Charge Card</button>
+              <button type="button" id="payCardOnFileBtn" class="btn btn-teal" hidden>CardOnFile</button>
+            </div>
+          </div>
+        </div>
+
+        <button type="button" id="payBtn" class="btn btn-teal btn-pay">Pay</button>
+      </aside>
+    </main>
+
+    <div id="statusToast" class="status-toast" role="status"></div>
+  </div>
+
+  <div id="processingOverlay" class="auth-overlay processing-overlay" hidden>
+    <div class="auth-card processing-card">
+      <p id="processingMessage">Processing…</p>
+      <div class="progress-bar"><div id="processingProgress" class="progress-fill"></div></div>
+    </div>
+  </div>
+
+  <div id="cardOnFileDialog" class="auth-overlay" hidden>
+    <div class="auth-card auth-card--narrow">
+      <h2>Confirm CardOnFile</h2>
+      <p id="cardOnFileText" class="auth-hint"></p>
+      <button type="button" id="cardOnFileConfirmBtn" class="btn btn-teal">Charge card on file</button>
+      <button type="button" id="cardOnFileCancelBtn" class="btn btn-outline">Cancel</button>
+    </div>
+  </div>
 
   <script src="/shared/dom-utils.js"></script>
+  <script src="/pos-math.js"></script>
+  <script src="/pos-register.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

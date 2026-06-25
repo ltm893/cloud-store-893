@@ -16,7 +16,7 @@ After replace:
 - Oracle assigns a **new ephemeral public IP** on the new VNIC.
 - A **reserved public IP does not reattach automatically** — it moves to lifecycle state `AVAILABLE` until you assign it to the new primary private IP.
 
-**Does not change IP:** `./scripts/oci/restart-container-instance.sh` (same instance; reserved IP stays attached).
+**Does not deploy new code:** `./scripts/oci/restart-container-instance.sh` (same cached image digest). Use `redeploy-app-code.sh` for new app code.
 
 **Warns before replace:** `./scripts/oci/terraform-apply-container.sh`, `./scripts/oci/deploy-app-oci.sh`, and `./scripts/oci/sync-container-env-to-terraform.sh` (via `scripts/oci/lib/oci-ip-warn.sh`).
 
@@ -210,5 +210,5 @@ Implemented scripts and hooks (see sections above for manual CLI equivalent):
 | `oci.cloudstore893.com` timeout after apply | Reserved IP detached | `oci network public-ip get --public-ip-id $RESERVED_OCID` → state `AVAILABLE` |
 | `confirm-public-url.sh` → `NotAuthorizedOrNotFound` | Stale `CLOUD_STORE_OCID` | `unset CLOUD_STORE_OCID` or `cloud-store-refresh-ocid` |
 | OAuth redirect mismatch | IdP URIs for old IP | Browse via hostname; update IdCS |
-| `404` on `/api/cashier/unlock` | Stale container image | `restart-container-instance.sh` or redeploy image |
+| `404` on `/api/cashier/unlock` | Stale container image | `redeploy-app-code.sh` or `redeploy-app-code-dev.sh` |
 | Ephemeral IP works, hostname does not | Reserved IP not attached | `./scripts/oci/reattach-reserved-ip.sh` |

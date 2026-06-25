@@ -11,7 +11,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TF_DIR="$(cd "$SCRIPT_DIR/../../terraform" && pwd)"
+
+# shellcheck source=lib/terraform-env.sh
+source "$PROJECT_ROOT/scripts/oci/lib/terraform-env.sh"
+cloud_store_resolve_tf_env "$PROJECT_ROOT"
 
 APP_URL=""
 EXPECTED_BUILD_ID=""
@@ -66,7 +71,7 @@ wait_for_container_running() {
   fi
 
   local instance_ocid container_ocid details exit_code restarts elapsed=0 limit=120
-  instance_ocid="$(cd "$TF_DIR" && terraform output -raw container_instance_ocid 2>/dev/null || true)"
+  instance_ocid="$(cloud_store_tf_output container_instance_ocid 2>/dev/null || true)"
   if [[ -z "$instance_ocid" ]]; then
     return 0
   fi

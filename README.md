@@ -1,15 +1,13 @@
 # Cloud Store 893
 
-A containerized Node.js shopping cart deployed on Oracle Cloud Infrastructure (OCI).
+Is an open source containerized Node.js Point of Sale System running Oracle Cloud Infrastructure (OCI).
 
 
 ---
 
 ## Project Overview
 
-A simple Express.js shopping cart with product listing, cart management, and an
-Autonomous Database (ATP) backend via ORDS. The app is fully containerized with Docker
-and all OCI infrastructure is managed by Terraform.
+The Point of Sale system features an Android and Ipad cash register integrated with supervisor approvals via push notifications. Along with an Andorid, IOS and Web Admin console to access tables and predefined reports. The data flows through through Oracle Rest Data Service ORDS into am Autonomous Database and secured with Oracle Identity and Access Management (IAM).
 
 **Stack:**
 - Node.js + Express (backend)
@@ -17,6 +15,7 @@ and all OCI infrastructure is managed by Terraform.
 - Kotlin + Jetpack Compose (Samsung tablet POS in `android-pos/`)
 - Docker / Colima (containerization)
 - Terraform (infrastructure as code)
+- OCI Identity and Access Management
 - OCI Container Registry (image storage)
 - OCI Container Instances — CI.Standard.A1.Flex (Always Free, ARM64)
 - OCI Autonomous Database ATP (Always Free, ORDS API)
@@ -37,9 +36,16 @@ Two **separate** app sessions — cashier (POS) and admin — each with its own 
 - **Public:** `GET /api/products` (catalog only).
 - **Local dev:** PINs and IdP settings in **`.env`** (see `.env.example`).
 - **OCI container:** PINs from **`terraform.tfvars`** (`cashier_pin`, `admin_pin`); IdP vars are **not** copied from `.env` automatically — add them via Terraform or the container console, then re-apply/restart.
-- **IdP:** Optional Oracle Identity Domain confidential clients; redirect URIs must match `APP_PUBLIC_URL` / callback paths on the host you deploy. Details: [docs/idp-setup.md](docs/idp-setup.md), app reset: [docs/idp-level1-reset.md](docs/idp-level1-reset.md).
+- **IdP:** Oracle Identity Domain confidential clients; redirect URIs must match deploy hostname. **Prod:** manual setup — [docs/idp-setup.md](docs/idp-setup.md). **Dev:** automated bootstrap — [docs/oci-dev-environment.md](docs/oci-dev-environment.md) § IdP, [scripts/oci/idp/README.md](scripts/oci/idp/README.md). App reset: [docs/idp-level1-reset.md](docs/idp-level1-reset.md).
 
 With IdP configured, `IDP_ALLOW_PIN=true` (default) keeps PIN login available alongside Oracle sign-in. With Model B enabled, PIN unlock is blocked (`403`) and IdP sign-in is required.
+
+---
+
+## Development
+
+Cloud Store 893 is built and maintained by [ltm893](https://github.com/ltm893) with the assitance of 
+[Cursor](https://cursor.com) AI agent. What ships are human-led. Cursor helps with architecture options,code, refactors, tests, and documentation as a pair-programming partner.
 
 ---
 
@@ -65,7 +71,6 @@ Full Terraform documentation (file layout, dependency graph, outputs, workload t
 ### 2. Run the deploy script
 
 ```bash
-chmod +x scripts/oci/deploy.sh   # first time only
 ./scripts/oci/deploy.sh
 ```
 
@@ -107,7 +112,6 @@ this automatically.
 ### Install
 
 ```bash
-chmod +x scripts/install-sqlcl.sh   # first time only
 ./scripts/install-sqlcl.sh
 ```
 
@@ -159,11 +163,21 @@ The username format is: `<object_storage_namespace>/<your_email>`
 
 ## Tear down workloads (compartment kept)
 
+**Prod:**
+
 ```bash
 ./scripts/oci/terraform-destroy-workloads.sh
 ```
 
-Removes Terraform-managed **workloads** in the `cloud-store` compartment (default
+**Dev:**
+
+```bash
+./scripts/oci/terraform-destroy-workloads-dev.sh
+```
+
+Identity Domains (e.g. `cloud-store-app-1`) are **not** removed by these scripts. See [docs/oci-dev-environment.md](docs/oci-dev-environment.md) for dev rebuild with `--resume`.
+
+Removes Terraform-managed **workloads** in the project compartment (default
 `project_name`; change in `terraform.tfvars` if needed). The **compartment is not
 destroyed** (`lifecycle { prevent_destroy = true }` in `terraform/compartment.tf`).
 Targets are derived from `terraform state list`, so you do not maintain a static
@@ -262,7 +276,7 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 2. **`.env` for sync** — `APP_PUBLIC_URL_FROM_REQUEST=true`; keep `APP_PUBLIC_URL` for local dev only (same host as step 1 is optional on OCI).
 3. **Push env via Terraform (once per env change)** — `./scripts/oci/sync-container-env-to-terraform.sh` then `./scripts/oci/terraform-apply-container.sh` (warns before replace/new IP). Then run the **network recovery** steps in [docs/oci-network-recovery.md](docs/oci-network-recovery.md) — **do not** apply again just to “fix” the URL.
 4. **Oracle Identity** — prefer hostname redirect URIs on `oci.cloudstore893.com`; use `./scripts/oci/idp-update-redirect-uris.sh` when adding IPs or after hostname changes.
-5. **App code** — `./scripts/oci/redeploy-app-code.sh` (build, push, restart; does not change IP). Required for Model B fields on `/api/admin/session`.
+5. **App code** — `./scripts/oci/redeploy-app-code.sh "label"` (build, push unique tag, terraform apply). See [docs/oci-deploy.md](docs/oci-deploy.md). Pre-prod: `./scripts/oci/redeploy-app-code-dev.sh "label"`.
 6. **Verify:**
    ```bash
    APP=$(./scripts/oci/confirm-public-url.sh)
@@ -288,10 +302,14 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 
 **Full guide:** [docs/oci-deploy.md](docs/oci-deploy.md) — decision table (code vs env vs DB vs IdP vs tablet), verify steps, troubleshooting.
 
-**App code only** (preferred — keeps public IP). Requires a short deploy label; see [docs/versioning.md](docs/versioning.md) for PR → deploy workflow.
+**App code only.** Requires a short deploy label; see [docs/versioning.md](docs/versioning.md). Pre-prod: [docs/oci-dev-environment.md](docs/oci-dev-environment.md).
 
 ```bash
+# Production:
 ./scripts/oci/redeploy-app-code.sh "describe this deploy"
+
+# Pre-production (dev stack):
+./scripts/oci/redeploy-app-code-dev.sh "describe this deploy"
 ```
 
 Quick verify (expect **200**, not **404** on unlock):
@@ -306,12 +324,13 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 | What changed | Command |
 |--------------|---------|
-| Server / admin UI | `redeploy-app-code.sh` |
+| Server / admin UI (prod) | `redeploy-app-code.sh "label"` |
+| Server / admin UI (dev) | `redeploy-app-code-dev.sh "label"` |
 | `.env` / IdP / Model B flags | `sync-container-env-to-terraform.sh` → `terraform-apply-container.sh` |
 | DB schema | `reset-db.sh` or manual SQL — see [oci-deploy.md](docs/oci-deploy.md#3-database-schema) |
 | Tablet APK | `android-pos/RebuildReinstall.sh` |
 
-**Env apply** may replace the instance (detach reserved IP): [docs/oci-network-recovery.md](docs/oci-network-recovery.md). **New image tag via Terraform:** `./scripts/oci/deploy-app-oci.sh <tag>`.
+**Env apply** may replace the instance (detach reserved IP): [docs/oci-network-recovery.md](docs/oci-network-recovery.md). **App code deploy** also replaces the instance when the image tag changes; prod may need `reattach-reserved-ip.sh`, dev auto-syncs DNS.
 
 ---
 

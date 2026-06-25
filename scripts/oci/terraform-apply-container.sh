@@ -12,7 +12,10 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TF_DIR="$PROJECT_ROOT/terraform"
+# shellcheck source=lib/terraform-env.sh
+source "$PROJECT_ROOT/scripts/oci/lib/terraform-env.sh"
+cloud_store_resolve_tf_env "$PROJECT_ROOT"
+TF_DIR="$CLOUD_STORE_TF_DIR"
 OCI_SCRIPTS="$PROJECT_ROOT/scripts/oci"
 MODE="apply"
 YES=""
@@ -52,11 +55,11 @@ if [[ "$plan_signal" -eq 1 ]]; then
 fi
 
 cd "$TF_DIR"
-echo "==> Running terraform apply (container env + networking; may take several minutes)..."
+echo "==> Running terraform apply ($(cloud_store_env_label); container env + networking; may take several minutes)..."
 if [[ "$YES" == "--yes" ]]; then
-  terraform apply -auto-approve
+  cloud_store_tf apply -auto-approve
 else
-  terraform apply
+  cloud_store_tf apply
 fi
 echo "==> Terraform apply finished."
 

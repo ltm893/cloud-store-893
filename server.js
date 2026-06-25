@@ -14,10 +14,6 @@ app.use(express.json());
 
 const { getBuildInfo } = require('./lib/build-info');
 
-app.get('/api/build-info', (req, res) => {
-  res.json(getBuildInfo());
-});
-
 const { registerSystemsRoutes } = require('./lib/systems-routes');
 registerSystemsRoutes(app);
 
@@ -87,6 +83,10 @@ const {
 const { posRatesFromEnv } = require('./lib/pos-pricing');
 
 const POS_RATES = posRatesFromEnv();
+
+app.get('/api/build-info', (req, res) => {
+  res.json({ ...getBuildInfo(), posRates: POS_RATES });
+});
 
 /** Post sales row; retry without cash-rounding columns when DB migration is not applied yet. */
 async function postSaleRow(payload) {
@@ -212,6 +212,7 @@ function enrichCartRow(row, linked893) {
     unitPricePayable: unitPay,
     lineSubtotalPublic: linePublic,
     lineSubtotalPayable: linePay,
+    taxExempt: Number(row.tax_exempt) === 1,
   };
 }
 
@@ -525,7 +526,10 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
   const { productsById, rulesByType } = validation;
 
   const settlement = resolveCheckoutSettlement({
-    subtotalPayable: summary.subtotalPayable,
+    cartItems: summary.items.map((it) => ({
+      lineSubtotalPayable: it.lineSubtotalPayable,
+      taxExempt: !!it.taxExempt,
+    })),
     paymentMethod,
     rawPayments: req.body?.payments ?? null,
     clientCheckoutTotal,
