@@ -23,19 +23,34 @@ wallet/
 *.p12
 *.sso
 
+# Generated OCI inventory for admin Platform tab (scripts/oci/sync-systems-manifest.sh)
+data/systems-oci-resources.json
+
 # iOS build artifacts (archives and exported IPAs)
 build/archives/
 build/export/
 
 # Terraform - secrets and generated state
 terraform/terraform.tfvars
+terraform/terraform.dev.tfvars
 terraform/container_env.auto.tfvars
+terraform/container_env.prod.tfvars
+terraform/container_env.dev.tfvars
 terraform/lb_tls.auto.tfvars
 terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/terraform.tfstate.*.backup
+terraform/terraform.dev.tfstate
+terraform/terraform.dev.tfstate.backup
+terraform/terraform.dev.tfstate.*.backup
+
+# Dev OCI env (local ORDS pointer — optional)
+.env.dev
+
+# IdP dev bootstrap state (domain OCIDs — no passwords)
+scripts/oci/idp/state/
 
 # Stray Terraform state outside terraform/ (never commit)
 scripts/*.tfstate

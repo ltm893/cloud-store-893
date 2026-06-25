@@ -1,6 +1,21 @@
-# Identity roadmap — Phase 1 done in repo, Phase 2 in OCI Console
+# Identity roadmap — Phase 1 done in repo, Phase 2 in OCI
 
 **Starting over on IdP apps only?** Use **[idp-level1-reset.md](idp-level1-reset.md)** (delete/recreate `cloud-store-pos` + `cloud-store-admin`).
+
+## Dev: automated Identity Domain bootstrap
+
+For the **dev** stack (`cloud-store-dev` compartment, `dev.oci.cloudstore893.com`), use scripts instead of the Console steps below:
+
+```bash
+./scripts/oci/idp/bootstrap-dev.sh --apply          # greenfield (creates cloud-store-app-N)
+./scripts/oci/idp/bootstrap-dev.sh --resume --apply # after partial run or post-destroy rebuild
+```
+
+Creates domain, user, groups, OIDC apps (`cloud-store-pos`, `cloud-store-admin`), redirect URIs, `.env.dev`, and optionally syncs IdP env to the dev container. See [scripts/oci/idp/README.md](../scripts/oci/idp/README.md) and [oci-dev-environment.md](oci-dev-environment.md) § IdP.
+
+**Prod** (`cloud-store-apps` in `cloud-store`) still uses the manual Console flow below (or future prod bootstrap).
+
+---
 
 ## Phase 1 (implemented): PIN sessions + network lockdown
 
@@ -41,7 +56,9 @@ After changing CIDRs: `cd terraform && terraform apply`.
 
 ---
 
-## Phase 2: OCI Identity Domain (IdP) — console steps
+## Phase 2: OCI Identity Domain (IdP) — prod Console steps
+
+Manual setup for **prod** (`cloud-store-apps`). For **dev**, use [Dev: automated Identity Domain bootstrap](#dev-automated-identity-domain-bootstrap) above.
 
 Do **not** use the tenancy **Default** domain for POS apps. Create a **new** domain for application users.
 

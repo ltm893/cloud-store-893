@@ -2,7 +2,12 @@ import XCTest
 @testable import CloudStorePos
 
 final class CartTotalsLogicTests: XCTestCase {
-    private func item(qty: Int = 1, publicLine: Double = 10, payable: Double = 10) -> CartItem {
+    private func item(
+        qty: Int = 1,
+        publicLine: Double = 10,
+        payable: Double = 10,
+        taxExempt: Bool = false
+    ) -> CartItem {
         CartItem(
             id: 1,
             productId: 1,
@@ -14,7 +19,8 @@ final class CartTotalsLogicTests: XCTestCase {
             unitPricePublic: 10,
             unitPricePayable: payable / Double(qty),
             lineSubtotalPublic: publicLine,
-            lineSubtotalPayable: payable
+            lineSubtotalPayable: payable,
+            taxExempt: taxExempt
         )
     }
 
@@ -25,6 +31,18 @@ final class CartTotalsLogicTests: XCTestCase {
             taxRate: 0.06
         )
         XCTAssertEqual(total, 106, accuracy: 0.01)
+    }
+
+    func testComputeSaleGrandTotalSkipsTaxOnExemptItems() {
+        let total = CartTotalsLogic.computeSaleGrandTotal(
+            cart: [
+                item(publicLine: 10, payable: 10),
+                item(publicLine: 5, payable: 5, taxExempt: true),
+            ],
+            salesFeeRate: 0,
+            taxRate: 0.06
+        )
+        XCTAssertEqual(total, 15.6, accuracy: 0.01)
     }
 
     func testBuildCashPaymentWithChange() {

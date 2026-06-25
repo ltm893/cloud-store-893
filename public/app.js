@@ -1,10 +1,10 @@
 const fetchOpts = { credentials: 'include' };
 
-const productsEl = document.getElementById('products');
 const pinGateEl = document.getElementById('pinGate');
 const pinSignInBlockEl = document.getElementById('pinSignInBlock');
 const signInIdpHintEl = document.getElementById('signInIdpHint');
-const pinInputEl = document.getElementById('pinInput');
+const pinDisplayEl = document.getElementById('pinDisplay');
+const pinNumpadEl = document.getElementById('pinNumpad');
 const pinSubmitBtn = document.getElementById('pinSubmitBtn');
 const pinErrorEl = document.getElementById('pinError');
 const approvalGateEl = document.getElementById('approvalGate');
@@ -13,33 +13,65 @@ const approvalTimerEl = document.getElementById('approvalTimer');
 const approvalPollStatusEl = document.getElementById('approvalPollStatus');
 const approvalCancelBtn = document.getElementById('approvalCancelBtn');
 const approvalErrorEl = document.getElementById('approvalError');
-const cartEl = document.getElementById('cart');
-const totalEl = document.getElementById('total');
-const statusEl = document.getElementById('status');
-const salesHistoryEl = document.getElementById('salesHistory');
-const checkoutBtn = document.getElementById('checkoutBtn');
-const paymentMethodEl = document.getElementById('paymentMethod');
-const customerSelectEl = document.getElementById('customerSelect');
-const menuBtn = document.getElementById('menuBtn');
-const appMenuEl = document.getElementById('appMenu');
-const toggleStatusBtn = document.getElementById('toggleStatusBtn');
+const tillGateEl = document.getElementById('tillGate');
+const tillTargetEl = document.getElementById('tillTarget');
+const tillDenomListEl = document.getElementById('tillDenomList');
+const tillSummaryEl = document.getElementById('tillSummary');
+const tillSubmitBtn = document.getElementById('tillSubmitBtn');
+const tillCreditOnlyBtn = document.getElementById('tillCreditOnlyBtn');
+const tillCancelBtn = document.getElementById('tillCancelBtn');
+const tillErrorEl = document.getElementById('tillError');
 
 const APPROVAL_POLL_MS = 2500;
+const PIN_MAX = 8;
 
-let selectedCustomerId = null;
-let statusVisible = false;
 let approvalPollTimer = null;
-
-function setStatus(message) {
-  statusEl.textContent = message;
-}
+let tillConfig = null;
+let pinDigits = '';
+let lastSessionData = null;
 
 function money(value) {
-  return `$${Number(value).toFixed(2)}`;
+  return PosMath.formatMoney(value);
 }
 
-function customerQs() {
-  return selectedCustomerId != null ? `?customerId=${encodeURIComponent(selectedCustomerId)}` : '';
+function updatePinDisplay() {
+  pinDisplayEl.textContent = pinDigits ? '•'.repeat(pinDigits.length) : '••••';
+}
+
+function renderPinNumpad() {
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  pinNumpadEl.innerHTML = '';
+  const addKey = (label, handler) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'numpad-key';
+    btn.textContent = label;
+    btn.addEventListener('click', handler);
+    pinNumpadEl.appendChild(btn);
+  };
+
+  keys.forEach((digit) => {
+    addKey(digit, () => {
+      if (pinDigits.length < PIN_MAX) {
+        pinDigits += digit;
+        updatePinDisplay();
+      }
+    });
+  });
+  addKey('C', () => {
+    pinDigits = '';
+    updatePinDisplay();
+  });
+  addKey('0', () => {
+    if (pinDigits.length < PIN_MAX) {
+      pinDigits += '0';
+      updatePinDisplay();
+    }
+  });
+  addKey('⌫', () => {
+    pinDigits = pinDigits.slice(0, -1);
+    updatePinDisplay();
+  });
 }
 
 function stopApprovalPoll() {
@@ -59,12 +91,23 @@ function hidePinGate() {
   pinGateEl.hidden = true;
   pinErrorEl.hidden = true;
   pinErrorEl.textContent = '';
+  pinDigits = '';
+  updatePinDisplay();
+}
+
+function hideTillGate() {
+  tillGateEl.hidden = true;
+  tillErrorEl.hidden = true;
+  tillErrorEl.textContent = '';
+  tillConfig = null;
 }
 
 function hideAllAuthOverlays() {
   hidePinGate();
   hideApprovalGate();
+  hideTillGate();
   stopApprovalPoll();
+  PosRegister.stop();
 }
 
 function formatApprovalTimer(secondsRemaining, expiresAt) {
@@ -81,6 +124,8 @@ function formatApprovalTimer(secondsRemaining, expiresAt) {
 
 function showApprovalGate(approval) {
   hidePinGate();
+  hideTillGate();
+  PosRegister.stop();
   approvalGateEl.hidden = false;
   approvalErrorEl.hidden = true;
   approvalErrorEl.textContent = '';
@@ -117,7 +162,9 @@ function configureIdpLink(data) {
 
 function showPinGate(message, { pinAllowed = true } = {}) {
   hideApprovalGate();
+  hideTillGate();
   stopApprovalPoll();
+  PosRegister.stop();
   pinGateEl.hidden = false;
 
   const pinOk = pinAllowed !== false;
@@ -133,6 +180,249 @@ function showPinGate(message, { pinAllowed = true } = {}) {
   }
 }
 
+function sumTillCounts(denominations, counts) {
+  let total = 0;
+  for (const denom of denominations || []) {
+    const count = Number(counts[denom.id] || 0);
+    if (!Number.isFinite(count) || count <= 0) continue;
+    total += denom.value * count;
+  }
+  return PosMath.roundMoney(total);
+}
+
+function readTillCounts() {
+  const counts = {};
+  tillDenomListEl.querySelectorAll('[data-denom-id]').forEach((input) => {
+    const id = input.dataset.denomId;
+    const count = Math.max(0, Math.floor(Number(input.value) || 0));
+    if (count > 0) counts[id] = count;
+  });
+  return counts;
+}
+
+function updateTillSummary() {
+  if (!tillConfig) return;
+  const counts = readTillCounts();
+  const total = sumTillCounts(tillConfig.denominations, counts);
+  const expected = tillConfig.expectedOpeningFloat;
+  let summary = `Counted total: ${money(total)}`;
+  let hasVariance = false;
+
+  if (expected != null) {
+    const variance = PosMath.roundMoney(total - expected);
+    if (Math.abs(variance) > 0.005) {
+      const sign = variance >= 0 ? '+' : '';
+      summary += ` · Variance ${sign}${money(variance)}`;
+      hasVariance = true;
+    }
+  }
+
+  tillSummaryEl.textContent = summary;
+  tillSummaryEl.classList.toggle('variance-warn', hasVariance);
+
+  const hasCounts = Object.keys(counts).length > 0;
+  const targetReached = expected == null || Math.abs(total - expected) < 0.005;
+  tillSubmitBtn.disabled = !hasCounts && !targetReached;
+  tillSubmitBtn.textContent = tillConfig.supervisorApprovalRequired
+    ? 'Submit for approval'
+    : 'Open register';
+}
+
+function showTillGate(data) {
+  hidePinGate();
+  hideApprovalGate();
+  stopApprovalPoll();
+  PosRegister.stop();
+  tillConfig = {
+    denominations: Array.isArray(data.denominations) ? data.denominations : [],
+    expectedOpeningFloat: data.expectedOpeningFloat ?? null,
+    awaitingTillToken: data.awaitingTillToken || null,
+    supervisorApprovalRequired: Boolean(data.supervisorApprovalRequired),
+  };
+
+  if (tillConfig.expectedOpeningFloat != null) {
+    tillTargetEl.textContent = `Target opening float: ${money(tillConfig.expectedOpeningFloat)}`;
+    tillTargetEl.hidden = false;
+  } else {
+    tillTargetEl.hidden = true;
+    tillTargetEl.textContent = '';
+  }
+
+  tillDenomListEl.innerHTML = tillConfig.denominations
+    .map(
+      (denom) => `
+    <div class="till-denom-row">
+      <label for="till-count-${escapeHtml(denom.id)}">${escapeHtml(denom.label)}</label>
+      <input
+        id="till-count-${escapeHtml(denom.id)}"
+        type="number"
+        min="0"
+        step="1"
+        inputmode="numeric"
+        value="0"
+        data-denom-id="${escapeHtml(denom.id)}"
+        data-denom-value="${denom.value}"
+      />
+      <span class="till-denom-line" data-line-for="${escapeHtml(denom.id)}">${money(0)}</span>
+    </div>
+  `,
+    )
+    .join('');
+
+  tillDenomListEl.querySelectorAll('[data-denom-id]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const count = Math.max(0, Math.floor(Number(input.value) || 0));
+      const value = Number(input.dataset.denomValue) || 0;
+      const line = tillDenomListEl.querySelector(`[data-line-for="${input.dataset.denomId}"]`);
+      if (line) line.textContent = money(value * count);
+      updateTillSummary();
+    });
+  });
+
+  tillErrorEl.hidden = true;
+  tillErrorEl.textContent = '';
+  tillGateEl.hidden = false;
+  updateTillSummary();
+}
+
+function showTillError(message) {
+  tillErrorEl.hidden = false;
+  tillErrorEl.textContent = message;
+}
+
+async function submitOpeningTill(cashMode) {
+  tillSubmitBtn.disabled = true;
+  tillCreditOnlyBtn.disabled = true;
+  tillCancelBtn.disabled = true;
+  tillErrorEl.hidden = true;
+
+  const body = { cashMode };
+  if (cashMode === 'cash_and_credit') {
+    const counts = readTillCounts();
+    body.denominations = counts;
+    body.countedTotal = sumTillCounts(tillConfig.denominations, counts);
+  }
+  if (tillConfig?.awaitingTillToken) {
+    body.awaitingTillToken = tillConfig.awaitingTillToken;
+  }
+
+  try {
+    const res = await fetch('/api/cashier/approval/till', {
+      ...fetchOpts,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.status === 401) {
+      hideTillGate();
+      showPinGate(data.error || 'Sign-in expired — sign in with Oracle again', {
+        pinAllowed: false,
+      });
+      return;
+    }
+
+    if (!res.ok) {
+      showTillError(data.error || 'Could not submit till count');
+      return;
+    }
+
+    if (data.pending) {
+      hideTillGate();
+      showApprovalGate({
+        requestToken: data.requestToken,
+        expiresAt: data.expiresAt,
+        cashierEmail: data.cashierEmail,
+        secondsRemaining: data.secondsRemaining,
+      });
+      startApprovalPoll();
+      return;
+    }
+
+    hideTillGate();
+    await initPos(lastSessionData);
+  } catch (error) {
+    console.error(error);
+    showTillError('Network error while submitting till count');
+  } finally {
+    tillSubmitBtn.disabled = false;
+    tillCreditOnlyBtn.disabled = false;
+    tillCancelBtn.disabled = false;
+    updateTillSummary();
+  }
+}
+
+async function cancelTillWait() {
+  tillCancelBtn.disabled = true;
+  try {
+    await fetch('/api/cashier/approval/till/cancel', {
+      ...fetchOpts,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    hideTillGate();
+    const res = await fetch('/api/cashier/session', fetchOpts);
+    const data = await res.json();
+    applySessionGate(data);
+  } catch (error) {
+    console.error(error);
+    showTillError('Could not cancel till count');
+  } finally {
+    tillCancelBtn.disabled = false;
+  }
+}
+
+tillSubmitBtn.addEventListener('click', () => {
+  if (tillSubmitBtn.disabled) return;
+  submitOpeningTill('cash_and_credit');
+});
+
+tillCreditOnlyBtn.addEventListener('click', () => {
+  if (!window.confirm('Open the register with credit card payments only (no cash today)?')) {
+    return;
+  }
+  submitOpeningTill('credit_only');
+});
+
+tillCancelBtn.addEventListener('click', cancelTillWait);
+
+function applySessionGate(data) {
+  configureIdpLink(data);
+
+  if (data.ok) {
+    hideAllAuthOverlays();
+    lastSessionData = data;
+    return 'ok';
+  }
+
+  if (data.pending) {
+    showApprovalGate(data.approval);
+    startApprovalPoll();
+    return 'pending';
+  }
+
+  if (data.awaitingTill) {
+    showTillGate(data);
+    return 'awaitingTill';
+  }
+
+  if (data.supervisorApprovalRequired && data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
+    showPinGate('', { pinAllowed: false });
+    return 'signIn';
+  }
+
+  if (data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
+    window.location.href = data.idpLoginUrl;
+    return 'redirect';
+  }
+
+  showPinGate(data.idpEnabled ? 'Enter PIN or use IdP sign-in below' : '', {
+    pinAllowed: data.pinAllowed,
+  });
+  return 'signIn';
+}
+
 async function pollApprovalStatus() {
   try {
     const res = await fetch('/api/cashier/approval/status', fetchOpts);
@@ -141,8 +431,9 @@ async function pollApprovalStatus() {
     if (res.ok && data.status === 'approved' && data.ok) {
       stopApprovalPoll();
       hideAllAuthOverlays();
-      setStatus('Supervisor approved — loading POS…');
-      await initPos();
+      const sessionRes = await fetch('/api/cashier/session', fetchOpts);
+      lastSessionData = await sessionRes.json();
+      await initPos(lastSessionData);
       return;
     }
 
@@ -159,9 +450,7 @@ async function pollApprovalStatus() {
 
     if (data.status === 'denied') {
       hideApprovalGate();
-      showPinGate(data.reason || 'Supervisor denied login', {
-        pinAllowed: false,
-      });
+      showPinGate(data.reason || 'Supervisor denied login', { pinAllowed: false });
       return;
     }
 
@@ -223,33 +512,11 @@ approvalCancelBtn.addEventListener('click', cancelApprovalWait);
 async function ensureCashierSession() {
   const res = await fetch('/api/cashier/session', fetchOpts);
   const data = await res.json();
-  configureIdpLink(data);
-
-  if (data.ok) {
-    hideAllAuthOverlays();
-    return true;
+  const gate = applySessionGate(data);
+  if (gate === 'ok') {
+    await initPos(data);
   }
-
-  if (data.pending) {
-    showApprovalGate(data.approval);
-    startApprovalPoll();
-    return false;
-  }
-
-  if (data.supervisorApprovalRequired && data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
-    showPinGate('', { pinAllowed: false });
-    return false;
-  }
-
-  if (data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
-    window.location.href = data.idpLoginUrl;
-    return false;
-  }
-
-  showPinGate(data.idpEnabled ? 'Enter PIN or use IdP sign-in below' : '', {
-    pinAllowed: data.pinAllowed,
-  });
-  return false;
+  return gate === 'ok';
 }
 
 async function unlockCashier(pin) {
@@ -264,287 +531,60 @@ async function unlockCashier(pin) {
     showPinGate(data.error || 'Invalid PIN', { pinAllowed: true });
     return false;
   }
+  if (data.awaitingTill) {
+    hidePinGate();
+    showTillGate(data);
+    return false;
+  }
   hidePinGate();
   return true;
 }
 
 pinSubmitBtn.addEventListener('click', async () => {
-  const pin = pinInputEl.value.trim();
-  if (!pin) {
+  if (!pinDigits) {
     showPinGate('Enter PIN', { pinAllowed: true });
     return;
   }
   pinSubmitBtn.disabled = true;
-  const ok = await unlockCashier(pin);
+  const ok = await unlockCashier(pinDigits);
   pinSubmitBtn.disabled = false;
   if (ok) {
-    pinInputEl.value = '';
-    await initPos();
+    pinDigits = '';
+    updatePinDisplay();
+    const res = await fetch('/api/cashier/session', fetchOpts);
+    lastSessionData = await res.json();
+    await initPos(lastSessionData);
   }
 });
 
-pinInputEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') pinSubmitBtn.click();
-});
-
-async function loadCustomers() {
-  const res = await fetch('/api/customers', fetchOpts);
-  const customers = await res.json();
-  customerSelectEl.innerHTML =
-    '<option value="">Walk-in (no customer)</option>' +
-    customers
-      .map(
-        (c) =>
-          `<option value="${c.id}">${escapeHtml(c.name)}</option>`,
-      )
-      .join('');
-  customerSelectEl.value = selectedCustomerId != null ? String(selectedCustomerId) : '';
-}
-
-async function loadProducts() {
-  const res = await fetch('/api/products', fetchOpts);
-  const products = await res.json();
-
-  productsEl.innerHTML = products
-    .map((product) => {
-      const inStock = product.inStock !== false;
-      const reg = money(product.regularPrice);
-      const saleLine =
-        product.onSale && product.salePrice != null
-          ? `<div class="product-prices"><span class="price-reg">Reg ${reg}</span><span class="price-sale">Sale ${money(product.salePrice)}</span></div>`
-          : `<div class="product-prices"><span class="price-reg">${reg}</span></div>`;
-      const qty = product.quantityOnHand;
-      const stockBadge =
-        qty == null
-          ? ''
-          : Number(qty) > 0
-            ? `<span class="stock-badge in-stock">Qty ${Number(qty)}</span>`
-            : '<span class="stock-badge out-of-stock">Qty 0</span>';
-      const addBtn = inStock
-        ? `<button onclick="addToCart(${product.id})">Add</button>`
-        : '<button disabled title="Out of stock">Add</button>';
-      return `
-    <article class="product-card${inStock ? '' : ' product-card--oos'}">
-      <div class="product-name">${escapeHtml(product.name)}</div>
-      ${saleLine}
-      ${stockBadge}
-      ${addBtn}
-    </article>
-  `;
-    })
-    .join('');
-}
-
-async function loadCart() {
-  const res = await fetch(`/api/cart${customerQs()}`, fetchOpts);
-  const payload = await res.json();
-  if (res.status === 401) {
-    await ensureCashierSession();
-    return;
-  }
-  if (!res.ok) {
-    setStatus(payload.error || 'Cart load failed');
-    return;
-  }
-
-  const items = payload.items || [];
-  const subPublic = Number(payload.subtotalPreMember || 0);
-  const subPay = Number(payload.subtotalPayable || 0);
-  const disc = Number(payload.memberDiscountPreTax || 0);
-  const linked = !!payload.linked893;
-
-  cartEl.innerHTML = items.length
-    ? items
-        .map((item) => {
-          const reg = money(item.regularPrice);
-          const salePart =
-            item.onSale && item.salePrice != null
-              ? ` · Sale ${money(item.salePrice)}`
-              : '';
-          const line893 =
-            linked && Math.abs(item.lineSubtotalPayable - item.lineSubtotalPublic) > 0.005
-              ? `<div class="cart-detail">Pre-tax: ${money(item.lineSubtotalPublic)} → ${money(item.lineSubtotalPayable)}</div>`
-              : `<div class="cart-detail">Pre-tax line: ${money(item.lineSubtotalPayable)}</div>`;
-          return `
-      <div class="cart-item">
-        <div>
-          <strong>${escapeHtml(item.name)}</strong><br>
-          <span class="cart-detail">Qty ${item.quantity} · Reg ${reg}${salePart}</span>
-          ${line893}
-        </div>
-        <button class="remove" onclick="removeFromCart(${item.id})">Remove</button>
-      </div>
-    `;
-        })
-        .join('')
-    : '<p>No items yet.</p>';
-
-  let totalHtml = `<div><strong>Pre-tax payable:</strong> ${money(subPay)}</div>`;
-  if (linked && disc > 0.005) {
-    totalHtml += `<div class="cart-summary-893">Customer discount — shelf subtotal ${money(subPublic)}, pre-tax discount ${money(disc)}</div>`;
-  } else {
-    totalHtml += `<div class="cart-muted">Shelf subtotal ${money(subPublic)}</div>`;
-  }
-  totalEl.innerHTML = totalHtml;
-}
-
-async function loadSalesHistory() {
-  const res = await fetch('/api/sales/recent', fetchOpts);
-  const sales = await res.json();
-
-  salesHistoryEl.innerHTML = sales.length
-    ? sales
-        .map((sale) => {
-          const tag = sale.linked893
-            ? ' <span class="tag-893">893</span>'
-            : '';
-          const disc =
-            sale.memberDiscountPreTax > 0.005
-              ? ` · discount ${money(sale.memberDiscountPreTax)}`
-              : '';
-          return `
-      <div class="cart-item">
-        <div><strong>${escapeHtml(sale.orderNumber)}</strong>${tag}</div>
-        <div>${money(sale.total)} · ${escapeHtml(sale.paymentMethod)}${disc}</div>
-      </div>
-    `;
-        })
-        .join('')
-    : '<p>No sales recorded yet.</p>';
-}
-
-async function addToCart(productId) {
-  const res = await fetch(`/api/cart${customerQs()}`, {
-    ...fetchOpts,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ productId }),
-  });
-  if (res.status === 401) {
-    await ensureCashierSession();
-    return;
-  }
-  if (!res.ok) {
-    const payload = await res.json().catch(() => ({}));
-    setStatus(payload.error || `Add to cart failed (${res.status})`);
-    return;
-  }
-  await loadCart();
-}
-
-async function removeFromCart(id) {
-  await fetch(`/api/cart/${id}${customerQs()}`, { ...fetchOpts, method: 'DELETE' });
-  await loadCart();
-}
-
-async function checkout() {
-  checkoutBtn.disabled = true;
-  setStatus('Processing sale...');
-
-  const body = {
-    paymentMethod: paymentMethodEl.value,
-  };
-  if (selectedCustomerId != null) {
-    body.customerId = selectedCustomerId;
-  }
-
-  const res = await fetch('/api/checkout', {
-    ...fetchOpts,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  const payload = await res.json();
-  if (!res.ok) {
-    setStatus(payload.error || 'Checkout failed');
-    checkoutBtn.disabled = false;
-    return;
-  }
-
-  const parts = [`Sale completed: ${payload.orderNumber}`];
-  if (payload.linked893) parts.push('customer discount');
-  if (payload.memberDiscountPreTax > 0.005) {
-    parts.push(`pre-tax discount ${money(payload.memberDiscountPreTax)}`);
-  }
-  setStatus(parts.join(' — '));
-  checkoutBtn.disabled = false;
-  await loadCart();
-  await loadSalesHistory();
-}
-
-checkoutBtn.addEventListener('click', checkout);
-
-menuBtn.addEventListener('click', () => {
-  appMenuEl.hidden = !appMenuEl.hidden;
-});
-
-toggleStatusBtn.addEventListener('click', () => {
-  statusVisible = !statusVisible;
-  statusEl.classList.toggle('status-hidden', !statusVisible);
-  toggleStatusBtn.textContent = statusVisible ? 'Hide status' : 'Show status';
-  appMenuEl.hidden = true;
-});
-
-statusEl.classList.add('status-hidden');
-
-customerSelectEl.addEventListener('change', () => {
-  const v = customerSelectEl.value;
-  selectedCustomerId = v === '' ? null : Number(v);
-  loadCart().catch(console.error);
-});
-
-async function initPos() {
+async function initPos(sessionData) {
   try {
-    setStatus('Loading POS...');
-    await loadCustomers();
-    await Promise.all([loadProducts(), loadCart(), loadSalesHistory()]);
-    setStatus('Ready');
+    await PosRegister.start(sessionData || lastSessionData || {});
   } catch (error) {
-    if (error && error.message && String(error).includes('401')) {
+    if (error && String(error).includes('401')) {
       await ensureCashierSession();
       return;
     }
-    setStatus('Failed to load POS');
     console.error(error);
   }
 }
 
 async function init() {
+  renderPinNumpad();
+  updatePinDisplay();
+
   const params = new URLSearchParams(window.location.search);
-  if (params.get('approval') === 'pending') {
+  if (params.get('approval') === 'pending' || params.get('awaiting_till') != null) {
     window.history.replaceState({}, '', window.location.pathname);
   }
 
   const res = await fetch('/api/cashier/session', fetchOpts);
   const data = await res.json();
-  configureIdpLink(data);
+  const gate = applySessionGate(data);
 
-  if (data.ok) {
-    hideAllAuthOverlays();
-    await initPos();
-    return;
+  if (gate === 'ok') {
+    await initPos(data);
   }
-
-  if (data.pending) {
-    showApprovalGate(data.approval);
-    startApprovalPoll();
-    return;
-  }
-
-  if (data.supervisorApprovalRequired && data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
-    showPinGate('', { pinAllowed: false });
-    return;
-  }
-
-  if (data.idpEnabled && data.idpLoginUrl && !data.pinAllowed) {
-    window.location.href = data.idpLoginUrl;
-    return;
-  }
-
-  showPinGate(data.idpEnabled ? 'Enter PIN or use IdP sign-in below' : '', {
-    pinAllowed: data.pinAllowed,
-  });
 }
 
 init();

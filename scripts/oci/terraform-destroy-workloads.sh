@@ -7,14 +7,19 @@
 # are included automatically without editing this script.
 #
 # Usage (from repo root):
-#   ./scripts/oci/terraform-destroy-workloads.sh           # prompts: type yes
+#   ./scripts/oci/terraform-destroy-workloads.sh           # prod — prompts: type yes
+#   ./scripts/oci/terraform-destroy-workloads-dev.sh       # dev workloads
 #   ./scripts/oci/terraform-destroy-workloads.sh --yes     # non-interactive
 #   ./scripts/oci/terraform-destroy-workloads.sh --plan-only   # terraform plan -destroy only
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TF_DIR="${SCRIPT_DIR}/../../terraform"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/terraform-env.sh
+source "$PROJECT_ROOT/scripts/oci/lib/terraform-env.sh"
+cloud_store_resolve_tf_env "$PROJECT_ROOT"
+TF_DIR="$CLOUD_STORE_TF_DIR"
 
 AUTO_YES=0
 PLAN_ONLY=0
@@ -52,7 +57,7 @@ fi
 exclude_compartment='(\.|^)oci_identity_compartment\.main(\[|$)'
 
 set +e
-raw_list=$(terraform state list 2>/dev/null)
+raw_list=$(terraform -chdir="$CLOUD_STORE_TF_DIR" state list -state="$CLOUD_STORE_TF_STATE" 2>/dev/null)
 list_ec=$?
 set -e
 if [[ "$list_ec" -ne 0 ]]; then
@@ -77,6 +82,8 @@ if [[ "${#workload_addrs[@]}" -eq 0 ]]; then
   exit 0
 fi
 
+echo "Environment:         $(cloud_store_env_label)"
+echo "Terraform state:     $CLOUD_STORE_TF_STATE"
 echo "Terraform directory: $TF_DIR"
 echo ""
 echo "Addresses to destroy (${#workload_addrs[@]}):"
@@ -88,8 +95,8 @@ echo "  - oci_identity_compartment.main (compartment kept in OCI)"
 echo ""
 
 if [[ "$PLAN_ONLY" -eq 1 ]]; then
-  echo "Running: terraform plan -destroy (no changes applied)"
-  tf_cmd=(terraform plan -destroy -no-color)
+  echo "Running: terraform plan -destroy ($(cloud_store_env_label); no changes applied)"
+  tf_cmd=(cloud_store_tf plan -destroy -no-color)
   for addr in "${workload_addrs[@]}"; do
     tf_cmd+=(-target="$addr")
   done
@@ -106,8 +113,8 @@ if [[ "$AUTO_YES" -ne 1 ]]; then
   fi
 fi
 
-echo "Running: terraform destroy -auto-approve (scoped to listed addresses only)"
-tf_cmd=(terraform destroy -auto-approve -compact-warnings -no-color)
+echo "Running: terraform destroy -auto-approve ($(cloud_store_env_label); scoped to listed addresses only)"
+tf_cmd=(cloud_store_tf destroy -auto-approve -compact-warnings -no-color)
 for addr in "${workload_addrs[@]}"; do
   tf_cmd+=(-target="$addr")
 done

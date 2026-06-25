@@ -50,8 +50,12 @@ Baked into the APK at **Gradle configuration** time (`BuildConfig.API_BASE_URL`)
 Watch the configure log: `[cloud-store-893] API_BASE_URL = https://…/`
 
 ```bash
-# OCI cloud (HTTPS)
+# OCI prod (HTTPS)
 ./RebuildReinstall.sh
+
+# OCI dev cloud (HTTPS)
+API_BASE_URL=https://dev.oci.cloudstore893.com/ ./RebuildReinstall.sh
+# or: OCI_API_HOST=dev.oci.cloudstore893.com ./RebuildReinstall.sh
 
 # Local Mac dev (npm run dev:up)
 USE_LOCAL=1 ./RebuildReinstall.sh

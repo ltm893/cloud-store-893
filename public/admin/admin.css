@@ -800,6 +800,8 @@ td.low-stock {
   border: 1px solid var(--border);
   border-radius: 10px;
   margin-bottom: 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .systems-card-title {
@@ -981,6 +983,8 @@ td.low-stock {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .systems-oci-resources-card .systems-oci-cards {
@@ -989,6 +993,8 @@ td.low-stock {
 
 .systems-oci-block {
   margin-bottom: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .systems-oci-meta {
@@ -1076,6 +1082,9 @@ td.low-stock {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .systems-oci-card-head {
@@ -1084,6 +1093,7 @@ td.low-stock {
   align-items: baseline;
   gap: 8px 14px;
   margin-bottom: 8px;
+  min-width: 0;
 }
 
 .systems-oci-type {
@@ -1097,6 +1107,8 @@ td.low-stock {
 .systems-oci-name {
   font-weight: 600;
   font-size: 0.9rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .systems-oci-state {
@@ -1108,7 +1120,11 @@ td.low-stock {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.78rem;
   line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
   word-break: break-all;
+  max-width: 100%;
+  min-width: 0;
   color: var(--text);
 }
 
@@ -1117,10 +1133,14 @@ td.low-stock {
 }
 
 .systems-ocid {
+  display: inline-block;
+  max-width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.78rem;
   line-height: 1.45;
   font-weight: 400;
+  white-space: normal;
+  overflow-wrap: anywhere;
   word-break: break-all;
 }
 
@@ -1146,7 +1166,10 @@ td.low-stock {
   margin: 4px 0 0;
   font-weight: 600;
   font-size: 0.9rem;
-  word-break: break-word;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .systems-cert-note {

@@ -1,5 +1,7 @@
 # Cloud Store 893 — session handoff
 
+**Onboard another developer:** [docs/developer-handoff.md](docs/developer-handoff.md) (tarball, IAM, dev IdP, tablet).
+
 Last updated: 2026-06-16
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
@@ -245,7 +247,7 @@ npm run dev:up
 
 ```bash
 open ios-pos/CloudStorePos.xcodeproj   # iPad simulator, set signing Team
-npm run test:ios-pos                   # 28 XCTests (last run: pass)
+npm run test:ios-pos                   # 37+ XCTests (macOS + Xcode)
 npm run ios-pos:local-config           # after npm run dev:up, for LAN API
 ```
 
@@ -413,7 +415,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 ## Security / IdP roadmap
 
 - **Phase 1 (in repo):** Cashier session cookies + optional ingress CIDR lockdown — see [docs/idp-setup.md](docs/idp-setup.md).
-- **Phase 2 (OCI Console):** Separate Identity Domain + OIDC clients for POS and admin.
+- **Phase 2 (IdP):** **Dev** — automated via `./scripts/oci/idp/bootstrap-dev.sh` ([scripts/oci/idp/README.md](scripts/oci/idp/README.md), [docs/oci-dev-environment.md](docs/oci-dev-environment.md)). **Prod** — separate Identity Domain + OIDC clients in OCI Console ([docs/idp-setup.md](docs/idp-setup.md)).
 - **Phase 3 (feature branch `feature/cashier-supervisor-approval`):** IdP cashier login + **supervisor approval** before session — **steps 1–8 implemented** (server, web POS, admin panel, Android tablet). Living doc: [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md). **Remaining:** OCI IdM group claims in console (step 9). Automated tests + CI: [docs/testing.md](docs/testing.md) (step 10).
 - **Start over (Level 1):** [docs/idp-level1-reset.md](docs/idp-level1-reset.md) — delete/recreate integrated apps only.
 
@@ -437,16 +439,17 @@ npm test                              # unit only (fast, no ORDS)
 npm run test:all                      # unit + auth + read-only API (needs ORDS in .env)
 ```
 
-Covers cart validation (`POST /api/cart` unknown product → 404), session guards, and cashier identity helpers. Full matrix: [docs/testing.md](docs/testing.md).
+Covers cart validation (`POST /api/cart` unknown product → 404), session guards, and cashier identity helpers (152 unit cases). Full matrix: [docs/testing.md](docs/testing.md). Onboard another dev: [docs/developer-handoff.md](docs/developer-handoff.md).
 
 **Manual smoke:**
 
 1. `npm run dev:up` — `✅ ORDS is healthy`
 2. `curl` cashier unlock → 200
 3. Open `/admin/` — login, list products
-4. Tablet: PIN **Done** → add product **1** → **Pay** → **Complete Sale** (rebuild APK with `USE_LOCAL=1` for local server)
-5. `☰` → Admin opens in browser
-6. OCI after code change: `./scripts/oci/redeploy-app-code.sh` then `curl -s "$(./scripts/oci/confirm-public-url.sh)/api/build-info"`
+4. Tablet (local): `cd android-pos && USE_LOCAL=1 ./RebuildReinstall.sh` → PIN **Done** → add product **1** → **Pay** → **Complete Sale**
+5. Tablet (dev OCI): `API_BASE_URL=https://dev.oci.cloudstore893.com/ ./RebuildReinstall.sh` → Oracle sign-in
+6. `☰` → Admin opens in browser
+7. OCI after code change: `./scripts/oci/redeploy-app-code.sh` then `curl -s "$(./scripts/oci/confirm-public-url.sh)/api/build-info"`
 
 **Model B (supervisor approval, feature branch):** optional manual checks — not part of `dev:up`. See [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md#testing-manual-today) and [End-to-end (web + admin + tablet)](docs/cashier-supervisor-approval.md#end-to-end-manual-web--admin--tablet). Automated suite: [docs/testing.md](docs/testing.md).
 
