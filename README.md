@@ -291,6 +291,7 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 - **Sign-in:** `/admin/login.html` — PIN and/or “Sign in with Oracle” when IdP env is set
 - **API:** `/api/admin/*` — CRUD on `products`, `customers`, `cart_items`, `sales`, `sale_items`; read-only `cart_view`
 - **Implementation:** `lib/admin-auth.js`, `lib/admin-routes.js`, `lib/cashier-auth.js`, `lib/oidc-*.js`, `public/admin/`
+- **Colors:** shared Lister-aligned palette — [docs/color-palette.md](docs/color-palette.md) (web admin, Platform tab, POS, Android, iOS)
 
 ### Web POS
 
@@ -338,7 +339,8 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 A native Android POS client lives in `android-pos/` (Kotlin + Jetpack
 Compose). Theming uses the **Lister palette** via `CloudStorePosTheme` in
-`android-pos/app/src/main/java/com/cloudstore/pos/ui/theme/`. See
+`android-pos/app/src/main/java/com/cloudstore/pos/ui/theme/`. Full swatches
+and hex values: [docs/color-palette.md](docs/color-palette.md). See
 `android-pos/README.md` for module-specific notes.
 
 Quick start (local backend on Mac):
@@ -442,6 +444,8 @@ cloud-store-893/
 ├── Dockerfile             # node:20-alpine, linux/arm64
 ├── .env.example           # ORDS, PINs, optional IdP (see Authentication)
 ├── CONTENTS.md            # session resume / handoff notes
+├── docs/
+│   └── color-palette.md   # brand colors (web admin, POS, Android, iOS)
 ├── android-pos/           # Kotlin + Compose tablet POS (see android-pos/README.md)
 ├── terraform/
 │   ├── main.tf            # OCI provider
