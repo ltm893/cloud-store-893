@@ -98,11 +98,14 @@
       <div id="reportsOrderTouchpoints" class="report-table-wrap"></div>
     </section>
     <section id="systemsPanel" class="systems-panel" hidden>
-      <div class="systems-intro-row">
+      <div class="systems-description-row">
         <div class="systems-description-card">
           <h2 class="systems-card-title">Description</h2>
           <p id="systemsOverview" class="systems-description-text"></p>
         </div>
+      </div>
+      <div class="systems-meta-row">
+        <div id="systemsRepo" class="systems-repo-block"></div>
         <div class="systems-updated-card">
           <h2 class="systems-card-title">Updated</h2>
           <div class="systems-updated-row">
@@ -110,16 +113,43 @@
             <button type="button" id="systemsRefreshBtn" class="systems-refresh-btn">Refresh</button>
           </div>
         </div>
-      </div>
-      <div class="systems-build-repo-row">
-        <div id="systemsRepo" class="systems-repo-block"></div>
         <div id="systemsBuild" class="systems-build-block"></div>
       </div>
-      <div id="systemsHost" class="systems-host-block"></div>
       <div id="systemsClients" class="systems-clients-block"></div>
-      <div id="systemsRoutes" class="systems-routes-block"></div>
-      <div id="systemsCert" class="systems-cert-block"></div>
-      <div id="systemsOciResources" class="systems-oci-block"></div>
+      <div class="systems-chevron-section">
+        <button type="button" class="systems-chevron-toggle" data-systems-view="health" aria-expanded="false" aria-controls="systemsHealthPanel">
+          <span class="systems-chevron" aria-hidden="true"></span>
+          <span class="systems-chevron-label">Health</span>
+        </button>
+        <div id="systemsHealthPanel" class="systems-detail-panel" hidden>
+          <div id="systemsCertHealth" class="systems-cert-health-block"></div>
+          <div id="systemsRoutes" class="systems-routes-block"></div>
+        </div>
+      </div>
+      <div class="systems-chevron-section">
+        <button type="button" class="systems-chevron-toggle" data-systems-view="infrastructure" aria-expanded="false" aria-controls="systemsInfrastructurePanel">
+          <span class="systems-chevron" aria-hidden="true"></span>
+          <span class="systems-chevron-label">Infrastructure</span>
+        </button>
+        <div id="systemsInfrastructurePanel" class="systems-detail-panel" hidden>
+          <div id="systemsHost" class="systems-host-block"></div>
+          <div id="systemsCert" class="systems-cert-block"></div>
+          <div id="systemsOciResources" class="systems-oci-block"></div>
+        </div>
+      </div>
+      <div class="systems-chevron-section">
+        <button type="button" class="systems-chevron-toggle" data-systems-view="datamodel" aria-expanded="false" aria-controls="systemsDataModelPanel">
+          <span class="systems-chevron" aria-hidden="true"></span>
+          <span class="systems-chevron-label">Data model</span>
+        </button>
+        <div id="systemsDataModelPanel" class="systems-detail-panel" hidden>
+          <div class="systems-data-model-card">
+            <h2 class="systems-card-title">Oracle ADB schema</h2>
+            <p class="hint systems-data-model-hint">Entity-relationship view from <code>scripts/db/seed.sql</code>. Views <code>cart_view</code> and <code>inventory_status_view</code> join underlying tables.</p>
+            <div id="systemsDataModelMount" class="systems-data-model-mount" role="img" aria-label="Database entity-relationship diagram"></div>
+          </div>
+        </div>
+      </div>
     </section>
     <section id="tablePanel" class="table-panel">
       <h2 id="tableTitle">—</h2>
@@ -149,7 +179,7 @@
   <script src="/admin/admin-approvals.js?v=20260611d"></script>
   <script src="/admin/admin-shift-closes.js?v=20260611d"></script>
   <script src="/admin/admin-reports.js?v=20260618a"></script>
-  <script src="/shared/admin-systems.js?v=20260620d"></script>
+  <script src="/shared/admin-systems.js?v=20260628a"></script>
   <script src="/admin/admin.js?v=20260619f"></script>
 </body>
 </html>
