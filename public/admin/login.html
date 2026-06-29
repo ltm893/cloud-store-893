@@ -10,7 +10,7 @@
   <style>
     :root {
       --bg: #faf3df;
-      --panel: #fff;
+      --panel: rgba(168, 213, 209, 0.5);
       --accent: #872434;
       --accent-2: #114b5f;
       --danger: #b42318;
@@ -18,6 +18,9 @@
       --muted: #6b7280;
     }
     * { box-sizing: border-box; }
+    html {
+      background: var(--bg);
+    }
     body {
       margin: 0;
       min-height: 100vh;
@@ -34,7 +37,7 @@
       background: var(--panel);
       border-radius: 12px;
       padding: 24px;
-      border: 1px solid #e5e7eb;
+      border: 1px solid rgba(17, 75, 95, 0.16);
     }
     .card.card-wide {
       max-width: 960px;
@@ -153,11 +156,15 @@
     </div>
 
     <section id="systemsPanel" class="login-systems-panel systems-panel" hidden>
-      <div class="systems-intro-row">
+      <div class="systems-description-row">
         <div class="systems-description-card">
           <h2 class="systems-card-title">Description</h2>
           <p id="systemsOverview" class="systems-description-text"></p>
         </div>
+      </div>
+      <p id="loginStatus" role="status"></p>
+      <div class="systems-meta-row">
+        <div id="systemsRepo" class="systems-repo-block"></div>
         <div class="systems-updated-card">
           <h2 class="systems-card-title">Updated</h2>
           <div class="systems-updated-row">
@@ -165,21 +172,47 @@
             <button type="button" id="systemsRefreshBtn" class="systems-refresh-btn">Refresh</button>
           </div>
         </div>
-      </div>
-      <p id="loginStatus" role="status"></p>
-      <div class="systems-build-repo-row">
-        <div id="systemsRepo" class="systems-repo-block"></div>
         <div id="systemsBuild" class="systems-build-block"></div>
       </div>
-      <div id="systemsHost" class="systems-host-block"></div>
       <div id="systemsClients" class="systems-clients-block"></div>
-      <div id="systemsRoutes" class="systems-routes-block"></div>
-      <div id="systemsCert" class="systems-cert-block"></div>
-      <div id="systemsOciResources" class="systems-oci-block"></div>
+      <div class="systems-chevron-section">
+        <button type="button" class="systems-chevron-toggle" data-systems-view="health" aria-expanded="false" aria-controls="systemsHealthPanel">
+          <span class="systems-chevron" aria-hidden="true"></span>
+          <span class="systems-chevron-label">Health</span>
+        </button>
+        <div id="systemsHealthPanel" class="systems-detail-panel" hidden>
+          <div id="systemsCertHealth" class="systems-cert-health-block"></div>
+          <div id="systemsRoutes" class="systems-routes-block"></div>
+        </div>
+      </div>
+      <div class="systems-chevron-section">
+        <button type="button" class="systems-chevron-toggle" data-systems-view="infrastructure" aria-expanded="false" aria-controls="systemsInfrastructurePanel">
+          <span class="systems-chevron" aria-hidden="true"></span>
+          <span class="systems-chevron-label">Infrastructure</span>
+        </button>
+        <div id="systemsInfrastructurePanel" class="systems-detail-panel" hidden>
+          <div id="systemsHost" class="systems-host-block"></div>
+          <div id="systemsCert" class="systems-cert-block"></div>
+          <div id="systemsOciResources" class="systems-oci-block"></div>
+        </div>
+      </div>
+      <div class="systems-chevron-section">
+        <button type="button" class="systems-chevron-toggle" data-systems-view="datamodel" aria-expanded="false" aria-controls="systemsDataModelPanel">
+          <span class="systems-chevron" aria-hidden="true"></span>
+          <span class="systems-chevron-label">Data model</span>
+        </button>
+        <div id="systemsDataModelPanel" class="systems-detail-panel" hidden>
+          <div class="systems-data-model-card">
+            <h2 class="systems-card-title">Oracle ADB schema</h2>
+            <p class="hint systems-data-model-hint">Entity-relationship view from <code>scripts/db/seed.sql</code>. Views <code>cart_view</code> and <code>inventory_status_view</code> join underlying tables.</p>
+            <div id="systemsDataModelMount" class="systems-data-model-mount" role="img" aria-label="Database entity-relationship diagram"></div>
+          </div>
+        </div>
+      </div>
     </section>
   </div>
   <script src="/shared/dom-utils.js?v=20260611c"></script>
-  <script src="/shared/admin-systems.js?v=20260620d"></script>
+  <script src="/shared/admin-systems.js?v=20260628a"></script>
   <script>
     const form = document.getElementById('loginForm');
     const errorEl = document.getElementById('error');
@@ -192,7 +225,9 @@
     const signInPanel = document.getElementById('signInPanel');
     const systemsPanel = document.getElementById('systemsPanel');
     const loginStatusEl = document.getElementById('loginStatus');
-    const forceLogin = new URLSearchParams(window.location.search).has('reauth');
+    const loginParams = new URLSearchParams(window.location.search);
+    const forceLogin = loginParams.has('reauth');
+    const platformTabRequested = loginParams.get('tab') === 'systems';
 
     function setLoginStatus(message, isError = false) {
       if (!loginStatusEl) return;
@@ -224,17 +259,15 @@
       btn.addEventListener('click', () => switchLoginTab(btn.dataset.loginTab));
     });
 
-    if (new URLSearchParams(window.location.search).get('tab') === 'systems') {
+    if (platformTabRequested) {
       switchLoginTab('systems');
     }
 
     fetch('/api/admin/session', { credentials: 'same-origin' })
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok && !forceLogin) {
-          const tab = new URLSearchParams(window.location.search).get('tab');
-          const next = tab === 'systems' ? '/admin/?tab=systems' : '/admin/';
-          window.location.replace(next);
+        if (data.ok && !forceLogin && !platformTabRequested) {
+          window.location.replace('/admin/');
           return;
         }
         if (data.idpEnabled) {
@@ -246,13 +279,11 @@
         if (data.pinAllowed !== false) {
           pinBlock.hidden = false;
           if (data.idpEnabled) pinDivider.hidden = false;
-        } else if (data.idpEnabled && data.idpLoginUrl && !data.ok) {
-          loginHint.textContent = 'Redirecting to Oracle sign-in…';
-          window.location.replace(`${data.idpLoginUrl}?prompt=login`);
-          return;
         }
         if (data.idpEnabled && !data.pinAllowed) {
-          loginHint.textContent = 'Sign in with your Oracle store account.';
+          loginHint.textContent = platformTabRequested
+            ? 'Sign in on the Sign in tab with your Oracle store account.'
+            : 'Sign in with your Oracle store account.';
         } else if (data.idpEnabled) {
           loginHint.textContent = 'Sign in with Oracle or the admin PIN.';
         } else {

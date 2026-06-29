@@ -9,14 +9,21 @@
   const buildEl = document.getElementById('systemsBuild');
   const ociResourcesEl = document.getElementById('systemsOciResources');
   const certEl = document.getElementById('systemsCert');
+  const certHealthEl = document.getElementById('systemsCertHealth');
   const routesEl = document.getElementById('systemsRoutes');
   const clientsEl = document.getElementById('systemsClients');
   const overviewEl = document.getElementById('systemsOverview');
   const hostEl = document.getElementById('systemsHost');
+  const healthPanelEl = document.getElementById('systemsHealthPanel');
+  const infrastructurePanelEl = document.getElementById('systemsInfrastructurePanel');
+  const dataModelPanelEl = document.getElementById('systemsDataModelPanel');
+  const dataModelMountEl = document.getElementById('systemsDataModelMount');
 
   let apiFetch = null;
   let setStatus = null;
   let active = false;
+  let dataModelLoaded = false;
+  let mermaidLoadPromise = null;
 
   function statusClass(status) {
     if (status === 'ok') return 'systems-ok';
@@ -83,12 +90,32 @@
 
   function wrapLbCertCard(bodyHtml) {
     return `<div class="systems-lb-cert-card">
-      <h2 class="systems-card-title">Load balancer certificate</h2>
+      <h2 class="systems-card-title">Load balancer</h2>
       <div class="systems-cert-body">${bodyHtml}</div>
     </div>`;
   }
 
+  function renderTlsCertHealth(cert) {
+    if (!certHealthEl) return;
+    if (!cert) {
+      certHealthEl.innerHTML = '';
+      return;
+    }
+    if (cert.skipped) {
+      certHealthEl.innerHTML = `<p class="systems-health-tls-line systems-muted">${statusDot('muted')} TLS cert · ${escapeHtml(cert.reason || 'check skipped')}</p>`;
+      return;
+    }
+    if (!cert.ok) {
+      certHealthEl.innerHTML = `<p class="systems-health-tls-line systems-fail">${statusDot('fail')} TLS cert · ${escapeHtml(cert.error || 'unavailable')}</p>`;
+      return;
+    }
+    const days = cert.daysRemaining == null ? '—' : `${cert.daysRemaining} day(s)`;
+    const status = cert.status || 'ok';
+    certHealthEl.innerHTML = `<p class="systems-health-tls-line ${statusClass(status)}">${statusDot(status)} TLS cert · expires ${formatTimestamp(cert.expiresAt)} · ${escapeHtml(days)}</p>`;
+  }
+
   function renderCert(cert) {
+    renderTlsCertHealth(cert);
     if (!certEl) return;
     const fields = [];
 
@@ -121,7 +148,6 @@
       return;
     }
 
-    const days = cert.daysRemaining == null ? '—' : `${cert.daysRemaining} day(s)`;
     const probeNote =
       cert.probeHost && cert.probeHost !== cert.hostname
         ? ` <span class="hint">(via ${escapeHtml(cert.probeHost)})</span>`
@@ -130,12 +156,6 @@
     fields.push(renderCertField('Host', `${escapeHtml(cert.hostname || '—')}${probeNote}`));
     fields.push(renderCertField('Subject', escapeHtml(cert.name || '—')));
     fields.push(renderCertField('Issuer', escapeHtml(cert.issuer || '—')));
-    fields.push(
-      renderCertField(
-        'Expires',
-        `<span class="${statusClass(cert.status)}">${statusDot(cert.status)} ${formatTimestamp(cert.expiresAt)} (${escapeHtml(days)})</span>`,
-      ),
-    );
 
     certEl.innerHTML = wrapLbCertCard(fields.join(''));
   }
@@ -205,14 +225,16 @@
     }
     hostEl.innerHTML = `<div class="systems-host-card">
       <h2 class="systems-card-title">${escapeHtml(title)}</h2>
-      ${fields
-        .map(
-          (field) => `<div class="systems-cert-field">
-          <dt>${escapeHtml(field.label || '—')}</dt>
-          <dd>${escapeHtml(field.value || '—')}</dd>
-        </div>`,
-        )
-        .join('')}
+      <div class="systems-host-fields-combined">
+        ${fields
+          .map(
+            (field) => `<div class="systems-host-field-inline">
+            <span class="systems-host-field-label">${escapeHtml(field.label || '—')}</span>
+            <span class="systems-host-field-value">${escapeHtml(field.value || '—')}</span>
+          </div>`,
+          )
+          .join('')}
+      </div>
     </div>`;
   }
 
@@ -282,6 +304,65 @@
     </div>`;
   }
 
+  function toggleSystemsDetailPanel(toggleBtn) {
+    const view = toggleBtn.dataset.systemsView;
+    const panels = {
+      health: healthPanelEl,
+      infrastructure: infrastructurePanelEl,
+      datamodel: dataModelPanelEl,
+    };
+    const panel = panels[view];
+    const open = toggleBtn.getAttribute('aria-expanded') === 'true';
+    const nextOpen = !open;
+    toggleBtn.setAttribute('aria-expanded', String(nextOpen));
+    toggleBtn.classList.toggle('open', nextOpen);
+    if (panel) panel.hidden = !nextOpen;
+    if (nextOpen && view === 'datamodel') {
+      loadDataModelDiagram();
+    }
+  }
+
+  function ensureMermaid() {
+    if (window.mermaid) return Promise.resolve(window.mermaid);
+    if (mermaidLoadPromise) return mermaidLoadPromise;
+    mermaidLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+      script.async = true;
+      script.onload = () => {
+        window.mermaid.initialize({
+          startOnLoad: false,
+          theme: 'neutral',
+          securityLevel: 'strict',
+          er: { useMaxWidth: true },
+        });
+        resolve(window.mermaid);
+      };
+      script.onerror = () => reject(new Error('Failed to load Mermaid'));
+      document.head.appendChild(script);
+    });
+    return mermaidLoadPromise;
+  }
+
+  async function loadDataModelDiagram() {
+    if (!dataModelMountEl || dataModelLoaded) return;
+    dataModelMountEl.textContent = 'Loading diagram…';
+    try {
+      const res = await fetch('/shared/data-model.mmd');
+      if (!res.ok) throw new Error('Failed to load data model');
+      const source = (await res.text()).trim();
+      const diagram = document.createElement('pre');
+      diagram.className = 'mermaid';
+      diagram.textContent = source;
+      dataModelMountEl.replaceChildren(diagram);
+      const mermaid = await ensureMermaid();
+      await mermaid.run({ nodes: [diagram] });
+      dataModelLoaded = true;
+    } catch (err) {
+      dataModelMountEl.innerHTML = `<p class="hint systems-fail">${escapeHtml(err.message || 'Failed to render diagram')}</p>`;
+    }
+  }
+
   function renderSystems(data) {
     if (generatedAtEl) {
       generatedAtEl.textContent = data.generatedAt
@@ -330,6 +411,10 @@
   }
 
   refreshBtnEl?.addEventListener('click', loadSystems);
+
+  document.querySelectorAll('.systems-chevron-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => toggleSystemsDetailPanel(btn));
+  });
 
   window.AdminSystems = {
     configure,
