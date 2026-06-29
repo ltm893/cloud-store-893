@@ -645,6 +645,16 @@ VALUES ('872000000303', 'Java Rocks Hoodie — Charcoal', 'clothes', 'Independen
 INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price)
 VALUES ('872000000304', 'Java Rocks Barista Apron', 'clothes', 'Chef Works', 29.99, NULL);
 
+-- Bottled water (tax-exempt retail)
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price, tax_exempt)
+VALUES ('872000000401', 'Crystal Spring 16.9oz Bottled Water', 'water', 'Crystal Spring Beverages', 1.99, NULL, 1);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price, tax_exempt)
+VALUES ('872000000402', 'Crystal Spring 1L Bottled Water', 'water', 'Crystal Spring Beverages', 2.49, NULL, 1);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price, tax_exempt)
+VALUES ('872000000403', 'Crystal Spring Sparkling Water 12oz', 'water', 'Crystal Spring Beverages', 2.25, NULL, 1);
+INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price, tax_exempt)
+VALUES ('872000000404', 'Crystal Spring Gallon Spring Water', 'water', 'Crystal Spring Beverages', 3.49, 2.99, 1);
+
 -- ── 24. Inventory for retail SKUs (made coffee uses bulk beans, not shelf stock) ─
 
 INSERT INTO bulk_inventory (sku_key, name, quantity_on_hand, unit, reorder_point)
@@ -657,7 +667,7 @@ VALUES ('made coffee', 'kitchen_beans', 1.5, 'oz');
 
 UPDATE products
 SET track_inventory = 1
-WHERE product_type IN ('coffee beans', 'go cups', 'clothes');
+WHERE product_type IN ('coffee beans', 'go cups', 'clothes', 'water');
 
 INSERT INTO product_inventory (product_id, quantity_on_hand, reorder_point)
 SELECT
@@ -666,12 +676,14 @@ SELECT
     WHEN 'coffee beans' THEN 30
     WHEN 'go cups' THEN 20
     WHEN 'clothes' THEN 10
+    WHEN 'water' THEN 48
     ELSE 0
   END,
   CASE p.product_type
     WHEN 'coffee beans' THEN 5
     WHEN 'go cups' THEN 3
     WHEN 'clothes' THEN 2
+    WHEN 'water' THEN 12
     ELSE 0
   END
 FROM products p

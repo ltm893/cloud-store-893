@@ -21,6 +21,8 @@
     "test:cashier-approval-poll": "./scripts/test/test-cashier-approval-poll.sh",
     "test:inventory": "./scripts/test/test-inventory-api.sh",
     "test:inventory:ephemeral": "RUN_EPHEMERAL=yes SKIP_DESTRUCTIVE=yes ./scripts/test/test-inventory-api.sh",
+    "create:test-sales": "node scripts/test/create-test-sales.js",
+    "seed:test-sales-matrix": "node scripts/test/seed-test-sales-matrix.js",
     "test:model-b-session": "./scripts/test/test-model-b-session.sh",
     "test:model-b-session:ephemeral": "RUN_EPHEMERAL=yes ./scripts/test/test-model-b-session.sh",
     "test:ios-admin": "./scripts/ios/run-admin-tests.sh",
