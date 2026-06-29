@@ -23,7 +23,7 @@ test('parseOrderNumber requires exactly 7 digits', () => {
 
 test('allocateOrderNumber returns next sequential value', async () => {
   const ordsGet = async (path) => {
-    assert.equal(path, 'sales/');
+    assert.equal(path, 'sales/?limit=500&offset=0');
     return [
       { order_number: '0000001' },
       { order_number: '0000010' },
@@ -32,6 +32,25 @@ test('allocateOrderNumber returns next sequential value', async () => {
   };
   const next = await allocateOrderNumber({ ordsGet });
   assert.equal(next, '0000011');
+});
+
+test('allocateOrderNumber paginates past ORDS default page size', async () => {
+  const calls = [];
+  const ordsGet = async (path) => {
+    calls.push(path);
+    if (path === 'sales/?limit=500&offset=0') {
+      return Array.from({ length: 500 }, (_, i) => ({
+        order_number: formatOrderNumber(i + 1),
+      }));
+    }
+    if (path === 'sales/?limit=500&offset=500') {
+      return [{ order_number: '0000750' }];
+    }
+    throw new Error(`unexpected path: ${path}`);
+  };
+  const next = await allocateOrderNumber({ ordsGet });
+  assert.equal(next, '0000751');
+  assert.deepEqual(calls, ['sales/?limit=500&offset=0', 'sales/?limit=500&offset=500']);
 });
 
 test('allocateOrderNumber starts at 0000001 on empty sales', async () => {

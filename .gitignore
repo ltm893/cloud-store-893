@@ -73,5 +73,8 @@ ios-admin/**/DerivedData/
 ios-pos/Config/Local.xcconfig
 ios-pos/**/xcuserdata/
 ios-pos/**/DerivedData/
+ios-lister/Config/Local.xcconfig
+ios-lister/**/xcuserdata/
+ios-lister/**/DerivedData/
 
 .venv-certbot/

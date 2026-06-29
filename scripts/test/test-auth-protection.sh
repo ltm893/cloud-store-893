@@ -99,6 +99,7 @@ http_test_probe_cashier_session "$BASE_URL" "$BODY" || true
 
 echo "-- Cashier: public without session --"
 expect_public_anon GET /api/products
+expect_public_anon GET /api/inventory/lookup?q=1
 expect_public_anon GET /api/cashier/session
 curl_req GET "$BASE_URL/api/cashier/approval/status"
 case "$HTTP_CODE" in
