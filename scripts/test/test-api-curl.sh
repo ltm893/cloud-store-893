@@ -120,6 +120,18 @@ expect_code 200 "GET /api/products"
 PRODUCT_ID=$(py -c "import json;d=open('$BODY').read();a=json.loads(d) if d.strip() else [];print(a[0]['id'] if isinstance(a,list)and a else '')" 2>/dev/null || true)
 PRODUCT_BARCODE=$(py -c "import json;d=open('$BODY').read();a=json.loads(d) if d.strip() else [];p=a[0] if isinstance(a,list)and a else {};print(p.get('barcode') or '')" 2>/dev/null || true)
 
+# ── GET /api/inventory/lookup ─────────────────────────────────────────────
+if [[ -n "$PRODUCT_ID" ]]; then
+  curl_json GET "$BASE_URL/api/inventory/lookup?q=$PRODUCT_ID"
+  expect_code 200 "GET /api/inventory/lookup?q=productId"
+fi
+if [[ -n "$PRODUCT_BARCODE" ]]; then
+  curl_json GET "$BASE_URL/api/inventory/lookup?q=$PRODUCT_BARCODE"
+  expect_code 200 "GET /api/inventory/lookup?q=barcode"
+fi
+curl_json GET "$BASE_URL/api/inventory/lookup?q=__not_a_product__"
+expect_code 404 "GET /api/inventory/lookup (missing product)"
+
 # ── Cashier session (PIN unlock or skip when Model B) ─────────────────────
 CASHIER_SESSION_READY=0
 if http_test_unlock_cashier "$BASE_URL" "$COOKIE" "$BODY" "$CASHIER_PIN"; then
