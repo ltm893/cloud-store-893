@@ -237,6 +237,7 @@ const {
   loadBulkInventoryMap,
   loadConsumptionRulesMap,
   loadInventoryMap,
+  lookupProductByQuery,
   mapProductForCashier,
   recordInventoryMovement,
   tracksInventory,
@@ -250,6 +251,11 @@ app.get('/api/products', asyncHandler(async (req, res) => {
     loadInventoryMap(ordsGet),
   ]);
   res.json(products.map((p) => mapProductForCashier(p, inventoryMap)));
+}));
+
+app.get('/api/inventory/lookup', asyncHandler(async (req, res) => {
+  const result = await lookupProductByQuery(ordsGet, req.query.q);
+  res.status(result.status).json(result.body);
 }));
 
 // ── Customers (for linking at checkout / cart preview) ────────────────────

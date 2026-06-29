@@ -1,0 +1,115 @@
+erDiagram
+  products ||--o| product_inventory : "1:1 tracked"
+  products ||--o{ cart_items : "in cart"
+  products ||--o{ sale_items : "sold as"
+  customers ||--o{ sales : "optional"
+  sales ||--|{ sale_items : "lines"
+  sales ||--|{ sale_payments : "payments"
+  sales }o--o| tills : "till_id"
+  bulk_inventory ||--o{ inventory_consumption_rules : "depletion"
+  products ||--o{ inventory_movements : "SKU audit"
+  bulk_inventory ||--o{ inventory_movements : "bulk audit"
+  pos_sessions ||--o{ tills : "opens"
+  pos_sessions ||--o{ till_open_approvals : "open approval"
+  tills ||--o{ till_close_approvals : "close approval"
+
+  products {
+    number id PK
+    string barcode UK
+    string name
+    string product_type
+    number price
+    number sale_price
+  }
+
+  product_inventory {
+    number product_id PK
+    number quantity_on_hand
+    number reorder_point
+  }
+
+  customers {
+    number id PK
+    string name
+    string email
+    string member_code
+  }
+
+  cart_items {
+    number id PK
+    number product_id FK
+    number quantity
+  }
+
+  sales {
+    number id PK
+    string order_number UK
+    number total
+    number customer_id FK
+    number till_id
+    timestamp created_at
+  }
+
+  sale_items {
+    number id PK
+    string order_number
+    number product_id FK
+    number quantity
+    number line_total
+  }
+
+  sale_payments {
+    number id PK
+    string order_number FK
+    string payment_method
+    number amount
+  }
+
+  bulk_inventory {
+    string sku_key PK
+    string name
+    number quantity_on_hand
+    string unit
+  }
+
+  inventory_consumption_rules {
+    string product_type PK
+    string bulk_sku_key FK
+    number quantity_per_unit
+  }
+
+  inventory_movements {
+    number id PK
+    number product_id FK
+    string bulk_sku_key FK
+    number delta
+    string reason
+  }
+
+  pos_sessions {
+    number id PK
+    string register_id
+    string cashier_sub
+    string status
+  }
+
+  till_open_approvals {
+    number id PK
+    string request_token UK
+    number pos_session_id FK
+    string status
+  }
+
+  tills {
+    number id PK
+    number pos_session_id FK
+    string till_type
+    string status
+  }
+
+  till_close_approvals {
+    number id PK
+    string close_token UK
+    number till_id FK
+    string status
+  }
