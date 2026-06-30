@@ -128,11 +128,35 @@ cleanup() {
 }
 trap cleanup EXIT
 
-info "Downloading temporary ADB wallet"
-oci db autonomous-database generate-wallet \
-  --autonomous-database-id "${ADB_OCID}" \
-  --password "WalletTemp1!" \
-  --file "${WALLET_ZIP}" >/dev/null
+if [[ -n "${ADB_WALLET_ZIP:-}" ]]; then
+  [[ -f "${ADB_WALLET_ZIP}" ]] || error "ADB_WALLET_ZIP not found: ${ADB_WALLET_ZIP}"
+  info "Using wallet from ADB_WALLET_ZIP=${ADB_WALLET_ZIP}"
+  WALLET_ZIP="${ADB_WALLET_ZIP}"
+  # Do not delete user-supplied wallet on exit
+  trap - EXIT
+else
+  info "Downloading temporary ADB wallet (OCI API — often 1–2 minutes; errors print below)"
+  if ! oci db autonomous-database generate-wallet \
+    --autonomous-database-id "${ADB_OCID}" \
+    --password "WalletTemp1!" \
+    --file "${WALLET_ZIP}"; then
+    cat <<'EOF' >&2
+[error] Wallet download failed (OCI often returns HTTP 500 on generateWallet).
+
+Workaround A — Database Actions (no wallet):
+  1. OCI Console → Autonomous Database → your DB → Database Actions → SQL
+  2. Open scripts/db/seed.sql from this repo → Run Script
+
+Workaround B — Console wallet + retry script:
+  1. DB → Database connection → Download wallet (set a password you remember)
+  2. export ADB_WALLET_ZIP=~/Downloads/Wallet_CLOUDSTORE893.zip
+  3. ./scripts/reset-db.sh --yes
+     (SQLcl will prompt for the wallet password you set in the console)
+
+EOF
+    error "Wallet download failed"
+  fi
+fi
 
 info "Running scripts/db/seed.sql against ${DB_SERVICE}"
 "${SQL_CMD}" -cloudconfig "${WALLET_ZIP}" \

@@ -10,7 +10,7 @@ enum PosAPIError: LocalizedError {
             return "Invalid API URL"
         case .httpStatus(let code, let message):
             if let message, !message.isEmpty { return message }
-            return "Server error (\(code))"
+            return APIErrorMessageLogic.httpErrorMessage(statusCode: code, body: nil)
         }
     }
 }
@@ -18,11 +18,13 @@ enum PosAPIError: LocalizedError {
 final class PosAPIClient {
     let baseURL: URL
     let cookieStore: CookieStore
+    let registerId: String
     private let session: URLSession
 
-    init(baseURL: URL, cookieStore: CookieStore) {
+    init(baseURL: URL, cookieStore: CookieStore, registerId: String = AppConfig.registerId) {
         self.baseURL = AppConfigLogic.apiBaseURL(fromRaw: baseURL.absoluteString)
         self.cookieStore = cookieStore
+        self.registerId = registerId
         let config = URLSessionConfiguration.default
         config.httpShouldSetCookies = false
         config.httpCookieAcceptPolicy = .never
@@ -30,7 +32,19 @@ final class PosAPIClient {
     }
 
     func fetchCashierSession() async throws -> CashierSessionResponse {
-        try await getJSON(path: "api/cashier/session", as: CashierSessionResponse.self)
+        try await getJSON(
+            path: "api/cashier/session",
+            queryItems: [URLQueryItem(name: "register_id", value: registerId)],
+            as: CashierSessionResponse.self
+        )
+    }
+
+    func unlockCashier(pin: String, registerId: String) async throws -> UnlockCashierResponse {
+        try await postJSON(
+            path: "api/cashier/unlock",
+            body: UnlockCashierRequest(pin: pin, clientKind: "ios", registerId: registerId),
+            as: UnlockCashierResponse.self
+        )
     }
 
     func pollApprovalStatus() async throws -> ApprovalStatusResponse {
@@ -63,11 +77,19 @@ final class PosAPIClient {
     }
 
     func closeTillPreview() async throws -> CloseTillPreviewResponse {
-        try await getJSON(path: "api/cashier/shift/close/preview", as: CloseTillPreviewResponse.self)
+        try await getJSON(
+            path: "api/cashier/shift/close/preview",
+            queryItems: [URLQueryItem(name: "register_id", value: registerId)],
+            as: CloseTillPreviewResponse.self
+        )
     }
 
     func submitCloseTill(_ body: SubmitCloseTillRequest) async throws -> SubmitCloseTillResponse {
-        try await postJSON(path: "api/cashier/shift/close/till", body: body, as: SubmitCloseTillResponse.self)
+        try await postJSON(
+            path: "api/cashier/shift/close/till",
+            body: body,
+            as: SubmitCloseTillResponse.self
+        )
     }
 
     func closeTillStatus(closeToken: String? = nil) async throws -> CloseTillStatusResponse {
@@ -238,7 +260,8 @@ final class PosAPIClient {
         cookieStore.absorbSetCookieHeaders(http.allHeaderFields, for: url)
 
         guard (200 ..< 300).contains(http.statusCode) else {
-            let message = String(data: data, encoding: .utf8)
+            let body = String(data: data, encoding: .utf8)
+            let message = APIErrorMessageLogic.httpErrorMessage(statusCode: http.statusCode, body: body)
             throw PosAPIError.httpStatus(http.statusCode, message)
         }
 

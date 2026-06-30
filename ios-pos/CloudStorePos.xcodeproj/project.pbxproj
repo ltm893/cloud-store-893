@@ -59,6 +59,11 @@
 		B2000001000000000000003F /* SaleReceiptLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002000000000000003F /* SaleReceiptLogic.swift */; };
 		B20000010000000000000040 /* SaleReceiptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000040 /* SaleReceiptPanel.swift */; };
 		B20000010000000000000041 /* SaleReceiptLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000041 /* SaleReceiptLogicTests.swift */; };
+		B20000010000000000000042 /* APIErrorMessageLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000042 /* APIErrorMessageLogic.swift */; };
+		B20000010000000000000043 /* APIErrorMessageLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000043 /* APIErrorMessageLogicTests.swift */; };
+		B20000010000000000000044 /* PinSignInLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000044 /* PinSignInLogic.swift */; };
+		B20000010000000000000045 /* PinSignInScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000045 /* PinSignInScreen.swift */; };
+		B20000010000000000000046 /* PinSignInLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000020000000000000046 /* PinSignInLogicTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -119,6 +124,11 @@
 		B2000002000000000000003F /* SaleReceiptLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaleReceiptLogic.swift; sourceTree = "<group>"; };
 		B20000020000000000000040 /* SaleReceiptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaleReceiptPanel.swift; sourceTree = "<group>"; };
 		B20000020000000000000041 /* SaleReceiptLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaleReceiptLogicTests.swift; sourceTree = "<group>"; };
+		B20000020000000000000042 /* APIErrorMessageLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIErrorMessageLogic.swift; sourceTree = "<group>"; };
+		B20000020000000000000043 /* APIErrorMessageLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIErrorMessageLogicTests.swift; sourceTree = "<group>"; };
+		B20000020000000000000044 /* PinSignInLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinSignInLogic.swift; sourceTree = "<group>"; };
+		B20000020000000000000045 /* PinSignInScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinSignInScreen.swift; sourceTree = "<group>"; };
+		B20000020000000000000046 /* PinSignInLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinSignInLogicTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXContainerItemProxy section */
@@ -208,6 +218,8 @@
 				B20000020000000000000038 /* CustomerFindLogicTests.swift */,
 				B2000002000000000000003D /* OfflineQueueStoreTests.swift */,
 				B20000020000000000000041 /* SaleReceiptLogicTests.swift */,
+				B20000020000000000000043 /* APIErrorMessageLogicTests.swift */,
+				B20000020000000000000046 /* PinSignInLogicTests.swift */,
 			);
 			path = CloudStorePosTests;
 			sourceTree = "<group>";
@@ -273,6 +285,8 @@
 				B2000002000000000000002A /* CheckoutPaymentLogic.swift */,
 				B20000020000000000000036 /* CustomerFindLogic.swift */,
 				B2000002000000000000003A /* NetworkErrorLogic.swift */,
+				B20000020000000000000042 /* APIErrorMessageLogic.swift */,
+				B20000020000000000000044 /* PinSignInLogic.swift */,
 				B2000002000000000000003B /* OfflineQueueFlushLogic.swift */,
 				B2000002000000000000003F /* SaleReceiptLogic.swift */,
 			);
@@ -288,6 +302,7 @@
 				B20000020000000000000026 /* OpeningTillScreen.swift */,
 				B2000002000000000000002C /* RegisterScreen.swift */,
 				B2000002000000000000002D /* CheckoutPaymentPanel.swift */,
+				B20000020000000000000045 /* PinSignInScreen.swift */,
 				B20000020000000000000031 /* SaleTotalsPanel.swift */,
 				B20000020000000000000032 /* CartQuantityEditHeader.swift */,
 				B20000020000000000000033 /* PosRegisterChrome.swift */,
@@ -424,6 +439,7 @@
 				B20000010000000000000021 /* PosRegisterViewModel.swift in Sources */,
 				B20000010000000000000022 /* RegisterScreen.swift in Sources */,
 				B20000010000000000000023 /* CheckoutPaymentPanel.swift in Sources */,
+				B20000010000000000000045 /* PinSignInScreen.swift in Sources */,
 				B20000010000000000000025 /* PosLayoutMetrics.swift in Sources */,
 				B20000010000000000000026 /* PosPanelStyle.swift in Sources */,
 				B20000010000000000000027 /* SaleTotalsPanel.swift in Sources */,
@@ -435,6 +451,8 @@
 				B2000001000000000000002D /* CustomerFindPanel.swift in Sources */,
 				B20000010000000000000039 /* OfflineQueueStore.swift in Sources */,
 				B2000001000000000000003A /* NetworkErrorLogic.swift in Sources */,
+				B20000010000000000000042 /* APIErrorMessageLogic.swift in Sources */,
+				B20000010000000000000044 /* PinSignInLogic.swift in Sources */,
 				B2000001000000000000003B /* OfflineQueueFlushLogic.swift in Sources */,
 				B2000001000000000000003C /* OfflineQueueStatus.swift in Sources */,
 				B2000001000000000000003E /* RegisterStatusPanel.swift in Sources */,
@@ -457,6 +475,8 @@
 				B2000001000000000000002E /* CustomerFindLogicTests.swift in Sources */,
 				B2000001000000000000003D /* OfflineQueueStoreTests.swift in Sources */,
 				B20000010000000000000041 /* SaleReceiptLogicTests.swift in Sources */,
+				B20000010000000000000043 /* APIErrorMessageLogicTests.swift in Sources */,
+				B20000010000000000000046 /* PinSignInLogicTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

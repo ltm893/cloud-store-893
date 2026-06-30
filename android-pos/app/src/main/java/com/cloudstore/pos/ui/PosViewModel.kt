@@ -1431,7 +1431,7 @@ class PosViewModel(
         }
         viewModelScope.launch {
             _state.value = _state.value.copy(status = "Signing in...")
-            runCatching { repository.unlockCashier(entered) }
+            runCatching { repository.unlockCashier(entered, registerId) }
                 .onSuccess { session ->
                     if (session.awaitingTill) {
                         loadOpeningTillGate()

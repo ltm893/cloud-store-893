@@ -18,6 +18,16 @@ struct PosRootView: View {
         .onAppear {
             viewModel.probeSessionOnLaunch()
         }
+        .alert("Notice", isPresented: Binding(
+            get: { viewModel.alertMessage != nil },
+            set: { if !$0 { viewModel.clearAlert() } }
+        )) {
+            Button("OK", role: .cancel) {
+                viewModel.clearAlert()
+            }
+        } message: {
+            Text(viewModel.alertMessage ?? "")
+        }
     }
 
     private var headerBar: some View {
@@ -69,7 +79,18 @@ struct PosRootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .signIn(let pinAllowed, let idpEnabled):
-            signInContent(pinAllowed: pinAllowed, idpEnabled: idpEnabled)
+            PinSignInScreen(
+                pinInput: viewModel.pinInput,
+                pinAllowed: pinAllowed,
+                idpEnabled: idpEnabled,
+                status: viewModel.status,
+                onDigit: { viewModel.appendPinDigit($0) },
+                onClear: { viewModel.clearPinInput() },
+                onBackspace: { viewModel.backspacePinInput() },
+                onUnlock: { viewModel.unlockWithPin() },
+                onOidcSignIn: { viewModel.openOidcSignIn() },
+                onRetrySession: { viewModel.recheckSession() }
+            )
 
         case .oidcSignIn:
             OidcSignInScreen(
@@ -153,7 +174,8 @@ struct PosRootView: View {
                         openingCountedFloat: openingCountedFloat,
                         cashSalesTotal: cashSalesTotal,
                         changeGivenTotal: changeGivenTotal
-                    )
+                    ),
+                    supervisorApprovalRequired: viewModel.closeSupervisorApprovalRequired
                 ),
                 onSelectDenomination: { viewModel.selectClosingDenomination($0) },
                 onDigit: { viewModel.appendClosingTillDigit($0) },
@@ -186,42 +208,6 @@ struct PosRootView: View {
                 closeVariance: closeVariance
             )
         }
-    }
-
-    private func signInContent(pinAllowed: Bool, idpEnabled: Bool) -> some View {
-        VStack(spacing: 16) {
-            Text("Cashier sign-in")
-                .font(.title2.bold())
-                .foregroundStyle(Color(red: 135 / 255, green: 36 / 255, blue: 52 / 255))
-
-            if viewModel.status.localizedCaseInsensitiveContains("break") {
-                Text(viewModel.status)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 420)
-            }
-
-            if idpEnabled || !pinAllowed {
-                Button("Sign in with Oracle") {
-                    viewModel.openOidcSignIn()
-                }
-                .buttonStyle(PosPrimaryButtonStyle())
-            }
-
-            if pinAllowed {
-                Text("PIN sign-in available when supervisor approval is off.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            Button("Retry session check") {
-                viewModel.recheckSession()
-            }
-            .font(.footnote)
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func waitingApprovalContent(
@@ -282,7 +268,11 @@ struct PosRootView: View {
             Text("Close till")
                 .font(.title2.bold())
                 .foregroundStyle(PosColors.burgundy)
-            Text("Credit cards only shift. A supervisor must approve before this till closes and the next cashier can sign in.")
+            Text(
+                viewModel.closeSupervisorApprovalRequired
+                    ? "Credit cards only shift. A supervisor must approve before this till closes and the next cashier can sign in."
+                    : "Close this credit-only shift to free the register for the next cashier."
+            )
                 .font(.body)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 480)
@@ -292,7 +282,11 @@ struct PosRootView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            Button(submitting ? "Submitting…" : "Submit for approval") {
+            Button(
+                submitting
+                    ? "Submitting…"
+                    : (viewModel.closeSupervisorApprovalRequired ? "Submit for approval" : "Close till")
+            ) {
                 viewModel.submitClosingCreditOnly()
             }
             .buttonStyle(PosPrimaryButtonStyle())

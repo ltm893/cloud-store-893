@@ -51,14 +51,18 @@ final class PosSessionViewModel {
     private(set) var status = "Checking session…"
     private(set) var lastSession: CashierSessionResponse?
     private(set) var signedInViaTillResume = false
+    var pinInput = ""
 
     private let api: PosAPIClient
     private let cookieStore: CookieStore
     private let apiBaseURL: URL
     private let registerId: String
     private var requireFreshIdpLogin = false
+    private var awaitingTillToken: String?
     private var approvalPollTask: Task<Void, Never>?
     private var closePollTask: Task<Void, Never>?
+    private(set) var closeSupervisorApprovalRequired = false
+    var alertMessage: String?
 
     var activeTillId: Int? { lastSession?.tillId }
     var activePosSessionId: Int? { lastSession?.posSessionId }
@@ -71,7 +75,7 @@ final class PosSessionViewModel {
         self.apiBaseURL = apiBaseURL
         self.registerId = registerId
         self.cookieStore = cookieStore
-        self.api = PosAPIClient(baseURL: apiBaseURL, cookieStore: cookieStore)
+        self.api = PosAPIClient(baseURL: apiBaseURL, cookieStore: cookieStore, registerId: registerId)
     }
 
     var oidcLoginURL: URL {
@@ -128,12 +132,116 @@ final class PosSessionViewModel {
                 cookieStore.pinAwaitingTillFromStoreIfNeeded(baseURL: apiBaseURL)
             }
             await probeSession()
+            if let session = lastSession {
+                applySessionAuth(session)
+            }
             ensureWaitingApprovalAfterOidc(completionURL: completionURL)
         }
     }
 
     func recheckSession() {
         Task { await probeSession() }
+    }
+
+    func appendPinDigit(_ digit: Character) {
+        pinInput = PinSignInLogic.appendPinDigit(current: pinInput, digit: digit)
+    }
+
+    func clearPinInput() {
+        pinInput = ""
+    }
+
+    func backspacePinInput() {
+        pinInput = PinSignInLogic.backspacePin(pinInput)
+    }
+
+    func unlockWithPin() {
+        let entered = pinInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !entered.isEmpty else {
+            status = "Enter PIN"
+            return
+        }
+        Task { await performPinUnlock(pin: entered) }
+    }
+
+    private func stashAwaitingTillToken(_ token: String?) {
+        guard let raw = token?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return
+        }
+        awaitingTillToken = raw
+        cookieStore.rememberAwaitingTillToken(raw, baseURL: apiBaseURL)
+    }
+
+    private func performPinUnlock(pin: String) async {
+        status = "Signing in…"
+        do {
+            let unlock = try await api.unlockCashier(pin: pin, registerId: registerId)
+            guard unlock.ok == true else {
+                status = "Unlock failed"
+                return
+            }
+            stashAwaitingTillToken(unlock.awaitingTillToken)
+            if unlock.resumed == true {
+                let session = try await api.fetchCashierSession()
+                lastSession = session
+                applySessionAuth(session)
+                pinInput = ""
+                applySessionProbe(session)
+                return
+            }
+            let session = try await api.fetchCashierSession()
+            lastSession = session
+            applySessionAuth(session)
+            if awaitingTillToken == nil {
+                stashAwaitingTillToken(session.awaitingTillToken)
+            }
+            if awaitingTillToken == nil {
+                stashAwaitingTillToken(cookieStore.pinnedAwaitingTillTokenValue)
+            }
+            guard session.ok || session.awaitingTill || unlock.awaitingTill == true else {
+                status = "Sign-in did not persist — check API URL and rebuild"
+                return
+            }
+            pinInput = ""
+            if session.awaitingTill || unlock.awaitingTill == true {
+                await loadOpeningTillGate()
+            } else {
+                applySessionProbe(session)
+            }
+        } catch let error as PosAPIError {
+            status = unlockErrorMessage(error)
+        } catch {
+            status = connectivityMessage(error)
+        }
+    }
+
+    private func unlockErrorMessage(_ error: PosAPIError) -> String {
+        guard case let .httpStatus(code, message) = error else {
+            return error.localizedDescription
+        }
+        switch code {
+        case 401:
+            return "Invalid PIN"
+        case 403:
+            return message ?? "Supervisor approval required — use Oracle sign-in"
+        case 404:
+            return "Server needs update (missing login API)"
+        case 409:
+            return registerInUseMessage(from: message)
+        default:
+            return message ?? "Server error (\(code))"
+        }
+    }
+
+    private func connectivityMessage(_ error: Error) -> String {
+        if NetworkErrorLogic.isOfflineLike(error) {
+            return "Cannot reach server — check Wi‑Fi and API URL (\(AppConfig.apiHostLabel))"
+        }
+        let text = error.localizedDescription
+        if text.localizedCaseInsensitiveContains("did not persist") {
+            return text
+        }
+        return text.isEmpty ? "Connection failed" : text
     }
 
     func cancelApprovalWait() {
@@ -158,6 +266,7 @@ final class PosSessionViewModel {
             requireFreshIdpLogin = true
             lastSession = nil
             signedInViaTillResume = false
+            pinInput = ""
             authGate = .signIn(pinAllowed: false, idpEnabled: true)
             status = "Signed out for break — till stays open"
             await probeSession(showChecking: false)
@@ -238,6 +347,7 @@ final class PosSessionViewModel {
         Task {
             status = "Cancelling…"
             try? await api.cancelOpeningTill()
+            clearAwaitingTillAuth()
             await returnToFreshSignIn(status: "Sign-in cancelled")
             await probeSession(showChecking: false)
             if case .signIn = authGate {
@@ -246,17 +356,30 @@ final class PosSessionViewModel {
         }
     }
 
+    func clearAlert() {
+        alertMessage = nil
+    }
+
+    private func presentAlert(_ message: String) {
+        alertMessage = message
+    }
+
     func beginCloseTill() {
         Task {
             status = "Loading close till…"
             do {
                 let preview = try await api.closeTillPreview()
                 guard preview.ok else {
-                    status = preview.error ?? "Cannot close till"
+                    let message = preview.error ?? "Cannot close till"
+                    status = message
+                    presentAlert(message)
                     return
                 }
+                closeSupervisorApprovalRequired = preview.supervisorApprovalRequired
                 if preview.cartBlocked {
-                    status = "Clear the cart before closing the till"
+                    let message = "Clear the cart before closing the till"
+                    status = message
+                    presentAlert(message)
                     return
                 }
                 if preview.creditOnly {
@@ -266,6 +389,7 @@ final class PosSessionViewModel {
                 }
             } catch {
                 status = error.localizedDescription
+                presentAlert(error.localizedDescription)
             }
         }
     }
@@ -349,7 +473,43 @@ final class PosSessionViewModel {
     }
 
     private func ensureOpeningTillCookies() async {
+        await prepareForTillSubmit()
+    }
+
+    private func applySessionAuth(_ session: CashierSessionResponse) {
+        guard let raw = session.awaitingTillToken?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return }
+        awaitingTillToken = raw
+        cookieStore.rememberAwaitingTillToken(raw, baseURL: apiBaseURL)
+    }
+
+    private func prepareForTillSubmit() async {
         await syncWebViewCookiesWithRetry()
+        cookieStore.pinAwaitingTillFromStoreIfNeeded(baseURL: apiBaseURL)
+        if let token = awaitingTillToken {
+            cookieStore.rememberAwaitingTillToken(token, baseURL: apiBaseURL)
+        }
+    }
+
+    private func awaitingTillTokenForSubmit() -> String? {
+        if let token = awaitingTillToken?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
+            return token
+        }
+        return cookieStore.pinnedAwaitingTillTokenValue
+    }
+
+    private func clearAwaitingTillAuth() {
+        awaitingTillToken = nil
+        cookieStore.clearAwaitingTillAuth(for: apiBaseURL.host)
+    }
+
+    private func onTillSubmitSuccess(_ response: SubmitOpeningTillResponse) {
+        if response.pending || response.ok {
+            clearAwaitingTillAuth()
+        }
+        if let token = response.requestToken?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
+            cookieStore.rememberPendingRequestToken(token, baseURL: apiBaseURL)
+        }
     }
 
     private func ensureWaitingApprovalAfterOidc(completionURL: URL) {
@@ -392,6 +552,7 @@ final class PosSessionViewModel {
     private func applySessionProbe(_ session: CashierSessionResponse) {
         if session.awaitingTill {
             stopApprovalPoll()
+            applySessionAuth(session)
             Task { await loadOpeningTillGate() }
             return
         }
@@ -399,6 +560,8 @@ final class PosSessionViewModel {
         if session.ok {
             stopApprovalPoll()
             requireFreshIdpLogin = false
+            pinInput = ""
+            clearAwaitingTillAuth()
             let user = session.displayUser ?? "Cashier"
             authGate = .signedIn(user: user)
             if signedInViaTillResume {
@@ -623,15 +786,8 @@ final class PosSessionViewModel {
             status = "Submitting till count…"
 
             do {
-                await ensureOpeningTillCookies()
-
-                let response = try await api.submitOpeningTill(
-                    SubmitOpeningTillRequest(
-                        cashMode: cashMode,
-                        denominations: denominations,
-                        countedTotal: countedTotal
-                    )
-                )
+                let response = try await executeTillSubmit(cashMode: cashMode, denominations: denominations, countedTotal: countedTotal)
+                onTillSubmitSuccess(response)
 
                 if response.pending {
                     if let token = response.requestToken {
@@ -668,10 +824,10 @@ final class PosSessionViewModel {
                 status = response.error ?? "Till submit failed"
             } catch let error as PosAPIError {
                 switch error {
-                case .httpStatus(401, _):
-                    await returnToFreshSignIn(status: "Sign-in expired — sign in with Oracle again")
+                case .httpStatus(401, let message):
+                    await handleTillSubmitUnauthorized(message: message)
                 case .httpStatus(409, let message):
-                    await returnToFreshSignIn(status: registerInUseMessage(from: message))
+                    await recoverableSignInAfterTillFailure(registerInUseMessage(from: message))
                 default:
                     updateOpeningTillGate { $0.copy(submitting: false) }
                     status = error.localizedDescription
@@ -683,25 +839,91 @@ final class PosSessionViewModel {
         }
     }
 
+    private func executeTillSubmit(
+        cashMode: String,
+        denominations: [String: Int]?,
+        countedTotal: Double?
+    ) async throws -> SubmitOpeningTillResponse {
+        func body() -> SubmitOpeningTillRequest {
+            SubmitOpeningTillRequest(
+                cashMode: cashMode,
+                denominations: denominations,
+                countedTotal: countedTotal,
+                awaitingTillToken: awaitingTillTokenForSubmit()
+            )
+        }
+
+        await prepareForTillSubmit()
+        do {
+            return try await api.submitOpeningTill(body())
+        } catch let error as PosAPIError {
+            if case .httpStatus(401, _) = error {
+                await prepareForTillSubmit()
+                return try await api.submitOpeningTill(body())
+            }
+            throw error
+        }
+    }
+
+    private func handleTillSubmitUnauthorized(message: String?) async {
+        clearAwaitingTillAuth()
+        updateOpeningTillGate { $0.copy(submitting: false) }
+        let pinAllowed = lastSession.map { $0.pinAllowed && !$0.supervisorApprovalRequired } ?? true
+        authGate = .signIn(
+            pinAllowed: pinAllowed,
+            idpEnabled: lastSession?.idpEnabled ?? true
+        )
+        if let message, !message.isEmpty {
+            status = message
+        } else {
+            status = "Sign-in step expired — enter PIN or sign in with Oracle again"
+        }
+    }
+
     private func applySessionAfterTillSubmit() async {
-        for attempt in 0 ..< 2 {
+        updateOpeningTillGate { $0.copy(submitting: false) }
+        for attempt in 0 ..< 4 {
             do {
                 let session = try await api.fetchCashierSession()
                 lastSession = session
+                applySessionAuth(session)
                 applySessionProbe(session)
                 if case .signedIn = authGate { return }
                 if case .waitingApproval = authGate { return }
+                if session.ok { return }
             } catch {
-                if attempt == 1 {
-                    await returnToFreshSignIn(
-                        status: "Till submitted but session did not persist — sign in again"
-                    )
-                    return
+                if attempt >= 3 {
+                    break
                 }
             }
-            try? await Task.sleep(nanoseconds: 200_000_000)
+
+            if cookieStore.hasCashierSession(for: apiBaseURL.host), attempt >= 1 {
+                requireFreshIdpLogin = false
+                pinInput = ""
+                clearAwaitingTillAuth()
+                authGate = .signedIn(user: lastSession?.displayUser ?? "Cashier")
+                status = "Signed in — till open"
+                return
+            }
+
+            try? await Task.sleep(nanoseconds: 250_000_000)
         }
-        await returnToFreshSignIn(status: "Till submitted but session did not persist — sign in again")
+        await recoverableSignInAfterTillFailure(
+            "Till opened but session check failed — enter PIN and try again"
+        )
+    }
+
+    private func recoverableSignInAfterTillFailure(_ message: String) async {
+        stopApprovalPoll()
+        requireFreshIdpLogin = false
+        pinInput = ""
+        clearAwaitingTillAuth()
+        let pinAllowed = lastSession.map { $0.pinAllowed && !$0.supervisorApprovalRequired } ?? true
+        authGate = .signIn(
+            pinAllowed: pinAllowed,
+            idpEnabled: lastSession?.idpEnabled ?? true
+        )
+        status = message
     }
 
     private func enterClosingCreditOnly() {
@@ -738,10 +960,11 @@ final class PosSessionViewModel {
                     SubmitCloseTillRequest(
                         cashMode: cashMode,
                         denominations: denominations,
-                        countedTotal: countedTotal
+                        countedTotal: countedTotal,
+                        registerId: registerId
                     )
                 )
-                if response.approved {
+                if response.approved || (response.ok && !response.pending) {
                     await finishCloseTillSignedOff()
                     return
                 }
@@ -759,10 +982,13 @@ final class PosSessionViewModel {
                     return
                 }
                 setCloseSubmitting(false)
-                status = response.error ?? "Close till failed"
+                let message = response.error ?? "Close till failed"
+                status = message
+                presentAlert(message)
             } catch {
                 setCloseSubmitting(false)
                 status = error.localizedDescription
+                presentAlert(error.localizedDescription)
             }
         }
     }
@@ -791,13 +1017,18 @@ final class PosSessionViewModel {
         stopClosePoll()
         stopApprovalPoll()
         await WebViewCookieSync.clearIdpCookies()
-        requireFreshIdpLogin = true
+
+        let pinAllowed = lastSession.map { $0.pinAllowed && !$0.supervisorApprovalRequired } ?? true
+        let idpEnabled = lastSession?.idpEnabled ?? true
+
         lastSession = nil
         signedInViaTillResume = false
+        pinInput = ""
+        requireFreshIdpLogin = false
         clearCashierCookies()
-        authGate = .checking
-        status = "Till closed — sign in with your credentials"
-        await probeSession(showChecking: false)
+        clearAwaitingTillAuth()
+        authGate = .signIn(pinAllowed: pinAllowed, idpEnabled: idpEnabled)
+        status = "Till closed — sign in again"
     }
 
     private func startClosePoll() {
@@ -925,6 +1156,8 @@ final class PosSessionViewModel {
         lastSession = nil
         signedInViaTillResume = false
         clearCashierCookies()
+        clearAwaitingTillAuth()
+        pinInput = ""
         authGate = .signIn(pinAllowed: false, idpEnabled: true)
         self.status = status
     }
