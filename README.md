@@ -227,6 +227,8 @@ Available npm scripts:
 | `npm run test:supervisor-routes` | HTTP smoke test for supervisor approval routes (manual; server + env — see [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md#testing-manual-today)) |
 | `npm run test:cashier-approval-session` | Pending cookie + `/api/cashier/session` for Model B (manual; server needs `CASHIER_SUPERVISOR_APPROVAL=true`) |
 | `npm run test:cashier-approval-poll` | Poll → supervisor approve → session cookie E2E (manual; server + supervisor env) |
+| `npm run create:test-sales` | Create real test sales via checkout (manual; server running; destructive — see [docs/testing.md](docs/testing.md)) |
+| `npm run seed:test-sales-matrix` | Seed 40-sale checkout matrix: credit-only + cash/credit tills (manual; destructive — see [docs/testing.md](docs/testing.md)) |
 
 `npm test` runs unit tests on every push (GitHub Actions). Integration tests run when `ORDS_BASE_URL` is configured as a repo secret, or via **Actions → Test → Run workflow**. Full guide: [docs/testing.md](docs/testing.md). Model B scripts below remain opt-in.
 
