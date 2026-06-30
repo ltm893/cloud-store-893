@@ -71,6 +71,11 @@ struct CustomerFindPanel: View {
                                                 .font(.caption)
                                                 .foregroundStyle(.secondary)
                                         }
+                                        if customer.hasCardOnFile, let last4 = customer.cardLast4, !last4.isEmpty {
+                                            Text("Card on file ····\(last4)")
+                                                .font(.caption2)
+                                                .foregroundStyle(PosColors.teal)
+                                        }
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, 14)

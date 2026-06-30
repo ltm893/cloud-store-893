@@ -27,6 +27,7 @@ struct CashierSessionResponse: Codable, Equatable {
     let idpLoginUrl: String?
     let pinAllowed: Bool
     let awaitingTill: Bool
+    let awaitingTillToken: String?
     let cashTillEnabled: Bool
     let cashEnabled: Bool?
     let cashMode: String?
@@ -39,7 +40,7 @@ struct CashierSessionResponse: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case ok, pending, auth, sub, email, name, user, cashierEmail
         case supervisorApprovalRequired, idpEnabled, idpLoginUrl, pinAllowed
-        case awaitingTill, cashTillEnabled, cashEnabled, cashMode
+        case awaitingTill, awaitingTillToken, cashTillEnabled, cashEnabled, cashMode
         case expectedOpeningFloat, tillId, posSessionId, approval, error
     }
 
@@ -58,6 +59,7 @@ struct CashierSessionResponse: Codable, Equatable {
         idpLoginUrl = try c.decodeIfPresent(String.self, forKey: .idpLoginUrl)
         pinAllowed = try c.decodeIfPresent(Bool.self, forKey: .pinAllowed) ?? true
         awaitingTill = try c.decodeIfPresent(Bool.self, forKey: .awaitingTill) ?? false
+        awaitingTillToken = try c.decodeIfPresent(String.self, forKey: .awaitingTillToken)
         cashTillEnabled = try c.decodeIfPresent(Bool.self, forKey: .cashTillEnabled) ?? false
         cashEnabled = try c.decodeIfPresent(Bool.self, forKey: .cashEnabled)
         cashMode = try c.decodeIfPresent(String.self, forKey: .cashMode)
@@ -81,4 +83,19 @@ struct CashierSessionResponse: Codable, Equatable {
 
 struct OkResponse: Codable {
     let ok: Bool?
+    let awaitingTill: Bool?
+    let awaitingTillToken: String?
+}
+
+struct UnlockCashierResponse: Codable {
+    let ok: Bool?
+    let awaitingTill: Bool?
+    let awaitingTillToken: String?
+    let resumed: Bool?
+}
+
+struct UnlockCashierRequest: Encodable {
+    let pin: String
+    let clientKind: String
+    let registerId: String
 }

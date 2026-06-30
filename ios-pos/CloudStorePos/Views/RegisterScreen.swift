@@ -9,6 +9,7 @@ struct RegisterScreen: View {
     @State private var drawerOpen = false
     @State private var adminOpen = false
     @State private var statusVisible = false
+    @State private var showCardOnFileConfirm = false
 
     init(
         user: String,
@@ -66,6 +67,19 @@ struct RegisterScreen: View {
             }
             .fullScreenCover(isPresented: $adminOpen) {
                 AdminWebScreen { adminOpen = false }
+            }
+            .alert("Confirm CardOnFile", isPresented: $showCardOnFileConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Confirm") {
+                    viewModel.applyCardOnFilePayment()
+                }
+                .disabled(viewModel.selectedCustomer?.cardLast4?.isEmpty != false)
+            } message: {
+                if let last4 = viewModel.selectedCustomer?.cardLast4, !last4.isEmpty {
+                    Text("Charge card ending in \(last4)?")
+                } else {
+                    Text("No card on file for this customer.")
+                }
             }
         }
     }
@@ -139,6 +153,11 @@ struct RegisterScreen: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 scanBar
+                if let checkoutError = viewModel.checkoutError, !viewModel.checkoutOpen {
+                    Text(checkoutError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
                 if let error = viewModel.addItemError {
                     Text(error)
                         .font(.caption)
@@ -293,6 +312,7 @@ struct RegisterScreen: View {
                     cashEnabled: viewModel.cashEnabled,
                     creditOnlyPayments: viewModel.creditOnlyPayments,
                     amountInput: viewModel.checkoutAmountInput,
+                    errorMessage: viewModel.checkoutError,
                     processingCard: viewModel.processingCard,
                     onAmountDigit: { viewModel.appendCheckoutDigit($0) },
                     onAmountClear: { viewModel.clearCheckoutAmount() },
@@ -300,8 +320,10 @@ struct RegisterScreen: View {
                     onAmountDecimal: { viewModel.appendCheckoutDigit(".") },
                     onFillRemaining: { viewModel.fillRemainingBalance() },
                     onQuickBill: { viewModel.applyQuickBill($0) },
+                    showCardOnFileButton: viewModel.selectedCustomer?.hasCardOnFile == true,
                     onApplyCash: { viewModel.applyPayment(method: "cash") },
                     onApplyCard: { viewModel.applyPayment(method: "card") },
+                    onPayCardOnFile: { showCardOnFileConfirm = true },
                     onRemovePayment: { viewModel.removePayment(at: $0) },
                     onBack: { viewModel.closeCheckout() }
                 )
@@ -446,6 +468,11 @@ private struct CartLineRow: View {
             Text("ID \(item.productId) · Reg \(CartTotalsLogic.formatMoney(item.regularPrice))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+        if item.taxExempt {
+            Text("Tax-free")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(PosColors.teal)
         }
     }
 }

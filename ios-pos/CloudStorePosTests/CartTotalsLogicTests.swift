@@ -45,6 +45,25 @@ final class CartTotalsLogicTests: XCTestCase {
         XCTAssertEqual(total, 15.6, accuracy: 0.01)
     }
 
+    func testLinkedCustomerTaxExemptWaterHasNoTax() {
+        let total = CartTotalsLogic.computeSaleGrandTotal(
+            cart: [item(publicLine: 1.99, payable: 1.79, taxExempt: true)],
+            customerLinked: true,
+            customerDiscount: true,
+            salesFeeRate: 0,
+            taxRate: 0.06
+        )
+        XCTAssertEqual(total, 1.79, accuracy: 0.01)
+        let tax = CartTotalsLogic.computeTaxAmount(
+            cart: [item(publicLine: 1.99, payable: 1.79, taxExempt: true)],
+            customerLinked: true,
+            customerDiscount: true,
+            salesFeeRate: 0,
+            taxRate: 0.06
+        )
+        XCTAssertEqual(tax, 0, accuracy: 0.001)
+    }
+
     func testBuildCashPaymentWithChange() {
         let payment = CheckoutPaymentLogic.buildCheckoutPaymentLine(
             method: "cash",

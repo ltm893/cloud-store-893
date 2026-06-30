@@ -191,7 +191,7 @@ function is893Member(customerRow) {
   return customerDiscountApplies(customerRow);
 }
 
-function enrichCartRow(row, linked893) {
+function enrichCartRow(row, linked893, productRow = null) {
   const qty = Number(row.quantity);
   const regularPrice = roundMoney(Number(row.price));
   const onSale = isOnSale(row);
@@ -212,12 +212,15 @@ function enrichCartRow(row, linked893) {
     unitPricePayable: unitPay,
     lineSubtotalPublic: linePublic,
     lineSubtotalPayable: linePay,
-    taxExempt: Number(row.tax_exempt) === 1,
+    taxExempt: resolveCartLineTaxExempt(row, productRow),
   };
 }
 
-function summarizeCart(cartRows, linked893) {
-  const items = cartRows.map((r) => enrichCartRow(r, linked893));
+function summarizeCart(cartRows, linked893, productsById = null) {
+  const items = cartRows.map((r) => {
+    const product = productsById?.get(Number(r.product_id)) ?? null;
+    return enrichCartRow(r, linked893, product);
+  });
   const subtotalPreMember = roundMoney(items.reduce((s, it) => s + it.lineSubtotalPublic, 0));
   const subtotalPayable = roundMoney(items.reduce((s, it) => s + it.lineSubtotalPayable, 0));
   const memberDiscountPreTax = roundMoney(subtotalPreMember - subtotalPayable);
@@ -239,6 +242,7 @@ const {
   loadInventoryMap,
   lookupProductByQuery,
   mapProductForCashier,
+  resolveCartLineTaxExempt,
   recordInventoryMovement,
   tracksInventory,
 } = require('./lib/inventory');
@@ -290,9 +294,12 @@ async function resolveLinked893FromRequest(req) {
 }
 
 async function fetchCartSummary(linked893) {
-  const cart = await ordsGet('cart_view/');
+  const [cart, productsById] = await Promise.all([
+    ordsGet('cart_view/'),
+    loadProductsById(),
+  ]);
   const rows = Array.isArray(cart) ? cart : [];
-  return summarizeCart(rows, linked893);
+  return summarizeCart(rows, linked893, productsById);
 }
 
 async function respondWithCart(req, res) {
@@ -524,12 +531,13 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
   }
 
   const linked893 = is893Member(customerRow);
-  const summary = summarizeCart(rows, linked893);
+  const productsById = await loadProductsById();
+  const summary = summarizeCart(rows, linked893, productsById);
   const validation = await validateCartLines(summary.items);
   if (validation.error) {
     return res.status(validation.status || 409).json({ error: validation.error });
   }
-  const { productsById, rulesByType } = validation;
+  const { rulesByType } = validation;
 
   const settlement = resolveCheckoutSettlement({
     cartItems: summary.items.map((it) => ({

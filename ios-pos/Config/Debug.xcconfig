@@ -1,5 +1,5 @@
-// Default API host (OCI). Optional override: copy Local.xcconfig.example → Local.xcconfig
-#include? "Local.xcconfig"
+// Default API host (OCI). Local override: npm run ios-pos:local-config → Config/Local.xcconfig
 API_BASE_URL = https:/$()/oci.cloudstore893.com/
 POS_SALES_FEE_RATE = 0.0
 POS_TAX_RATE = 0.06
+#include? "Local.xcconfig"
