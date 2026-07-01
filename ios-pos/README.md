@@ -12,6 +12,7 @@ Native SwiftUI register for **Cloud Store 893**, mirroring `android-pos/`. **iPa
 |---------|----------------|
 | Launch session probe | `GET /api/cashier/session` |
 | Oracle OIDC sign-in | `WKWebView` → `/oauth/login?client_kind=ios&register_id=…` |
+| **PIN unlock** | Numpad → `POST /api/cashier/unlock` (`clientKind=ios`, `register_id`) |
 | Cookie bridge | `WebViewCookieSync` → `CookieStore` → `URLSession` |
 | Waiting for supervisor | Poll `GET /api/cashier/approval/status` every **2.5s** |
 | Cancel approval | `POST /api/cashier/approval/cancel` |
@@ -26,7 +27,6 @@ Native SwiftUI register for **Cloud Store 893**, mirroring `android-pos/`. **iPa
 
 ## Not implemented yet
 
-- PIN numpad unlock
 - Camera barcode scan
 - Card on file
 - Receipt print

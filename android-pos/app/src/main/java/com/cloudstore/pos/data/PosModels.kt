@@ -60,6 +60,9 @@ data class Sale(
 
 data class OkResponse(
     val ok: Boolean = false,
+    @Json(name = "awaitingTill") val awaitingTill: Boolean = false,
+    @Json(name = "awaitingTillToken") val awaitingTillToken: String? = null,
+    val resumed: Boolean = false,
 )
 
 /** @deprecated Use [CashierSessionResponse] for session probe. */
@@ -147,6 +150,7 @@ data class CloseTillStatusResponse(
 data class SubmitOpeningTillResponse(
     val ok: Boolean = false,
     val pending: Boolean = false,
+    val resumed: Boolean = false,
     @Json(name = "awaitingTill") val awaitingTill: Boolean = false,
     @Json(name = "requestToken") val requestToken: String? = null,
     @Json(name = "cashMode") val cashMode: String? = null,

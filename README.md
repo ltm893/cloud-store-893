@@ -227,6 +227,8 @@ Available npm scripts:
 | `npm run test:supervisor-routes` | HTTP smoke test for supervisor approval routes (manual; server + env — see [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md#testing-manual-today)) |
 | `npm run test:cashier-approval-session` | Pending cookie + `/api/cashier/session` for Model B (manual; server needs `CASHIER_SUPERVISOR_APPROVAL=true`) |
 | `npm run test:cashier-approval-poll` | Poll → supervisor approve → session cookie E2E (manual; server + supervisor env) |
+| `npm run create:test-sales` | Create real test sales via checkout (manual; server running; destructive — see [docs/testing.md](docs/testing.md)) |
+| `npm run seed:test-sales-matrix` | Seed 40-sale checkout matrix: credit-only + cash/credit tills (manual; destructive — see [docs/testing.md](docs/testing.md)) |
 
 `npm test` runs unit tests on every push (GitHub Actions). Integration tests run when `ORDS_BASE_URL` is configured as a repo secret, or via **Actions → Test → Run workflow**. Full guide: [docs/testing.md](docs/testing.md). Model B scripts below remain opt-in.
 
@@ -513,6 +515,8 @@ allowing your user/group to read usage-report in the tenancy.
 - [ ] CI/CD (GitHub Actions → OCIR → container refresh) — tests run in [`.github/workflows/test.yml`](.github/workflows/test.yml); deploy workflow not added yet.
 - [ ] Restrict ingress (`ingress_allowed_cidrs` in `terraform.tfvars`) when not on public IP — still default `0.0.0.0/0`; LB fronts the container but SSH/app rules remain open per [terraform/variables.tf](terraform/variables.tf).
 - [x] Tablet: OIDC sign-in (WebView), offline queue sync/discard, cart snapshot on queue — see `CashierOidcWebScreen`, `OfflineQueueStore.cartLines`, `clearOfflineQueue`.
+- [ ] **ADB wallet / `reset-db.sh`** — OCI `generateWallet` often returns HTTP 500; document reliable path: Database Actions → Run `scripts/db/seed.sql`, or Console **Download wallet** + `ADB_WALLET_ZIP=… ./scripts/reset-db.sh --yes` (see `scripts/db/reset-db.sh`).
+- [x] **Admin force-close till** — Approvals tab → **Open tills — force close** (`POST /api/admin/open-tills/:id/force-close`).
 - [ ] **Cash rounding (web POS only)** — server, tablets, and admin reports persist `register_total` / `cash_due`; web cart still has no tax/cash tender UI — see [CONTENTS.md](CONTENTS.md#cash-rounding).
 - [ ] **Card terminal / payment pad** — no pad API today; Card is manual “paid” only — see [CONTENTS.md](CONTENTS.md#card-terminal--payment-pad-todo).
 - [ ] **Receipt / print after Complete Sale** — tablet shows `SaleReceipt` after checkout; `printReceipt()` is a UI stub (no hardware printer integration yet).

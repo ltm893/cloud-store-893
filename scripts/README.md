@@ -79,6 +79,9 @@ OCI scripts are documented in [docs/oci-deploy.md](../docs/oci-deploy.md) and [d
 | `test-cashier-approval-poll.sh` | Poll → approve → session cookie E2E (Model B) |
 | `test-login-approval-lib.js` | Smoke-test `lib/login-approval.js` against live ORDS |
 | `create-test-pending-approval.js` | Insert pending approval row for supervisor route tests |
+| `create-test-sales.js` | Create real test sales via checkout (`npm run create:test-sales`) |
+| `seed-test-sales-matrix.js` | 40-sale matrix: credit-only + cash/credit tills (`npm run seed:test-sales-matrix`) |
+| `verify-test-sales-matrix.sql` | SQL checks after matrix seed (`scripts/db/verify-test-sales-matrix.sql`) |
 
 ---
 

@@ -374,6 +374,12 @@ body:not(.tab-tables) .menu-btn {
   border-color: #f5c2c0;
 }
 
+.approval-actions button.force-close-btn {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
 .approvals-empty {
   margin-top: 8px;
 }

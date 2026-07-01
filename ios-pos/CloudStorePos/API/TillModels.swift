@@ -27,11 +27,13 @@ struct SubmitOpeningTillRequest: Encodable {
     let cashMode: String
     let denominations: [String: Int]?
     let countedTotal: Double?
+    let awaitingTillToken: String?
 }
 
 struct SubmitOpeningTillResponse: Codable, Equatable {
     let ok: Bool
     let pending: Bool
+    let resumed: Bool
     let awaitingTill: Bool
     let requestToken: String?
     let cashMode: String?
@@ -41,7 +43,7 @@ struct SubmitOpeningTillResponse: Codable, Equatable {
     let error: String?
 
     enum CodingKeys: String, CodingKey {
-        case ok, pending, awaitingTill, requestToken, cashMode, cashEnabled
+        case ok, pending, resumed, awaitingTill, requestToken, cashMode, cashEnabled
         case openingCountedFloat, openingVariance, error
     }
 
@@ -49,6 +51,7 @@ struct SubmitOpeningTillResponse: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         ok = try c.decodeIfPresent(Bool.self, forKey: .ok) ?? false
         pending = try c.decodeIfPresent(Bool.self, forKey: .pending) ?? false
+        resumed = try c.decodeIfPresent(Bool.self, forKey: .resumed) ?? false
         awaitingTill = try c.decodeIfPresent(Bool.self, forKey: .awaitingTill) ?? false
         requestToken = try c.decodeIfPresent(String.self, forKey: .requestToken)
         cashMode = try c.decodeIfPresent(String.self, forKey: .cashMode)
@@ -68,11 +71,12 @@ struct CloseTillPreviewResponse: Codable, Equatable {
     let cashSalesTotal: Double?
     let changeGivenTotal: Double?
     let denominations: [TillDenomination]
+    let supervisorApprovalRequired: Bool
     let error: String?
 
     enum CodingKeys: String, CodingKey {
         case ok, creditOnly, cartBlocked, openingCountedFloat, expectedCloseFloat
-        case cashSalesTotal, changeGivenTotal, denominations, error
+        case cashSalesTotal, changeGivenTotal, denominations, supervisorApprovalRequired, error
     }
 
     init(from decoder: Decoder) throws {
@@ -85,6 +89,7 @@ struct CloseTillPreviewResponse: Codable, Equatable {
         cashSalesTotal = try c.decodeIfPresent(Double.self, forKey: .cashSalesTotal)
         changeGivenTotal = try c.decodeIfPresent(Double.self, forKey: .changeGivenTotal)
         denominations = try c.decodeIfPresent([TillDenomination].self, forKey: .denominations) ?? []
+        supervisorApprovalRequired = try c.decodeIfPresent(Bool.self, forKey: .supervisorApprovalRequired) ?? false
         error = try c.decodeIfPresent(String.self, forKey: .error)
     }
 }
@@ -93,6 +98,7 @@ struct SubmitCloseTillRequest: Encodable {
     let cashMode: String
     let denominations: [String: Int]?
     let countedTotal: Double?
+    let registerId: String?
 }
 
 struct SubmitCloseTillResponse: Codable, Equatable {

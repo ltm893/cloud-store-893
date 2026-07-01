@@ -276,6 +276,8 @@ Not part of `npm test` or `npm run test:all`. Run when working on supervisor app
 | `test:supervisor-routes` | `CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true` recommended | Admin approval list/approve/deny routes |
 | `test:cashier-approval-session` | `CASHIER_SUPERVISOR_APPROVAL=true` | Pending cookie + `/api/cashier/session` shapes |
 | `test:cashier-approval-poll` | Model B + supervisor PIN fallback | Full poll → approve → `cashier_session` cookie |
+| `create:test-sales` | Server running; `CASHIER_PIN` | PIN unlock + credit-only till → N checkouts (default 1) |
+| `seed:test-sales-matrix` | Server running; `CASHIER_PIN` (+ `ADMIN_PIN` if supervisor approval on) | 40-sale matrix: credit-only till (card) + cash/credit till (card/cash/split) |
 
 See [cashier-supervisor-approval.md](cashier-supervisor-approval.md#testing-manual-today) for step-by-step Model B manual testing.
 
@@ -285,6 +287,29 @@ Example:
 CASHIER_SUPERVISOR_APPROVAL=true CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true npm run dev:up
 # separate terminal:
 npm run test:cashier-approval-poll
+```
+
+---
+
+## Manual sales seeding (dev fixtures)
+
+**Not** part of `npm test` or CI. Use after `npm run dev:up` when you want realistic sales in ADB (reports, till close, order-number checks, etc.).
+
+| Command | What it does |
+|---------|----------------|
+| `npm run create:test-sales` | PIN unlock + credit-only till → N checkouts. `--yes` skips confirm; `--count 5` for batch. |
+| `npm run seed:test-sales-matrix` | Two till sessions × 20 sales: card-only (credit-only till), then card/cash/split + linked customer (cash+credit till). |
+| `scripts/db/verify-test-sales-matrix.sql` | SQL PASS/FAIL checks in Database Actions after the matrix script |
+
+**Requires:** running server, `CASHIER_PIN` (and `ADMIN_PIN` if supervisor approval is on). With `OPENING_CASH_FLOAT` set, scripts complete till open automatically.
+
+```bash
+npm run dev:up
+# separate terminal:
+npm run create:test-sales -- --yes --count 5
+npm run seed:test-sales-matrix -- --yes
+# then in Database Actions / SQLcl:
+# @scripts/db/verify-test-sales-matrix.sql
 ```
 
 ---

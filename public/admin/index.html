@@ -52,6 +52,15 @@
       <div id="shiftClosesList" class="approvals-list"></div>
       <p id="shiftClosesEmpty" class="hint approvals-empty" hidden>No pending till closes.</p>
     </section>
+    <section id="openTillsPanel" class="approvals-panel" hidden>
+      <h2>Open tills — force close</h2>
+      <p class="hint">Close a stale till on a register (wrong cashier, abandoned tablet, or blocked PIN resume). No cashier count; audit row is written to till close approvals.</p>
+      <div id="openTillsForbidden" class="approvals-forbidden" hidden>
+        <p>Your account does not have supervisor privileges.</p>
+      </div>
+      <div id="openTillsList" class="approvals-list"></div>
+      <p id="openTillsEmpty" class="hint approvals-empty" hidden>No open tills.</p>
+    </section>
     <section id="reportsPanel" class="reports-panel" hidden>
       <h2>Store reports</h2>
       <p class="hint">On-demand totals from live sales and inventory. Ranges use UTC calendar dates.</p>
@@ -178,6 +187,7 @@
   <script src="/shared/dom-utils.js?v=20260611c"></script>
   <script src="/admin/admin-approvals.js?v=20260611d"></script>
   <script src="/admin/admin-shift-closes.js?v=20260611d"></script>
+  <script src="/admin/admin-open-tills.js?v=20260625a"></script>
   <script src="/admin/admin-reports.js?v=20260618a"></script>
   <script src="/shared/admin-systems.js?v=20260628a"></script>
   <script src="/admin/admin.js?v=20260619f"></script>

@@ -67,16 +67,28 @@ final class CookieStore: @unchecked Sendable {
     }
 
     func absorbSetCookieHeaders(_ headers: [AnyHashable: Any], for url: URL) {
-        var fields: [String: String] = [:]
+        var collected: [HTTPCookie] = []
         for (key, value) in headers {
-            guard let name = key as? String else { continue }
-            if name.lowercased() == "set-cookie", let raw = value as? String {
-                fields[name] = fields[name].map { "\($0), \(raw)" } ?? raw
+            guard let name = key as? String, name.lowercased() == "set-cookie" else { continue }
+            let rawValues: [String]
+            if let raw = value as? String {
+                rawValues = [raw]
+            } else if let array = value as? [String] {
+                rawValues = array
+            } else {
+                continue
+            }
+            for raw in rawValues {
+                collected.append(
+                    contentsOf: HTTPCookie.cookies(
+                        withResponseHeaderFields: ["Set-Cookie": raw],
+                        for: url
+                    )
+                )
             }
         }
-        guard !fields.isEmpty else { return }
-        let cookies = HTTPCookie.cookies(withResponseHeaderFields: fields, for: url)
-        saveFromResponse(url: url, cookies: cookies)
+        guard !collected.isEmpty else { return }
+        saveFromResponse(url: url, cookies: collected)
     }
 
     func cookies(for url: URL) -> [HTTPCookie] {
@@ -172,6 +184,29 @@ final class CookieStore: @unchecked Sendable {
         pinnedPendingToken = nil
         pinnedAwaitingTillToken = nil
         manualSessionId = nil
+    }
+
+    func clearAwaitingTillAuth(for host: String?) {
+        lock.lock()
+        pinnedAwaitingTillToken = nil
+        if let host {
+            store[host]?.removeValue(forKey: Self.cashierAwaitingTill)
+        }
+        lock.unlock()
+    }
+
+    var pinnedAwaitingTillTokenValue: String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return pinnedAwaitingTillToken
+    }
+
+    func hasCashierSession(for host: String?) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if manualSessionId != nil { return true }
+        guard let host else { return false }
+        return store[host]?[Self.cashierSession] != nil
     }
 
     private func makeCookie(host: String, name: String, value: String, secure: Bool) -> HTTPCookie? {
