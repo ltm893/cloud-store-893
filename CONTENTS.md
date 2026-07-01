@@ -516,7 +516,7 @@ Ref: `android-pos/README.md` (Cash — no pennies).
 
 ### Admin till ops & DB reseed (TODO)
 
-- [ ] **Admin force-close till** — close a stale/orphan till on a register from `/admin/` (wrong cashier, “tablet in use”, blocks PIN resume).
+- [x] **Admin force-close till** — `/admin/` Approvals → **Open tills — force close**; audit in `till_close_approvals` (`force_closed`).
 - [ ] **Reliable ADB wallet for `reset-db.sh`** — OCI CLI `generateWallet` often returns HTTP 500; use **Database Actions** → Run `scripts/db/seed.sql`, or Console **Download wallet** + `ADB_WALLET_ZIP=… ./scripts/reset-db.sh --yes`.
 
 ### Card terminal / payment pad (TODO)
