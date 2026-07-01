@@ -667,7 +667,12 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
 const { registerAdminRoutes } = require('./lib/admin-routes');
 const { registerSupervisorRoutes } = require('./lib/supervisor-routes');
 
-registerSupervisorRoutes(app, { loginApprovalStore, shiftCloseStore });
+registerSupervisorRoutes(app, {
+  loginApprovalStore,
+  shiftCloseStore,
+  tillStore,
+  posSessionStore,
+});
 registerAdminRoutes(app, { ordsGet, ordsPost, ordsPut, ordsDelete, ordsTimestamp });
 
 app.get('/api/sales/recent', asyncHandler(async (req, res) => {

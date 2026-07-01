@@ -193,5 +193,5 @@
     session = adminSession;
   }
 
-  window.AdminShiftCloses = { configure, activate, deactivate, show, hide, isActive };
+  window.AdminShiftCloses = { configure, activate, deactivate, show, hide, isActive, refresh: () => loadPending({ quiet: true }) };
 })();

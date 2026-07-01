@@ -24,6 +24,7 @@ const editCancelBtn = document.getElementById('editCancel');
 const menuBtn = document.getElementById('menuBtn');
 const approvalsPanelEl = document.getElementById('approvalsPanel');
 const shiftClosesPanelEl = document.getElementById('shiftClosesPanel');
+const openTillsPanelEl = document.getElementById('openTillsPanel');
 const reportsPanelEl = document.getElementById('reportsPanel');
 const systemsPanelEl = document.getElementById('systemsPanel');
 const tablePanelEl = document.getElementById('tablePanel');
@@ -66,6 +67,7 @@ function formatCell(value, col, tableName) {
     }
   }
   if (tableName === 'till_close_approvals') {
+    if (col === 'status' && value === 'force_closed') return 'Force closed';
     if (col === 'till_type') {
       if (value === 'credit_only') return 'Card only';
       if (value === 'cash_and_card') return 'Cash + card';
@@ -115,9 +117,9 @@ function setPanelHidden(el, hidden) {
 function resolveInitialAdminTab(session) {
   const requested = new URLSearchParams(window.location.search).get('tab');
   let tab = requested && ADMIN_TAB_IDS.includes(requested) ? requested : null;
-  if (tab === 'approvals' && !session.supervisorApprovalEnabled) tab = null;
+  if (tab === 'approvals' && !session.isSupervisor && !session.supervisorApprovalEnabled) tab = null;
   if (!tab) {
-    tab = session.supervisorApprovalEnabled && session.isSupervisor ? 'approvals' : 'tables';
+    tab = session.isSupervisor ? 'approvals' : 'tables';
   }
   return tab;
 }
@@ -141,18 +143,21 @@ function switchAdminTab(tab) {
 
   setPanelHidden(approvalsPanelEl, true);
   setPanelHidden(shiftClosesPanelEl, true);
+  setPanelHidden(openTillsPanelEl, true);
   setPanelHidden(reportsPanelEl, true);
   setPanelHidden(systemsPanelEl, true);
   setPanelHidden(tablePanelEl, true);
 
   window.AdminApprovals?.deactivate?.();
   window.AdminShiftCloses?.deactivate?.();
+  window.AdminOpenTills?.deactivate?.();
   window.AdminReports?.deactivate?.();
   window.AdminSystems?.deactivate?.();
 
   if (tab === 'approvals') {
     window.AdminApprovals?.activate?.();
     window.AdminShiftCloses?.activate?.();
+    window.AdminOpenTills?.activate?.();
   } else if (tab === 'reports') {
     window.AdminReports?.activate?.();
   } else if (tab === 'systems') {
@@ -418,6 +423,13 @@ async function loadTable(name) {
         adminSession: session,
       });
     }
+    if (window.AdminOpenTills) {
+      window.AdminOpenTills.configure({
+        apiFetch,
+        setStatus,
+        adminSession: session,
+      });
+    }
     if (window.AdminReports) {
       window.AdminReports.configure({
         apiFetch,
@@ -430,7 +442,7 @@ async function loadTable(name) {
         setStatus,
       });
     }
-    if (!session.supervisorApprovalEnabled && approvalsTabBtn) {
+    if (!session.supervisorApprovalEnabled && !session.isSupervisor && approvalsTabBtn) {
       approvalsTabBtn.hidden = true;
     }
     await loadMeta();
