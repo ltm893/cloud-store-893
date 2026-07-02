@@ -558,6 +558,15 @@ final class PosSessionViewModel {
         }
 
         if session.ok {
+            if session.tillOpenForSales == false {
+                stopApprovalPoll()
+                pinInput = ""
+                clearAwaitingTillAuth()
+                authGate = .signIn(pinAllowed: session.pinAllowed, idpEnabled: session.idpEnabled)
+                status = session.saleBlockedMessage
+                    ?? "This till was closed by a supervisor. Sign out and start a new shift to continue selling."
+                return
+            }
             stopApprovalPoll()
             requireFreshIdpLogin = false
             pinInput = ""

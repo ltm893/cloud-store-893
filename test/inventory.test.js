@@ -16,9 +16,11 @@ const inventoryMap = new Map([
   [11, { product_id: 11, quantity_on_hand: 0, reorder_point: 2 }],
 ]);
 
-test('tracksInventory respects track_inventory flag', () => {
+test('tracksInventory respects track_inventory flag and product_type fallback', () => {
   assert.equal(tracksInventory({ track_inventory: 1 }), true);
   assert.equal(tracksInventory({ track_inventory: 0 }), false);
+  assert.equal(tracksInventory({ track_inventory: 0, product_type: 'water' }), true);
+  assert.equal(tracksInventory({ track_inventory: 0, product_type: 'made coffee' }), false);
 });
 
 test('availableQuantity is unlimited when not tracked', () => {
@@ -42,6 +44,7 @@ test('canFulfillQuantity blocks over-allocation', () => {
   const blocked = canFulfillQuantity(product, inventoryMap, 5);
   assert.equal(blocked.ok, false);
   assert.match(blocked.error, /only 3 available/);
+  assert.equal(blocked.maxOrderable, 3);
 });
 
 test('mapProductForCashier exposes quantity for tracked SKUs', () => {

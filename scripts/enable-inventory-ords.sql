@@ -1,1 +1,0 @@
-db/migrate/enable-inventory-ords.sql

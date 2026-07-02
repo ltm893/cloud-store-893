@@ -184,10 +184,26 @@
     </form>
   </dialog>
 
+  <dialog id="adminPromptDialog" class="admin-prompt-dialog">
+    <form id="adminPromptForm" method="dialog">
+      <h3 id="adminPromptTitle">Confirm</h3>
+      <p id="adminPromptMessage" class="hint admin-prompt-message"></p>
+      <label id="adminPromptLabel" class="admin-prompt-label">
+        <span id="adminPromptLabelText">Reason (optional)</span>
+        <textarea id="adminPromptInput" rows="3" maxlength="500"></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="adminPromptCancel">Cancel</button>
+        <button type="submit" id="adminPromptConfirm" class="danger">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="/shared/dom-utils.js?v=20260611c"></script>
-  <script src="/admin/admin-approvals.js?v=20260611d"></script>
-  <script src="/admin/admin-shift-closes.js?v=20260611d"></script>
-  <script src="/admin/admin-open-tills.js?v=20260625a"></script>
+  <script src="/shared/admin-prompt.js?v=20260702a"></script>
+  <script src="/admin/admin-approvals.js?v=20260702a"></script>
+  <script src="/admin/admin-shift-closes.js?v=20260702a"></script>
+  <script src="/admin/admin-open-tills.js?v=20260702a"></script>
   <script src="/admin/admin-reports.js?v=20260618a"></script>
   <script src="/shared/admin-systems.js?v=20260628a"></script>
   <script src="/admin/admin.js?v=20260619f"></script>

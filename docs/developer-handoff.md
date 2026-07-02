@@ -216,7 +216,7 @@ Identity Domains are **not** Terraform-managed — `cloud-store-app-1` survives 
 ./scripts/oci/terraform-destroy-workloads-dev.sh --yes
 ./scripts/oci/deploy-dev.sh
 CLOUD_STORE_ENV=dev ./scripts/oci/dev-dns-a-record.sh
-./scripts/sync-env-dev.sh
+./scripts/dev/sync-env-dev.sh
 ./scripts/oci/idp/bootstrap-dev.sh --resume --apply
 ```
 

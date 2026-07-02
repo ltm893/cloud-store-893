@@ -354,7 +354,12 @@
 
   async function denyRequest(requestToken, btn) {
     if (!requestToken) return;
-    const reason = window.prompt('Reason for denial (optional):', '') ?? '';
+    const reason = await AdminPrompt.ask({
+      title: 'Deny till open',
+      message: 'The cashier will remain locked out until they submit a new request.',
+      label: 'Reason for denial (optional)',
+      confirmText: 'Deny',
+    });
     if (reason === null) return;
 
     btn.disabled = true;
@@ -364,7 +369,7 @@
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason: reason.trim() || undefined }),
+          body: JSON.stringify({ reason: reason || undefined }),
         },
       );
       const payload = await res.json().catch(() => ({}));

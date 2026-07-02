@@ -1,1 +1,0 @@
-db/migrate/migrate-pos-sessions-tills.sql

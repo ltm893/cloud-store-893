@@ -1,6 +1,6 @@
 # Cashier login — Model B (IdP + supervisor approval)
 
-**Living doc** — update the [Journey log](#journey-log) and [Implementation checklist](#implementation-checklist) as work lands. Last updated: **2026-05-29** (step 8 landed).
+**Living doc** — update the [Journey log](#journey-log) and [Implementation checklist](#implementation-checklist) as work lands. Last updated: **2026-07-02** (force-close sale guard + admin prompt dialog).
 
 **Model B:** Cashier signs in with **Oracle Identity Domains (OIDC)**. The app creates a **pending login** and waits for a **supervisor** (admin IdP user in `store-supervisors`) to approve before issuing `cashier_session`.
 
@@ -21,6 +21,7 @@ Related: [idp-setup.md](idp-setup.md) (Phase 2 IdP), [CONTENTS.md](../CONTENTS.m
 | 2026-05-29 | **Step 6** | Web POS — `#approvalGate` waiting overlay, 2.5s poll on `/api/cashier/approval/status`, cancel, IdP-only sign-in when supervisor approval on. |
 | 2026-05-29 | **Step 7** | Admin — `admin-approvals.js` panel (list/approve/deny, 4s refresh); session exposes `supervisorApprovalEnabled` + `isSupervisor`. |
 | 2026-05-29 | **Step 8** | Tablet — WebView OIDC (`CashierOidcWebScreen`), cookie sync to Retrofit, approval poll/cancel, IdP-only login when Model B on. |
+| 2026-07-02 | **Force-close** | Admin **Open tills — force close** ends POS session; `lib/till-sale-guard.js` blocks cart/checkout; session probe exposes `tillOpenForSales`. Reason prompt via `AdminPrompt` (replaces `window.prompt` in WebView). |
 | | | Next: IdM groups + token claims in OCI Console (step 9). |
 
 ---
@@ -94,6 +95,7 @@ Related: [idp-setup.md](idp-setup.md) (Phase 2 IdP), [CONTENTS.md](../CONTENTS.m
 │  lib/login-approval.js    create / approve / deny / expire requests         │
 │  lib/supervisor-routes.js GET list, POST approve/deny (admin auth)          │
 │  lib/cashier-auth.js      cashier_session gate; cashier_pending cookie      │
+│  lib/till-sale-guard.js   block cart/checkout when till closed / force-close │
 └─────────────────────────────────────────────────────────────────────────────┘
          │                                    │
          │ ORDS REST                          │ OIDC
@@ -265,6 +267,8 @@ CASHIER_SUPERVISOR_APPROVAL=true CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true npm r
 | 4 | Admin → **Login approvals** | **Approve** the pending cashier |
 | 5 | Web or tablet | Register loads; add to cart / checkout works |
 
+**Force-close (orphan till):** With cashier still signed in on a register, supervisor opens **Admin → Approvals → Open tills — force close**, enters a reason in the prompt dialog, and confirms. Register should immediately fail add/checkout with supervisor message; session probe returns `tillOpenForSales: false`. Cashier must sign in and open a new till.
+
 **Tablet only:** rebuild APK with current Mac LAN IP (`LAN_IP=… ./RebuildReinstall.sh` in `android-pos/`).
 
 **Windows PC:** use Chrome/Edge at `http://<LAN_IP>:3000/` as cashier; tablet or another browser tab for admin — no APK needed.
@@ -278,8 +282,8 @@ CASHIER_SUPERVISOR_APPROVAL=true CASHIER_SUPERVISOR_PIN_IS_SUPERVISOR=true npm r
 **Apply locally / OCI** (destructive — recreates all tables):
 
 ```bash
-./scripts/reset-db.sh
-# or paste scripts/seed.sql in Database Actions → SQL → Run Script
+./scripts/db/reset-db.sh
+# or paste scripts/db/seed.sql in Database Actions → SQL → Run Script
 ```
 
 Verify ORDS:
@@ -308,7 +312,7 @@ curl -s "${ORDS}/login_approval_requests/" | head
 
 | File | Role |
 |------|------|
-| `scripts/seed.sql` | `login_approval_requests` table + ORDS |
+| `scripts/db/seed.sql` | `login_approval_requests` table + ORDS |
 | `lib/login-approval.js` | Core pending/approve logic |
 | `lib/supervisor-auth.js` | Group membership check |
 | `lib/supervisor-routes.js` | Admin approval APIs |
@@ -321,8 +325,9 @@ curl -s "${ORDS}/login_approval_requests/" | head
 | `android-pos/.../CashierOidcWebScreen.kt` | WebView OIDC login |
 | `android-pos/.../WebViewCookieSync.kt` | WebView → OkHttp cookie bridge |
 | `.env.example` | New env vars |
-| `scripts/test-login-approval-lib.js` | ORDS smoke (step 2) |
-| `scripts/test-supervisor-routes.sh` | HTTP smoke (step 3) |
+| `scripts/test/test-login-approval-lib.js` | ORDS smoke (step 2) |
+| `scripts/test/test-supervisor-routes.sh` | HTTP smoke (step 3) |
+| `scripts/test/create-test-pending-approval.js` | Helper for supervisor route test |
 | `scripts/create-test-pending-approval.js` | Helper for supervisor route test |
 
 ---

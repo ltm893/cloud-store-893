@@ -8,6 +8,9 @@ enum APIErrorMessageLogic {
               let error = json["error"] as? String,
               !error.isEmpty
         else { return nil }
+        if let maxOrderable = json["maxOrderable"] as? NSNumber, maxOrderable.intValue > 0 {
+            return "\(error) (max \(maxOrderable.intValue) can be ordered)"
+        }
         return error
     }
 

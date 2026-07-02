@@ -64,7 +64,7 @@ export CLOUD_STORE_DEV_OCID="<container_instance_ocid from deploy output>"
 Optional local ORDS URL for dev:
 
 ```bash
-./scripts/sync-env-dev.sh   # writes .env.dev ORDS_BASE_URL from dev state
+./scripts/dev/sync-env-dev.sh   # writes .env.dev ORDS_BASE_URL from dev state
 ```
 
 ### 3. DNS
@@ -104,7 +104,7 @@ Save the **generated password** printed at the end (or reset via Oracle later). 
 ```bash
 ./scripts/oci/deploy-dev.sh
 CLOUD_STORE_ENV=dev ./scripts/oci/dev-dns-a-record.sh
-./scripts/sync-env-dev.sh
+./scripts/dev/sync-env-dev.sh
 ./scripts/oci/idp/bootstrap-dev.sh --resume --apply
 ```
 

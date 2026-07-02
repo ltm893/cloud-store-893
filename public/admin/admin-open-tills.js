@@ -107,11 +107,13 @@
 
   async function forceCloseTill(tillId, btn) {
     if (!tillId) return;
-    const reason =
-      window.prompt(
-        'Force-close this till? Clears register lock without a cashier count.\n\nReason (optional):',
-        '',
-      ) ?? null;
+    const reason = await AdminPrompt.ask({
+      title: 'Force close till',
+      message:
+        'Clears register lock without a cashier count. An audit row is written to till close approvals.',
+      label: 'Reason (optional)',
+      confirmText: 'Force close',
+    });
     if (reason === null) return;
 
     btn.disabled = true;
@@ -119,7 +121,7 @@
       const res = await apiFetch(`/api/admin/open-tills/${encodeURIComponent(tillId)}/force-close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason.trim() || undefined }),
+        body: JSON.stringify({ reason: reason || undefined }),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || res.statusText);

@@ -114,12 +114,12 @@ Equivalent shell entry points:
 
 ## Unit tests
 
-**Location:** `test/*.test.js` (29 files, **152** cases as of last `npm test`)  
+**Location:** `test/*.test.js` (30+ files)  
 **Runner:** Node.js built-in [`node:test`](https://nodejs.org/api/test.html) (no Jest/Mocha dependency).
 
 | File | Module / area under test |
 |------|-------------------------|
-| `admin-index.test.js` | `public/admin/index.html` — Platform tab wiring |
+| `admin-index.test.js` | `public/admin/index.html` — Platform tab wiring, `AdminPrompt` dialog + `admin-prompt.js` before open-tills script |
 | `admin-orientation.test.js` | `lib/admin-orientation.js` — portrait vs landscape, `client_kind=ios` |
 | `approval-errors.test.js` | `lib/approval-errors.js` |
 | `awaiting-till-store.test.js` | `lib/awaiting-till-store.js` — dev persistence reload |
@@ -129,7 +129,7 @@ Equivalent shell entry points:
 | `cashier-identity-match.test.js` | `lib/cashier-identity-match.js` — `cashierMatchesShift` |
 | `checkout-settlement.test.js` | `lib/checkout-settlement.js` — nickel rounding, split tender, tax-exempt |
 | `host-info.test.js` | `lib/host-info.js` — Systems tab host overview |
-| `inventory.test.js` | `lib/inventory.js` — retail qty, bulk consumption, `mapProductForCashier` |
+| `inventory.test.js` | `lib/inventory.js` — retail qty, bulk consumption, `mapProductForCashier`, `maxOrderable` on stock 409 |
 | `ios-admin-portrait.test.js` | `lib/ios-admin-portrait-scripts.js` + synced `ios-admin/.../Resources/*` (runs `scripts/ios/sync-portrait-resources.js` in `before`) |
 | `oidc-flow-store.test.js` | `lib/oidc-flow-store.js` — OAuth state, `client_kind` round-trip |
 | `order-number.test.js` | `lib/order-number.js` — 7-digit order numbers, allocation |
@@ -148,6 +148,7 @@ Equivalent shell entry points:
 | `supervisor-config.test.js` | `lib/supervisor-config.js` — `isSupervisorPinFallbackEnabled` |
 | `systems-status.test.js` | `lib/systems-status.js` — cert expiry, OCI resource manifest |
 | `tills.test.js` | `lib/tills.js` — register lock, resume, `createFromApproval` |
+| `till-sale-guard.test.js` | `lib/till-sale-guard.js` — force-close sale block, `sessionFlags` on `/api/cashier/session` |
 
 Run directly:
 
@@ -157,7 +158,7 @@ node --test test/*.test.js
 
 Add new pure-logic tests here as shared `lib/*` helpers grow. Keep Express route tests in the integration layer unless you introduce a lightweight HTTP mock.
 
-**iOS admin portrait:** if `ios-admin-portrait.test.js` fails on sync, ensure the test calls `scripts/ios/sync-portrait-resources.js` (not the bash wrapper at `scripts/sync-ios-portrait-resources.js`).
+**iOS admin portrait:** if `ios-admin-portrait.test.js` fails on sync, ensure the test calls `scripts/ios/sync-portrait-resources.js`.
 
 ---
 
@@ -234,7 +235,7 @@ Destructive actions:
 **Skip destructive work:**
 
 ```bash
-SKIP_DESTRUCTIVE=yes ./scripts/test-api-curl.sh   # default in npm run test:all
+SKIP_DESTRUCTIVE=yes ./scripts/test/test-api-curl.sh   # default in npm run test:all
 ```
 
 **Model B on the server under test:** `test-api-curl.sh` probes `GET /api/cashier/session` first. When `supervisorApprovalRequired` is true, it skips protected POS routes instead of failing on `POST /api/cashier/unlock` → 403.
@@ -246,8 +247,8 @@ Runs automatically in `npm run test:all` after the API curl suite.
 **Always runs (non-destructive when possible):**
 
 - `GET /api/products` — `inStock` + `quantityOnHand` (null for bar drinks, numeric for retail)
-- `POST /api/cart` → **409** when retail SKU is out of stock (uses natural OOS row or admin `set-count` → 0, then restores)
-- `POST /api/cart` → **409** when kitchen beans insufficient (admin sets `kitchen_beans` to 0.5 oz, then restores)
+- `POST /api/cart` → **409** when retail SKU is out of stock (uses natural OOS row or admin `set-count` → 0, then restores); body may include `maxOrderable` when partial quantity is available
+- `POST /api/cart` → **409** when kitchen beans insufficient (admin sets `kitchen_beans` to 0.5 oz, then restores); `maxOrderable` when applicable
 
 **Destructive phase** (mixed drink + retail checkout):
 
@@ -277,7 +278,7 @@ Not part of `npm test` or `npm run test:all`. Run when working on supervisor app
 | `test:cashier-approval-session` | `CASHIER_SUPERVISOR_APPROVAL=true` | Pending cookie + `/api/cashier/session` shapes |
 | `test:cashier-approval-poll` | Model B + supervisor PIN fallback | Full poll → approve → `cashier_session` cookie |
 | `create:test-sales` | Server running; `CASHIER_PIN` | PIN unlock + credit-only till → N checkouts (default 1) |
-| `seed:test-sales-matrix` | Server running; `CASHIER_PIN` (+ `ADMIN_PIN` if supervisor approval on) | 40-sale matrix: credit-only till (card) + cash/credit till (card/cash/split) |
+| `seed:test-sales-matrix` | Server running; `CASHIER_PIN`, `ADMIN_PIN` | 40-sale matrix; preflight resets matrix SKU stock to seed levels |
 
 See [cashier-supervisor-approval.md](cashier-supervisor-approval.md#testing-manual-today) for step-by-step Model B manual testing.
 
@@ -298,8 +299,8 @@ npm run test:cashier-approval-poll
 | Command | What it does |
 |---------|----------------|
 | `npm run create:test-sales` | PIN unlock + credit-only till → N checkouts. `--yes` skips confirm; `--count 5` for batch. |
-| `npm run seed:test-sales-matrix` | Two till sessions × 20 sales: card-only (credit-only till), then card/cash/split + linked customer (cash+credit till). |
-| `scripts/db/verify-test-sales-matrix.sql` | SQL PASS/FAIL checks in Database Actions after the matrix script |
+| `npm run seed:test-sales-matrix` | Two till sessions × 20 sales; **preflight** resets matrix retail + `kitchen_beans` to seed.sql levels (`--no-inventory-top-up` to skip). |
+| `scripts/db/verify-test-sales-matrix.sql` | SQL PASS/FAIL: sales (§2) + inventory post-matrix (§5) — `npm run verify:test-sales-matrix` |
 
 **Requires:** running server, `CASHIER_PIN` (and `ADMIN_PIN` if supervisor approval is on). With `OPENING_CASH_FLOAT` set, scripts complete till open automatically.
 
@@ -308,8 +309,7 @@ npm run dev:up
 # separate terminal:
 npm run create:test-sales -- --yes --count 5
 npm run seed:test-sales-matrix -- --yes
-# then in Database Actions / SQLcl:
-# @scripts/db/verify-test-sales-matrix.sql
+npm run verify:test-sales-matrix
 ```
 
 ---
@@ -364,7 +364,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 Optional API smoke against the live server (read-only; needs cashier unlock in script):
 
 ```bash
-BASE_URL="$APP" SKIP_DESTRUCTIVE=yes ./scripts/test-api-curl.sh
+BASE_URL="$APP" SKIP_DESTRUCTIVE=yes ./scripts/test/test-api-curl.sh
 ```
 
 See also [README.md](../README.md#update-the-oci-container-after-code-changes) and [oci-network-recovery.md](oci-network-recovery.md).
@@ -424,7 +424,7 @@ Integration tests do **not** cover Android UI (e.g. add-item error display); val
 |---------|--------------|-----|
 | `ORDS_BASE_URL is not set` | Missing `.env` | Copy `.env.example`, set `ORDS_BASE_URL` |
 | `POST /api/cashier/unlock → 403` | Model B on server | Use integration runner (forces approval off) or set `CASHIER_SUPERVISOR_APPROVAL=false` |
-| `POST /api/cart/barcode → 404` on seed barcode | Empty products table | Run `scripts/seed.sql` in Database Actions |
+| `POST /api/cart/barcode → 404` on seed barcode | Empty products table | Run `scripts/db/seed.sql` in Database Actions |
 | `POST /api/cart {productId} → 404` on valid-looking id | Product not in ADB | Expected for unknown ids; seed products or use id from `GET /api/products` |
 | `POST /api/cart/barcode → 404` on unknown barcode | Expected | Non-destructive API test uses `does-not-exist-xyz` |
 | Auth passes, API cart routes → 500 | ORDS down or schema not enabled | `npm run dev:up` probe; fix ORDS enablement |
@@ -440,8 +440,8 @@ Integration tests do **not** cover Android UI (e.g. add-item error display); val
 ## Adding tests
 
 1. **Pure functions in `lib/`** → add `test/<module>.test.js`, run `npm test`.
-2. **New HTTP route** → extend `scripts/test-auth-protection.sh` and/or `scripts/test-api-curl.sh` (prefer non-destructive checks in the read-only section). Inventory/stock behavior → `scripts/test-inventory-api.sh`.
-3. **Model B behavior** → extend the opt-in scripts under `scripts/test-cashier-approval-*.sh`.
+2. **New HTTP route** → extend `scripts/test/test-auth-protection.sh` and/or `scripts/test/test-api-curl.sh` (prefer non-destructive checks in the read-only section). Inventory/stock behavior → `scripts/test/test-inventory-api.sh`.
+3. **Model B behavior** → extend the opt-in scripts under `scripts/test/test-cashier-approval-*.sh`.
 4. **OCI deploy / dev IdP** → [oci-deploy.md](oci-deploy.md), [oci-dev-environment.md](oci-dev-environment.md); verify with curl + optional `test-api-curl.sh` against live URL.
 5. **CI** → unit tests run automatically; integration picks up changes to curl scripts when secrets are configured.
 

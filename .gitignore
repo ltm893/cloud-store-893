@@ -1,7 +1,7 @@
 # Environment variables - never commit these
 .env
 
-# Local TLS key material (scripts/generate-dev-tls.sh)
+# Local TLS key material (scripts/tls/generate-dev-tls.sh)
 certs/
 .venv-barcode/
 

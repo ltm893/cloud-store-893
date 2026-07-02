@@ -415,7 +415,7 @@ terraform output cert_renew_schedule_next_run
 For early bring-up only (browser/tablet warnings):
 
 ```bash
-./scripts/generate-lb-tls.sh oci.cloudstore893.com
+./scripts/tls/generate-lb-tls.sh oci.cloudstore893.com
 ```
 
 PEMs in gitignored `terraform/lb_tls.auto.tfvars` → `oci_load_balancer_certificate` in Terraform.

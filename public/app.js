@@ -391,6 +391,16 @@ function applySessionGate(data) {
   configureIdpLink(data);
 
   if (data.ok) {
+    if (data.tillOpenForSales === false) {
+      hideAllAuthOverlays();
+      lastSessionData = data;
+      showPinGate(
+        data.saleBlockedMessage
+          || 'This till was closed by a supervisor. Sign out and start a new shift to continue selling.',
+        { pinAllowed: data.pinAllowed !== false },
+      );
+      return 'blocked';
+    }
     hideAllAuthOverlays();
     lastSessionData = data;
     return 'ok';

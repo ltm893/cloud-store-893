@@ -5,8 +5,8 @@
 # Does NOT delete products, sales, cart items, or customers.
 #
 # Usage:
-#   ./scripts/truncate-shift-auth-tables.sh          # interactive confirm
-#   ./scripts/truncate-shift-auth-tables.sh --yes    # skip confirm
+#   ./scripts/db/truncate-shift-auth-tables.sh          # interactive confirm
+#   ./scripts/db/truncate-shift-auth-tables.sh --yes    # skip confirm
 #
 # Requires: oci CLI, SQLcl, terraform/terraform.tfvars (adb_admin_password)
 
@@ -24,7 +24,7 @@ error() { printf '[error] %s\n' "$1" >&2; exit 1; }
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/truncate-shift-auth-tables.sh [--yes]
+  ./scripts/db/truncate-shift-auth-tables.sh [--yes]
 
 Truncates (empties):
   - till_open_approvals

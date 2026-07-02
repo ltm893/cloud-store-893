@@ -106,10 +106,10 @@ container_instance_ocid  = "ocid1.containerinstance..."
 | `container_instance_ocid` | Shell helpers / `CLOUD_STORE_OCID` in `~/.zshrc` (see root README). |
 | `app_url` | `http://{public_ip}:{app_port}` — cart app. |
 | `ocir_image_path` | Exact `docker tag` / `docker push` target. |
-| `ords_base_url` | ORDS admin base — synced into `.env` as `ORDS_BASE_URL` via `npm run sync-env` / [`../scripts/sync-env.sh`](../scripts/sync-env.sh). |
+| `ords_base_url` | ORDS admin base — synced into `.env` as `ORDS_BASE_URL` via `npm run sync-env` / [`../scripts/dev/sync-env.sh`](../scripts/dev/sync-env.sh). |
 | `adb_ocid`, `vcn_ocid` | Support, console deep links, debugging. |
 
-[`../scripts/dev-up.sh`](../scripts/dev-up.sh) compares `.env`’s `ORDS_BASE_URL` to `terraform output -raw ords_base_url` and warns on drift.
+[`../scripts/dev/up.sh`](../scripts/dev/up.sh) compares `.env`’s `ORDS_BASE_URL` to `terraform output -raw ords_base_url` and warns on drift.
 
 **After first apply:**
 

@@ -1,1 +1,0 @@
-db/truncate-shift-auth-tables.sql

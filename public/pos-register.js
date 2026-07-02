@@ -27,6 +27,7 @@ const PosRegister = (() => {
     customerSearch: '',
     receipt: null,
     statusVisible: false,
+    statusPanelMessage: null,
   };
 
   function $(id) {
@@ -82,6 +83,7 @@ const PosRegister = (() => {
       'drawerBackdrop',
       'menuBtn',
       'toggleStatusBtn',
+      'hideStatusBtn',
       'findCustomerBtn',
       'signOutBtn',
     ].forEach((id) => {
@@ -515,6 +517,20 @@ const PosRegister = (() => {
     });
   }
 
+  function openStatusPanel(message) {
+    if (message) state.statusPanelMessage = message;
+    state.statusVisible = true;
+    renderStatusPanel();
+  }
+
+  function formatApiError(data, fallback = 'Request failed') {
+    const base = data?.error || fallback;
+    if (data?.maxOrderable != null && Number(data.maxOrderable) > 0) {
+      return `${base} (max ${data.maxOrderable} can be ordered)`;
+    }
+    return base;
+  }
+
   function renderReceipt() {
     const r = state.receipt;
     if (!r) {
@@ -525,23 +541,37 @@ const PosRegister = (() => {
     els.salePanel.hidden = true;
     els.receiptPanel.hidden = false;
     const change = PosMath.checkoutChangeTotal(r.payments || []);
+    const memberDiscount = Number(r.memberDiscountPreTax) || 0;
+    const linkedDiscountLines =
+      r.linked893 && memberDiscount > 0.005
+        ? `
+      <div class="receipt-line"><span>Subtotal</span><span>${PosMath.formatMoney(r.subtotalPreMember || 0)}</span></div>
+      <div class="receipt-line receipt-line--discount"><span>Discount</span><span>−${PosMath.formatMoney(memberDiscount)}</span></div>
+    `
+        : r.linked893
+          ? '<p><span class="tag-893">893</span> Customer linked</p>'
+          : '';
     els.receiptBody.innerHTML = `
       <div class="receipt-line"><strong>Order</strong><span>${escapeHtml(r.orderNumber)}</span></div>
+      ${linkedDiscountLines}
       <div class="receipt-line"><span>Total</span><span>${PosMath.formatMoney(r.total)}</span></div>
       <div class="receipt-line"><span>Payment</span><span>${escapeHtml(r.paymentMethod)}</span></div>
       ${change > 0.005 ? `<div class="receipt-line"><span>Change</span><span>${PosMath.formatMoney(change)}</span></div>` : ''}
-      ${r.linked893 ? '<p><span class="tag-893">893</span> Customer discount applied</p>' : ''}
     `;
   }
 
   function renderStatusPanel() {
-    const lines = [
+    const lines = [];
+    if (state.statusPanelMessage) {
+      lines.push(['Message', state.statusPanelMessage]);
+    }
+    lines.push(
       ['API', window.location.origin],
       ['User', state.sessionUser || '—'],
       ['Till', state.sessionMeta.tillId != null ? String(state.sessionMeta.tillId) : '—'],
       ['Cash', state.cashEnabled ? 'enabled' : 'credit only'],
       ['Tax rate', `${(state.taxRate * 100).toFixed(2)}%`],
-    ];
+    );
     if (state.buildInfo?.display) {
       lines.push(['Build', state.buildInfo.display]);
     }
@@ -550,6 +580,9 @@ const PosRegister = (() => {
       .join('');
     els.statusPanel.hidden = !state.statusVisible;
     els.toggleStatusBtn.textContent = state.statusVisible ? 'Hide status' : 'Show status';
+    if (els.appShell) {
+      els.appShell.classList.toggle('app-shell--status-open', state.statusVisible);
+    }
   }
 
   function renderHeader() {
@@ -617,16 +650,20 @@ const PosRegister = (() => {
         return;
       }
       if (!product) {
-        state.addItemError = `Product not found: ID ${cleaned}`;
+        const msg = `Product not found: ID ${cleaned}`;
+        state.addItemError = msg;
         els.addItemError.hidden = false;
-        els.addItemError.textContent = state.addItemError;
+        els.addItemError.textContent = msg;
+        openStatusPanel(msg);
         return;
       }
       if (product.inStock === false) {
         const stockMsg = product.quantityOnHand != null ? ` (qty ${product.quantityOnHand})` : '';
-        state.addItemError = `${product.name} is out of stock${stockMsg}`;
+        const msg = `${product.name} is out of stock${stockMsg}`;
+        state.addItemError = msg;
         els.addItemError.hidden = false;
-        els.addItemError.textContent = state.addItemError;
+        els.addItemError.textContent = msg;
+        openStatusPanel(msg);
         return;
       }
 
@@ -639,9 +676,11 @@ const PosRegister = (() => {
       const data = await res.json().catch(() => ({}));
       if (res.status === 401) throw new Error('401');
       if (!res.ok) {
-        state.addItemError = data.error || 'Add failed';
+        const msg = formatApiError(data, 'Add failed');
+        state.addItemError = msg;
         els.addItemError.hidden = false;
-        els.addItemError.textContent = state.addItemError;
+        els.addItemError.textContent = msg;
+        openStatusPanel(msg);
         return;
       }
       state.cart = data;
@@ -654,9 +693,11 @@ const PosRegister = (() => {
     const byBarcode = state.products.find((p) => String(p.barcode || '') === cleaned);
     if (byBarcode && byBarcode.inStock === false) {
       const stockMsg = byBarcode.quantityOnHand != null ? ` (qty ${byBarcode.quantityOnHand})` : '';
-      state.addItemError = `${byBarcode.name} is out of stock${stockMsg}`;
+      const msg = `${byBarcode.name} is out of stock${stockMsg}`;
+      state.addItemError = msg;
       els.addItemError.hidden = false;
-      els.addItemError.textContent = state.addItemError;
+      els.addItemError.textContent = msg;
+      openStatusPanel(msg);
       return;
     }
 
@@ -669,9 +710,11 @@ const PosRegister = (() => {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) throw new Error('401');
     if (!res.ok) {
-      state.addItemError = data.error || 'Product not found';
+      const msg = formatApiError(data, 'Product not found');
+      state.addItemError = msg;
       els.addItemError.hidden = false;
-      els.addItemError.textContent = state.addItemError;
+      els.addItemError.textContent = msg;
+      openStatusPanel(msg);
       return;
     }
     state.cart = data;
@@ -731,12 +774,18 @@ const PosRegister = (() => {
       await removeCartItem(id);
       return;
     }
-    await fetch(`/api/cart/${id}${customerQs()}`, {
+    const res = await fetch(`/api/cart/${id}${customerQs()}`, {
       ...fetchOpts,
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ quantity: qty }),
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      openStatusPanel(formatApiError(data, 'Quantity update failed'));
+      renderAll();
+      return;
+    }
     await refreshCart();
     renderAll();
   }
@@ -893,6 +942,11 @@ const PosRegister = (() => {
       state.statusVisible = !state.statusVisible;
       renderStatusPanel();
       closeDrawer();
+    });
+    els.hideStatusBtn.addEventListener('click', () => {
+      state.statusVisible = false;
+      state.statusPanelMessage = null;
+      renderStatusPanel();
     });
     els.findCustomerBtn.addEventListener('click', () => {
       state.customerFindOpen = true;

@@ -2,9 +2,27 @@
 
 **Onboard another developer:** [docs/developer-handoff.md](docs/developer-handoff.md) (tarball, IAM, dev IdP, tablet).
 
-Last updated: 2026-06-16
+Last updated: 2026-07-02
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
+
+---
+
+## Changelog (2026-07-02)
+
+Session notes for work landed this day — see linked docs for detail.
+
+| Area | Change |
+|------|--------|
+| **Force-close sale block** | `lib/till-sale-guard.js` — cart mutations and checkout return **403** (`TILL_FORCE_CLOSED`) when supervisor force-closed the till or POS session ended. `GET /api/cashier/session` adds `tillOpenForSales`, `tillClosedBySupervisor`, `saleBlockedMessage`. Web + Android + iOS sign out on probe. |
+| **Admin force-close prompt** | `public/shared/admin-prompt.js` + `<dialog id="adminPromptDialog">` — reason entry for force-close / shift-close / deny flows. Replaces `window.prompt()` (broken in admin WebViews on tablet). |
+| **Status overlay** | Register status is a full-screen overlay (dim scrim, centered card, burgundy border). Auto-opens on cart/API errors (e.g. insufficient stock). Android: `RegisterStatusOverlay` (`Dialog`); web: `#statusPanel`; iOS: full-screen overlay. |
+| **Stock 409 `maxOrderable`** | `lib/inventory.js` returns `maxOrderable` on partial stock; clients append “(max N can be ordered)” (Android `NetworkErrorLogic`, iOS `APIErrorMessageLogic`, web `formatApiError`). |
+| **Receipt member discount** | Linked 893 customer discount shown on receipt (subtotal → discount → pre-tax → savings → total) — Android `SaleReceipt.kt`, iOS `SaleReceiptLogic.swift`, web checkout receipt. |
+| **Tests** | `test/till-sale-guard.test.js`; `inventory.test.js` / client tests for `maxOrderable`; `admin-index.test.js` wires `AdminPrompt`. |
+| **Docs** | `docs/pos-session-cookies.md`, `docs/cash-till-opening-and-close.md`, `docs/cashier-supervisor-approval.md`, `docs/testing.md`, platform READMEs. |
+
+**Manual verify — force-close:** Cashier signed in → admin **Open tills — force close** with reason → register cannot add/checkout; session probe shows blocked message → cashier signs in fresh.
 
 ---
 
@@ -15,7 +33,7 @@ Use this file to resume work in a new session. Canonical setup details live in [
 | **Web POS** (`/`) | Product grid, cart, checkout |
 | **Admin** (`/admin/`) | CRUD on DB tables; PIN login (`ADMIN_PIN`) |
 | **Tablet POS** | Numpad login; unified Pay panel; split tender cash/card; auto-finalize at zero balance |
-| **iPad POS** (`ios-pos/`) | **Auth + opening till + register selling + till close (P0–P2, P3.1–P3.3):** OIDC, cookie bridge, session probe, supervisor approval, opening till count, scan/Add Id cart, checkout, split tender, EOD close + close approval wait. **Offline queue (P3.5) next.** |
+| **iPad POS** (`ios-pos/`) | Auth + opening till + register selling + till close + offline queue (P0–P3.3, P3.5). See [ios-pos/README.md](ios-pos/README.md). |
 | **Local dev** | `npm run dev:up` + `.env` |
 | **OCI app URL** | **`https://oci.cloudstore893.com/`** (no `:3000`) — LB :443 → container :3000 |
 | **HTTPS / TLS** | **Let's Encrypt** (public CA) via **OCI Certificates** → LB listener by cert OCID (see below) |
@@ -199,7 +217,7 @@ npm run dev:up
 | `POST /api/checkout` | Sale, including split-tender payloads (requires `created_at` on ORDS inserts) |
 | `GET /api/sales/recent` | Recent sales |
 | `POST /api/cashier/unlock` | Cashier login (`{ pin }`) → session cookie |
-| `GET /api/cashier/session`, `POST /api/cashier/logout` | Session check / sign-out |
+| `GET /api/cashier/session`, `POST /api/cashier/logout` | Session check / sign-out; session may include `tillOpenForSales`, `saleBlockedMessage` when till closed |
 | `GET /oauth/login`, `GET /oauth/callback` | POS IdP (when `IDP_POS_*` set) |
 | `GET /oauth/admin/login`, `GET /oauth/admin/callback` | Admin IdP (when `IDP_ADMIN_*` set) |
 | Cart, checkout, customers, sales | Require cashier session (products list is public) |
@@ -214,23 +232,29 @@ npm run dev:up
 
 - **Login:** Numpad + **Done** when PIN is allowed; **Sign in with Oracle** (WebView) when IdP / Model B is on; **Waiting for supervisor** screen polls until approved. Server PIN check (not in APK).
 - **Menu (☰):** Show/hide status, find customer / keypad, unlink (when linked), sync/discard queue (when queued), Admin (browser), Lock.
+- **Status overlay** — ☰ **Show status** or auto-open on cart/API errors: full-screen dim scrim, centered card (burgundy border), API message + offline queue; blocks register input while open. Android: `RegisterStatusOverlay` (`Dialog`); web: `#statusPanel` in `#appShell`; iOS: full-screen overlay.
 - **Add item:** Numpad digit(s) + **Add**, or **Scan** (camera), or full barcode string.
+- **Stock errors (409):** Server returns `maxOrderable` when partial quantity is possible; clients append “(max N can be ordered)” to the error.
+- **Receipt:** After checkout, shows subtotal, **member discount** (linked 893 customer), pre-tax, savings, and total — same lines as register totals (`SaleReceipt.kt` / `SaleReceiptLogic.swift` / web receipt).
 - **Cash pay:** Split tender on **Pay** → amount numpad + **Cash** / **Card** / **CardOnFile** (when linked customer has card); auto-finalize at $0 balance.
 - **`API_BASE_URL`:** Gradle configure time — see build log; override with `LAN_IP=…`.
 - **Theme:** Lister palette in `ui/theme/` — see [AGENTS.md](AGENTS.md).
 
 ### iOS iPad POS (`ios-pos/`) — in progress
 
-**Status (2026-06-11):** Phases **P0–P2**, **P3.1 opening till**, **P3.2 register selling**, and **P3.3 till close** complete on branch `dev`. **P3.5 offline queue** next.
+**Status (2026-06-11):** Phases **P0–P2**, **P3.1 opening till**, **P3.2 register selling**, **P3.3 till close**, and **P3.5 offline queue** complete on branch `dev`.
 
 | Done | Not yet |
 |------|---------|
 | Xcode project, `API_BASE_URL` xcconfig | PIN numpad (dev) |
 | `client_kind=ios`, `register_id=tablet-{uuid}` | Camera barcode scan |
-| OIDC WebView + cookie bridge | Customer / member discount |
-| Session probe + auth gates | Admin WebView from POS menu |
-| Supervisor approval poll (2.5s) + Cancel | Offline queue |
-| Break → `POST /api/cashier/logout` | Cart quantity edit panel |
+| OIDC WebView + cookie bridge | Camera barcode scan |
+| Session probe + auth gates | Cart quantity edit panel |
+| Customer link + member discount on register & receipt | |
+| Supervisor approval poll (2.5s) + Cancel | |
+| Break → `POST /api/cashier/logout` | |
+| Admin WebView from POS menu | |
+| Offline queue (P3.5) | |
 | Opening till count UI | |
 | Scan/Add Id, cart rows, checkout, split tender | |
 | Till close count + close approval wait | |
@@ -260,8 +284,9 @@ npm run ios-pos:local-config           # after npm run dev:up, for LAN API
 5. **Cash float** (if `OPENING_CASH_FLOAT` set on server): OIDC → opening till count → submit → supervisor approval → signed in.
 7. **Close till:** Empty cart → **Close till** → count drawer (or credit-only confirm) → supervisor approval → signed out; next sign-in opens fresh till.
 8. **Register lock:** Second tablet/iPad with same `register_id` while till active → sign-in error (409).
+9. **Force-close block:** Supervisor force-closes till from admin → register cannot add/checkout (403); session probe returns `tillOpenForSales: false` and signs cashier out with supervisor message.
 
-**Next session:** P3.5 offline queue (optional) or admin WebView menu. See plan doc.
+**Next session:** Receipt print or camera barcode. See plan doc.
 
 **Reference:** `ios-admin/` — admin WebView pattern (`client_kind=ios`); reuse for POS Admin menu later.
 
@@ -298,9 +323,9 @@ Colors (see `ui/theme/Color.kt`): page/drawer **cream** `#FAF3DF`; top bar **bur
 │ ☰ │        Cloud Store 893 POS                              │ v1.x       │  ← burgundy bar, cream text
 ├───┴──────────────────────────────────────────────────────────────────────────┤
 │ ┌─────────────────────────────────────┐ ┌────────────────────────────────┐ │
-│ │ Scan / Add Id  [________________]   │ │ (optional) Status card         │ │
+│ │ Scan / Add Id  [________________]   │ │ Status overlay (optional)      │ │
 │ │ [ Scan ]  [ Add ]                   │ │  API status, offline queue     │ │
-│ │─────────────────────────────────────│ │  Sync queued / Discard         │ │
+│ │─────────────────────────────────────│ │  full-screen when open/errors  │ │
 │ │ Current Sale                        │ ├────────────────────────────────┤ │
 │ │ Linked: Name              [Unlink]  │ │ ┌────┬────┬────┐               │ │
 │ │ ┌─────────────────────────────────┐ │ │ │ 1  │ 2  │ 3  │  cream panel  │ │
@@ -516,8 +541,9 @@ Ref: `android-pos/README.md` (Cash — no pennies).
 
 ### Admin till ops & DB reseed (TODO)
 
-- [x] **Admin force-close till** — `/admin/` Approvals → **Open tills — force close**; audit in `till_close_approvals` (`force_closed`).
-- [ ] **Reliable ADB wallet for `reset-db.sh`** — OCI CLI `generateWallet` often returns HTTP 500; use **Database Actions** → Run `scripts/db/seed.sql`, or Console **Download wallet** + `ADB_WALLET_ZIP=… ./scripts/reset-db.sh --yes`.
+- [x] **Admin force-close till** — `/admin/` Approvals → **Open tills — force close**; audit in `till_close_approvals` (`force_closed`). Reason entered via `AdminPrompt` dialog (`public/shared/admin-prompt.js`) — required in Android/iOS admin WebViews where `window.prompt()` does not work.
+- [x] **Block sales after force-close** — `lib/till-sale-guard.js` rejects cart mutations and checkout (**403**, code `TILL_FORCE_CLOSED`) when till is closed or POS session ended after supervisor force-close. `GET /api/cashier/session` adds `tillOpenForSales`, `tillClosedBySupervisor`, `saleBlockedMessage` so clients sign out proactively.
+- [x] **Reliable ADB wallet for `reset-db.sh`** — `wallet/adb.zip`, `./scripts/db/download-adb-wallet.sh`, `ADB_WALLET_ZIP` / `ADB_WALLET_PASSWORD`, or Database Actions → `scripts/db/seed.sql`.
 
 ### Card terminal / payment pad (TODO)
 
@@ -597,8 +623,8 @@ POS sends (conceptually): amount, currency, sale reference (`orderNumber`), opti
 - `android-pos/app/src/main/java/com/cloudstore/pos/data/PosModels.kt`
 - `android-pos/app/src/main/java/com/cloudstore/pos/data/OfflineQueueStore.kt`
 - `server.js`
-- `scripts/reset-db.sh`
-- `scripts/seed.sql`
+- `scripts/db/reset-db.sh`
+- `scripts/db/seed.sql`
 - likely `lib/admin-tables.js` if payment rows need admin visibility
 
 **Next resume steps:**

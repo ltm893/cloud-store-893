@@ -85,7 +85,7 @@ The script handles everything end-to-end:
 > See **Creating an OCI Auth Token** below if you haven't done this yet.
 
 > **SQLcl not installed?** The deploy will complete but skip the seed.
-> Run `./scripts/reset-db.sh` after installing SQLcl, or run `scripts/seed.sql` manually via OCI Database Actions:
+> Run `./scripts/db/reset-db.sh` after installing SQLcl, or run `scripts/db/seed.sql` manually via OCI Database Actions:
 > `OCI Console → Autonomous Database → adb-cloud-store → Database Actions → SQL`
 
 ---
@@ -112,7 +112,7 @@ this automatically.
 ### Install
 
 ```bash
-./scripts/install-sqlcl.sh
+./scripts/tools/install-sqlcl.sh
 ```
 
 The script:
@@ -137,7 +137,7 @@ To wipe and reinstall cleanly (e.g. after a failed install):
 
 ```bash
 sudo rm -rf /opt/sqlcl
-./scripts/install-sqlcl.sh
+./scripts/tools/install-sqlcl.sh
 ```
 
 ---
@@ -199,7 +199,7 @@ npm install
 npm run dev:up
 ```
 
-`dev:up` runs `scripts/dev-up.sh`, which:
+`dev:up` runs `scripts/dev/up.sh`, which:
 
 1. Verifies `.env` has an `ORDS_BASE_URL`
 2. Compares it to `terraform output -raw ords_base_url` and warns on drift
@@ -381,7 +381,7 @@ Full tablet notes: [android-pos/README.md](android-pos/README.md).
 
 POS UI (high level):
 
-- **☰ Menu** — **Show/Hide status** (connection + offline queue), **Admin** (opens `/admin/` in browser), **Lock**
+- **☰ Menu** — **Show/Hide status** (connection + offline queue; full-screen overlay on errors), **Admin** (opens `/admin/` in browser), **Lock**
 - **Login** — on-screen number pad + **Done** (calls `POST /api/cashier/unlock`)
 - **Sale screen** — scan field, **Scan** / **Add**, numpad, cart, **Pay** → **Complete Sale**
 - Numeric input ≤ 6 digits → `POST /api/cart {productId}`; longer → `POST /api/cart/barcode`
@@ -515,8 +515,8 @@ allowing your user/group to read usage-report in the tenancy.
 - [ ] CI/CD (GitHub Actions → OCIR → container refresh) — tests run in [`.github/workflows/test.yml`](.github/workflows/test.yml); deploy workflow not added yet.
 - [ ] Restrict ingress (`ingress_allowed_cidrs` in `terraform.tfvars`) when not on public IP — still default `0.0.0.0/0`; LB fronts the container but SSH/app rules remain open per [terraform/variables.tf](terraform/variables.tf).
 - [x] Tablet: OIDC sign-in (WebView), offline queue sync/discard, cart snapshot on queue — see `CashierOidcWebScreen`, `OfflineQueueStore.cartLines`, `clearOfflineQueue`.
-- [ ] **ADB wallet / `reset-db.sh`** — OCI `generateWallet` often returns HTTP 500; document reliable path: Database Actions → Run `scripts/db/seed.sql`, or Console **Download wallet** + `ADB_WALLET_ZIP=… ./scripts/reset-db.sh --yes` (see `scripts/db/reset-db.sh`).
-- [x] **Admin force-close till** — Approvals tab → **Open tills — force close** (`POST /api/admin/open-tills/:id/force-close`).
+- [x] **ADB wallet / `reset-db.sh`** — `wallet/adb.zip` cache, `download-adb-wallet.sh` (3 retries), `ADB_WALLET_ZIP` / `ADB_WALLET_PASSWORD`, or Database Actions → `scripts/db/seed.sql`.
+- [x] **Admin force-close till** — Approvals tab → **Open tills — force close** (`POST /api/admin/open-tills/:id/force-close`); reason via `AdminPrompt` dialog. Force-close ends POS session and blocks further sales on that register until cashier signs in again — see [CONTENTS.md](CONTENTS.md#admin-till-ops--db-reseed-todo).
 - [ ] **Cash rounding (web POS only)** — server, tablets, and admin reports persist `register_total` / `cash_due`; web cart still has no tax/cash tender UI — see [CONTENTS.md](CONTENTS.md#cash-rounding).
 - [ ] **Card terminal / payment pad** — no pad API today; Card is manual “paid” only — see [CONTENTS.md](CONTENTS.md#card-terminal--payment-pad-todo).
 - [ ] **Receipt / print after Complete Sale** — tablet shows `SaleReceipt` after checkout; `printReceipt()` is a UI stub (no hardware printer integration yet).

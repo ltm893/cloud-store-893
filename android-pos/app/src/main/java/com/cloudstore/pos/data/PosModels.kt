@@ -181,6 +181,10 @@ data class CashierSessionResponse(
     @Json(name = "expectedOpeningFloat") val expectedOpeningFloat: Double? = null,
     @Json(name = "tillId") val tillId: Int? = null,
     @Json(name = "posSessionId") val posSessionId: Int? = null,
+    @Json(name = "tillOpenForSales") val tillOpenForSales: Boolean? = null,
+    @Json(name = "tillClosedBySupervisor") val tillClosedBySupervisor: Boolean? = null,
+    @Json(name = "saleBlockedMessage") val saleBlockedMessage: String? = null,
+    @Json(name = "saleBlockedCode") val saleBlockedCode: String? = null,
     val approval: PendingApprovalInfo? = null,
     val error: String? = null,
 ) {

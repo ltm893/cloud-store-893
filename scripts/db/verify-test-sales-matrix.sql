@@ -6,6 +6,8 @@
 --   tablet-seed-cash-credit   (20 sales, card/cash/split, cash_and_credit till)
 --
 -- Run in Database Actions / SQLcl as ADMIN after seed:test-sales-matrix.
+-- Or: npm run verify:test-sales-matrix
+--     ./scripts/db/run-sql.sh scripts/db/verify-test-sales-matrix.sql
 -- If you wiped all other sales, matrix_sales will equal the full sales table.
 
 -- ── 1. Row listing (sanity check) ───────────────────────────────────────────
@@ -139,9 +141,9 @@ checks AS (
 
   UNION ALL
   SELECT 'sales with tax-exempt water lines',
-         14,
+         15,
          COUNT(DISTINCT si.order_number),
-         CASE WHEN COUNT(DISTINCT si.order_number) = 14 THEN 'PASS' ELSE 'FAIL' END
+         CASE WHEN COUNT(DISTINCT si.order_number) = 15 THEN 'PASS' ELSE 'FAIL' END
   FROM sale_items si
   JOIN matrix_sales ms ON ms.order_number = si.order_number
   JOIN products p ON p.id = si.product_id
@@ -150,9 +152,17 @@ checks AS (
 
   UNION ALL
   SELECT 'sale_items rows for matrix sales',
-         58,
+         54,
          COUNT(*),
-         CASE WHEN COUNT(*) = 58 THEN 'PASS' ELSE 'FAIL' END
+         CASE WHEN COUNT(*) = 54 THEN 'PASS' ELSE 'FAIL' END
+  FROM sale_items si
+  JOIN matrix_sales ms ON ms.order_number = si.order_number
+
+  UNION ALL
+  SELECT 'sale_items units for matrix sales',
+         58,
+         SUM(si.quantity),
+         CASE WHEN SUM(si.quantity) = 58 THEN 'PASS' ELSE 'FAIL' END
   FROM sale_items si
   JOIN matrix_sales ms ON ms.order_number = si.order_number
 
@@ -206,3 +216,90 @@ FROM (
     ) AS matrix_cnt
   FROM dual
 );
+
+-- ── 5. Inventory (post-matrix — requires preflight in seed-test-sales-matrix.js) ─
+-- Synced with scripts/test/lib/matrix-inventory.js + test/matrix-inventory.test.js
+
+WITH expected_retail AS (
+  SELECT '872000000303' AS barcode, 'hoodie' AS label, 6 AS qty_on_hand FROM dual UNION ALL
+  SELECT '872000000301', 'tee', 8 FROM dual UNION ALL
+  SELECT '872000000401', 'water16', 36 FROM dual UNION ALL
+  SELECT '872000000404', 'waterGallon', 45 FROM dual UNION ALL
+  SELECT '872000000403', 'sparkling', 44 FROM dual UNION ALL
+  SELECT '872000000103', 'beans', 25 FROM dual UNION ALL
+  SELECT '872000000201', 'tumbler', 18 FROM dual UNION ALL
+  SELECT '872000000203', 'coldCup', 19 FROM dual
+),
+actual_retail AS (
+  SELECT p.barcode, pi.quantity_on_hand
+  FROM product_inventory pi
+  JOIN products p ON p.id = pi.product_id
+  WHERE p.barcode IN (
+    '872000000303', '872000000301', '872000000401', '872000000404',
+    '872000000403', '872000000103', '872000000201', '872000000203'
+  )
+),
+retail_checks AS (
+  SELECT
+    'retail on_hand: ' || e.label AS check_name,
+    e.qty_on_hand AS expected,
+    a.quantity_on_hand AS actual,
+    CASE
+      WHEN a.quantity_on_hand IS NULL THEN 'FAIL (no product_inventory row — run seed.sql inventory sections)'
+      WHEN a.quantity_on_hand = e.qty_on_hand THEN 'PASS'
+      ELSE 'FAIL'
+    END AS status
+  FROM expected_retail e
+  LEFT JOIN actual_retail a ON a.barcode = e.barcode
+),
+bulk_check AS (
+  SELECT
+    'kitchen_beans bulk on_hand (oz)' AS check_name,
+    7962.5 AS expected,
+    quantity_on_hand AS actual,
+    CASE WHEN ABS(quantity_on_hand - 7962.5) < 0.01 THEN 'PASS' ELSE 'FAIL' END AS status
+  FROM bulk_inventory
+  WHERE sku_key = 'kitchen_beans'
+),
+matrix_sale_moves AS (
+  SELECT COUNT(*) AS cnt
+  FROM inventory_movements im
+  JOIN sales s ON s.order_number = im.order_number
+  JOIN tills t ON t.id = s.till_id
+  WHERE im.reason = 'sale'
+    AND im.product_id IS NOT NULL
+    AND t.register_id IN ('tablet-seed-credit-only', 'tablet-seed-cash-credit')
+),
+matrix_consume_moves AS (
+  SELECT COUNT(*) AS cnt
+  FROM inventory_movements im
+  JOIN sales s ON s.order_number = im.order_number
+  JOIN tills t ON t.id = s.till_id
+  WHERE im.reason = 'consume'
+    AND im.bulk_sku_key = 'kitchen_beans'
+    AND t.register_id IN ('tablet-seed-credit-only', 'tablet-seed-cash-credit')
+),
+movement_checks AS (
+  SELECT 'matrix retail sale movements' AS check_name,
+         31 AS expected,
+         (SELECT cnt FROM matrix_sale_moves) AS actual,
+         CASE
+           WHEN (SELECT cnt FROM matrix_sale_moves) = 0 THEN
+             'FAIL (0 rows — products likely lack track_inventory=1; run seed.sql §24–25)'
+           WHEN (SELECT cnt FROM matrix_sale_moves) = 31 THEN 'PASS'
+           ELSE 'FAIL'
+         END AS status
+  FROM dual
+  UNION ALL
+  SELECT 'matrix bulk consume movements',
+         23,
+         (SELECT cnt FROM matrix_consume_moves),
+         CASE WHEN (SELECT cnt FROM matrix_consume_moves) = 23 THEN 'PASS' ELSE 'FAIL' END
+  FROM dual
+)
+SELECT check_name, expected, actual, status FROM retail_checks
+UNION ALL
+SELECT check_name, expected, actual, status FROM bulk_check
+UNION ALL
+SELECT check_name, expected, actual, status FROM movement_checks
+ORDER BY check_name;

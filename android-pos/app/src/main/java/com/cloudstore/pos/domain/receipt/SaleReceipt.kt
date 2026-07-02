@@ -26,6 +26,9 @@ data class SaleReceipt(
     val customerName: String?,
     val lines: List<ReceiptLine>,
     val itemCount: Int,
+    val customerLinked: Boolean,
+    val shelfSubtotal: Double,
+    val memberDiscount: Double,
     val subtotal: Double,
     val savings: Double,
     val tax: Double,
@@ -35,6 +38,7 @@ data class SaleReceipt(
     val changeTotal: Double,
     val queuedOffline: Boolean = false,
 ) {
+    val showMemberDiscount: Boolean get() = customerLinked && memberDiscount > 0.005
     fun formattedTimestamp(): String {
         val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy  h:mm a")
         return Instant.ofEpochMilli(completedAtMillis)
@@ -93,6 +97,9 @@ fun buildSaleReceipt(
             )
         },
         itemCount = totals.itemCount,
+        customerLinked = customerLinked && customerDiscount,
+        shelfSubtotal = totals.shelfSubtotal,
+        memberDiscount = totals.memberDiscount,
         subtotal = totals.itemPreTax,
         savings = totals.saleSavings,
         tax = taxAmt,

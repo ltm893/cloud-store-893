@@ -1,6 +1,6 @@
 -- Add opening-till columns to login_approval_requests (non-destructive).
 -- Safe to re-run. Then refresh ORDS REST metadata for the table.
--- Run: ./scripts/migrate-login-approval-till.sh
+-- Run: ./scripts/db/migrate/migrate-login-approval-till.sh
 
 WHENEVER SQLERROR EXIT SQL.SQLCODE
 

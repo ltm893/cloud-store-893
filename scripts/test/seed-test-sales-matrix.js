@@ -9,7 +9,8 @@
  *   npm run seed:test-sales-matrix
  *   npm run seed:test-sales-matrix -- --yes
  *
- * Requires: npm run dev:up (or running server), CASHIER_PIN, fresh or reset DB recommended.
+ * Requires: npm run dev:up (or running server), CASHIER_PIN, ADMIN_PIN for inventory preflight.
+ * Resets matrix SKU stock to seed.sql baselines before sales (skip with --no-inventory-top-up).
  */
 
 require('dotenv').config({ quiet: true });
@@ -26,6 +27,7 @@ const {
 const { resolveCheckoutSettlement } = require('../../lib/checkout-settlement');
 const {
   CookieJar,
+  api,
   signInCashier,
   signOffCashier,
   clearCart,
@@ -33,6 +35,13 @@ const {
   fetchCartPreview,
   checkout,
 } = require('./lib/pos-api-client');
+const {
+  SEED_STOCK_BY_TYPE,
+  BULK_KITCHEN_BEANS_SEED,
+  PRODUCT_KEY_TYPES,
+  sumQtyByKey,
+  retailKeysInMatrix,
+} = require('./lib/matrix-inventory');
 
 const PRODUCT_BARCODES = {
   espresso: '872000000005',
@@ -103,12 +112,14 @@ function usage() {
   console.log(`Usage: seed-test-sales-matrix.js [options]
 
 Options:
-  --base-url URL     API base (default: http://127.0.0.1:\${PORT||3000})
-  --yes              Skip destructive confirmation
-  --json             JSON summary on stdout
-  -h, --help         Show help
+  --base-url URL           API base (default: http://127.0.0.1:\${PORT||3000})
+  --yes                    Skip destructive confirmation
+  --no-inventory-top-up    Skip retail/bulk preflight (may 409 if stock depleted)
+  --json                   JSON summary on stdout
+  -h, --help               Show help
 
 Runs 40 sales total: 20 credit-only till (card), 20 cash+credit till (card/cash/split).
+Preflight (default): reset matrix SKU stock to seed.sql levels via admin inventory APIs.
 `);
 }
 
@@ -118,12 +129,14 @@ function parseArgs(argv) {
     yes: false,
     json: false,
     help: false,
+    noInventoryTopUp: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '-h' || arg === '--help') { opts.help = true; continue; }
     if (arg === '--yes') { opts.yes = true; continue; }
     if (arg === '--json') { opts.json = true; continue; }
+    if (arg === '--no-inventory-top-up') { opts.noInventoryTopUp = true; continue; }
     if (arg === '--base-url' && argv[i + 1]) {
       opts.baseUrl = argv[++i];
       continue;
@@ -157,7 +170,6 @@ async function confirmDestructive(baseUrl) {
 }
 
 async function loadCatalog(jar, baseUrl) {
-  const { api } = require('./lib/pos-api-client');
   const products = await api(jar, baseUrl, 'GET', '/api/products');
   const byBarcode = new Map();
   const byKey = new Map();
@@ -173,13 +185,54 @@ async function loadCatalog(jar, baseUrl) {
 }
 
 async function loadMemberCustomer(jar, baseUrl) {
-  const { api } = require('./lib/pos-api-client');
   const customers = await api(jar, baseUrl, 'GET', '/api/customers');
   const member = customers.find((c) => c.is893 || c.memberCode === 'JR-893');
   if (!member) {
     throw new Error('No linked member customer in DB (expected Alex Rivera / JR-893)');
   }
   return member;
+}
+
+async function ensureMatrixInventory(baseUrl, catalog, adminPin, opts) {
+  if (opts.noInventoryTopUp) {
+    logStep(opts, 'SKIP inventory preflight (--no-inventory-top-up)');
+    return;
+  }
+
+  const consumed = sumQtyByKey([CREDIT_ONLY_SCENARIOS, CASH_AND_CREDIT_SCENARIOS]);
+  const adminJar = new CookieJar();
+  await api(adminJar, baseUrl, 'POST', '/api/admin/login', { pin: adminPin });
+
+  logStep(opts, '');
+  logStep(opts, '== inventory preflight (seed.sql baselines) ==');
+
+  for (const key of retailKeysInMatrix(consumed)) {
+    const product = catalog.byKey.get(key);
+    const type = PRODUCT_KEY_TYPES[key];
+    const target = SEED_STOCK_BY_TYPE[type];
+    if (!product?.id || target == null) continue;
+
+    try {
+      await api(adminJar, baseUrl, 'POST', '/api/admin/inventory/set-count', {
+        productId: product.id,
+        quantity: target,
+        note: 'seed-test-sales-matrix preflight',
+      });
+      logStep(opts, `OK   stock ${key} → ${target}`);
+    } catch (err) {
+      const hint = product.quantityOnHand == null
+        ? ' (product may lack track_inventory=1 or product_inventory — run scripts/db/seed.sql or backfill)'
+        : '';
+      throw new Error(`inventory preflight failed for ${key}: ${err.message}${hint}`);
+    }
+  }
+
+  await api(adminJar, baseUrl, 'POST', '/api/admin/inventory/bulk/set-count', {
+    skuKey: 'kitchen_beans',
+    quantity: BULK_KITCHEN_BEANS_SEED,
+    note: 'seed-test-sales-matrix preflight',
+  });
+  logStep(opts, `OK   bulk kitchen_beans → ${BULK_KITCHEN_BEANS_SEED} oz`);
 }
 
 function cartLinesFromPreview(cartPreview) {
@@ -368,6 +421,7 @@ async function main() {
 
   const jar = new CookieJar();
   const catalog = await loadCatalog(jar, opts.baseUrl);
+  await ensureMatrixInventory(opts.baseUrl, catalog, adminPin, opts);
 
   const creditOnly = await runBatch({
     jar,

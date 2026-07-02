@@ -221,10 +221,22 @@ Approval error codes (JSON `code` field): `APPROVAL_DISABLED`, `NO_PENDING`, `WR
 | **Break** (Android UI) | `POST /api/cashier/logout` | **Ended** | Stays **active** | All cleared |
 | **Sign-off** (API only on tablet) | `POST /api/cashier/sign-off` | Ended | **Closed** | All cleared |
 | **EOD close** (supervisor flow) | `shift/close/*` | Ended on approve | Closed on approve | Cleared on approve |
+| **Force-close** (admin) | `POST /api/admin/open-tills/:id/force-close` | **Ended** immediately | **Closed** immediately | `cashier_session` may linger until next probe |
 
 **iOS must match Android:** menu “Break” → `logout`. “Close till” → close flow, not `sign-off`.
 
 After break, same cashier signing in on same `register_id` hits **resume** path (`cashier_resume=1`) if till still active.
+
+### Sales blocked after force-close
+
+When a supervisor **force-closes** a till, the server ends the linked `pos_sessions` row and marks the till `closed`. The cashier cookie may still exist briefly, but **sale APIs are rejected**:
+
+| Guard | Behavior |
+|-------|----------|
+| `lib/till-sale-guard.js` | Before cart mutations / checkout: **403** `{ code: "TILL_FORCE_CLOSED", error: "This till was closed by a supervisor…" }` if till closed, POS session ended, or latest `till_close_approvals` row is `force_closed` |
+| `GET /api/cashier/session` | When session cookie is still valid but till is not open for sales, response includes `ok: true` plus `tillOpenForSales: false`, `tillClosedBySupervisor: true`, `saleBlockedMessage` — web/tablet clients sign out and show the message |
+
+Cashier must sign in again and open a **new** till to sell.
 
 ---
 
@@ -253,6 +265,17 @@ Cookies gate HTTP access; database rows track business state:
 | Till | `tills` | One per open→close cycle; **survives break**; same `till.id` across multiple POS sessions |
 
 `cashier_session` payload includes `tillId` and `posSessionId` when till is open.
+
+When the till is not open for sales (force-close, normal close, ended POS session), `GET /api/cashier/session` may still return `ok: true` for a moment but adds:
+
+| Field | Meaning |
+|-------|---------|
+| `tillOpenForSales` | `false` when cart/checkout must be blocked |
+| `tillClosedBySupervisor` | `true` when latest close audit is `force_closed` |
+| `saleBlockedMessage` | Human-readable reason for clients to show on sign-in gate |
+| `saleBlockedCode` | e.g. `TILL_FORCE_CLOSED`, `TILL_CLOSED`, `POS_SESSION_ENDED` |
+
+Native clients: on `tillOpenForSales === false`, clear register state and return to sign-in with `saleBlockedMessage`.
 
 ---
 
