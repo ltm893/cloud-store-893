@@ -1,7 +1,7 @@
 -- seed.sql — Database setup for cloud-store-893
 --
 -- Do not run this file directly with bash.
--- Use ./scripts/reset-db.sh or run it in Database Actions / SQLcl as ADMIN.
+-- Use ./scripts/db/reset-db.sh or run it in Database Actions / SQLcl as ADMIN.
 --
 -- Run this in Database Actions SQL Worksheet as ADMIN:
 --   OCI Console → Oracle Database → Autonomous Database
@@ -655,6 +655,8 @@ VALUES ('872000000403', 'Crystal Spring Sparkling Water 12oz', 'water', 'Crystal
 INSERT INTO products (barcode, name, product_type, manufacturer, price, sale_price, tax_exempt)
 VALUES ('872000000404', 'Crystal Spring Gallon Spring Water', 'water', 'Crystal Spring Beverages', 3.49, 2.99, 1);
 
+COMMIT;
+
 -- ── 24. Inventory for retail SKUs (made coffee uses bulk beans, not shelf stock) ─
 
 INSERT INTO bulk_inventory (sku_key, name, quantity_on_hand, unit, reorder_point)
@@ -668,6 +670,8 @@ VALUES ('made coffee', 'kitchen_beans', 1.5, 'oz');
 UPDATE products
 SET track_inventory = 1
 WHERE product_type IN ('coffee beans', 'go cups', 'clothes', 'water');
+
+COMMIT;
 
 INSERT INTO product_inventory (product_id, quantity_on_hand, reorder_point)
 SELECT

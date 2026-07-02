@@ -97,7 +97,18 @@ private struct ReceiptTotalsSection: View {
 
     var body: some View {
         ReceiptTotalRow(label: "Items", value: "\(receipt.itemCount)")
-        ReceiptTotalRow(label: "Subtotal", value: CartTotalsLogic.formatMoney(receipt.subtotal))
+        if receipt.customerLinked {
+            ReceiptTotalRow(label: "Subtotal", value: CartTotalsLogic.formatMoney(receipt.shelfSubtotal))
+            ReceiptTotalRow(
+                label: "Discount",
+                value: receipt.showMemberDiscount
+                    ? "−\(CartTotalsLogic.formatMoney(receipt.memberDiscount))"
+                    : CartTotalsLogic.formatMoney(0)
+            )
+            ReceiptTotalRow(label: "PreTax", value: CartTotalsLogic.formatMoney(receipt.subtotal))
+        } else {
+            ReceiptTotalRow(label: "Subtotal", value: CartTotalsLogic.formatMoney(receipt.subtotal))
+        }
         ReceiptTotalRow(
             label: "Savings",
             value: receipt.savings > 0.005

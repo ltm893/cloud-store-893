@@ -1,5 +1,5 @@
 -- Add nickel cash rounding columns to sales (idempotent).
--- Run after deploy when ORDS already exists: sqlplus ... @scripts/migrate-sales-cash-rounding.sql
+-- Run after deploy when ORDS already exists: sqlplus ... @scripts/db/migrate/migrate-sales-cash-rounding.sql
 
 BEGIN
   EXECUTE IMMEDIATE 'ALTER TABLE sales ADD (register_total NUMBER(10, 2))';

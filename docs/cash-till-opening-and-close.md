@@ -384,12 +384,15 @@ On supervisor approve: set shift `closed`, clear `cashier_session`, client retur
 | GET | `/api/admin/shift-closes?status=pending` | supervisor | List pending EOD balances |
 | POST | `/api/admin/shift-closes/:id/approve` | supervisor | Close shift + force cashier logout |
 | POST | `/api/admin/shift-closes/:id/deny` | supervisor | Cashier must re-count or continue shift |
+| POST | `/api/admin/open-tills/:tillId/force-close` | supervisor | Close till + end POS session + audit `force_closed`; blocks further sales on that register (`lib/till-sale-guard.js`) |
 
-Admin UI: extend **Login approvals** for open; add **Shift closes** tab or merge into one **Register** queue with type badge (`OPEN` | `CLOSE`).
+Admin UI: extend **Login approvals** for open; add **Shift closes** tab or merge into one **Register** queue with type badge (`OPEN` | `CLOSE`). **Open tills — force close** uses `AdminPrompt` (`public/shared/admin-prompt.js`) for the reason field — do not use `window.prompt()` (broken in admin WebViews on tablet).
 
 ### Checkout guard
 
 `POST /api/checkout`: if session `cashEnabled === false` and any payment has `method === 'cash'`, respond `403` with `{ error: 'Cash payments are not enabled for this shift' }`.
+
+Cart and checkout also pass `lib/till-sale-guard.js` when the till is closed or the POS session ended (including after supervisor force-close). Response **403** with `code: TILL_FORCE_CLOSED` and message that the till was closed by a supervisor.
 
 ---
 

@@ -703,6 +703,51 @@ td.low-stock {
   cursor: pointer;
 }
 
+.admin-prompt-dialog {
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 0;
+  max-width: min(420px, 92vw);
+}
+
+.admin-prompt-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.admin-prompt-dialog form {
+  padding: 20px;
+}
+
+.admin-prompt-dialog h3 {
+  margin: 0 0 8px;
+}
+
+.admin-prompt-message {
+  margin: 0 0 12px;
+}
+
+.admin-prompt-label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.admin-prompt-label textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
+.dialog-actions .danger {
+  background: var(--danger);
+}
+
 /* Landscape-first admin (tablets); overlay when held in portrait */
 .portrait-blocker {
   display: none;

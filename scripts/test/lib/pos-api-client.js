@@ -30,11 +30,21 @@ async function api(jar, baseUrl, method, path, body) {
   if (cookie) headers.Cookie = cookie;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
-  const res = await fetch(`${baseUrl}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (cause) {
+    const detail = cause?.code || cause?.message || String(cause);
+    const err = new Error(
+      `${method} ${path} → fetch failed (${detail}); is the dev server running at ${baseUrl}? (npm run dev:up)`,
+    );
+    err.cause = cause;
+    throw err;
+  }
   jar.ingest(res);
 
   const text = await res.text();

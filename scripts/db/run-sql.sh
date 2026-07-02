@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Run a SQL script against live ADB via SQLcl + wallet (non-destructive by itself).
+#
+#   ./scripts/db/run-sql.sh scripts/db/verify-test-sales-matrix.sql
+#   ./scripts/db/run-sql.sh --wallet-zip wallet/adb.zip path/to/script.sql
 
 set -euo pipefail
 
@@ -21,16 +25,18 @@ error() { printf '[error] %s\n' "$1" >&2; exit 1; }
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/db/reset-db.sh [--yes] [--wallet-zip PATH]
+  ./scripts/db/run-sql.sh [--wallet-zip PATH] SQL_FILE
 
-What it does:
-  - Connects with SQLcl using an ADB wallet zip
-  - Runs scripts/db/seed.sql to drop and recreate the schema from scratch
+Run SQL_FILE as ADMIN via SQLcl using an ADB wallet zip.
+
+Examples:
+  ./scripts/db/run-sql.sh scripts/db/verify-test-sales-matrix.sql
+  npm run verify:test-sales-matrix
 
 Wallet resolution (first match wins):
   1. --wallet-zip PATH
   2. ADB_WALLET_ZIP in environment or .env
-  3. wallet/adb.zip in repo root (from Console download or download-adb-wallet.sh)
+  3. wallet/adb.zip (Console download or download-adb-wallet.sh)
   4. OCI CLI generate-wallet (3 retries) → caches wallet/adb.zip
 
 Requirements:
@@ -38,18 +44,8 @@ Requirements:
   - terraform/terraform.tfvars with adb_admin_password
 
 Wallet passwords:
-  - OCI-generated wallet/adb.zip uses WalletTemp1! (see download-adb-wallet.sh)
-  - Console-downloaded wallet: export ADB_WALLET_PASSWORD='your-zip-password'
-
-If generate-wallet keeps failing (HTTP 500):
-  - ./scripts/db/download-adb-wallet.sh   OR
-  - cp ~/Downloads/Wallet_*.zip wallet/adb.zip + ADB_WALLET_PASSWORD  OR
-  - Database Actions → Run scripts/db/seed.sql
-  - ./scripts/db/run-sql.sh scripts/db/seed.sql
-
-Notes:
-  - Destructive: drops products, customers, cart, sales, tills, approvals, etc.
-  - scripts/db/seed.sql is SQL — do not run it with bash.
+  - OCI-generated wallet/adb.zip uses WalletTemp1!
+  - Console wallet: export ADB_WALLET_PASSWORD='your-zip-password'
 EOF
 }
 
@@ -80,14 +76,10 @@ tfvar() {
   ' "${TFVARS}"
 }
 
-CONFIRMED=0
 WALLET_ZIP_ARG=""
+SQL_FILE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --yes|-y)
-      CONFIRMED=1
-      shift
-      ;;
     --wallet-zip)
       WALLET_ZIP_ARG="${2:-}"
       [[ -n "${WALLET_ZIP_ARG}" ]] || error "--wallet-zip requires a path"
@@ -97,22 +89,31 @@ while [[ $# -gt 0 ]]; do
       usage
       exit 0
       ;;
-    *)
+    --)
+      shift
+      ;;
+    -*)
       usage
       error "Unknown argument: $1"
+      ;;
+    *)
+      if [[ -n "${SQL_FILE}" ]]; then
+        error "Only one SQL file allowed (got: ${SQL_FILE} and $1)"
+      fi
+      SQL_FILE="$1"
+      shift
       ;;
   esac
 done
 
-[[ "${CONFIRMED}" -eq 1 ]] && ADB_NONINTERACTIVE=1
+[[ -n "${SQL_FILE}" ]] || { usage; error "SQL_FILE is required"; }
+[[ -f "${SQL_FILE}" ]] || error "SQL file not found: ${SQL_FILE}"
 
-command -v terraform >/dev/null 2>&1 || error "terraform not found"
 command -v oci >/dev/null 2>&1 || error "oci CLI not found"
 SQL_CMD="$(find_sqlcl || true)"
-[[ -n "${SQL_CMD}" ]] || error "SQLcl not found. Install it with ./scripts/tools/install-sqlcl.sh"
+[[ -n "${SQL_CMD}" ]] || error "SQLcl not found. Install with ./scripts/tools/install-sqlcl.sh"
 
 ADB_OCID="${ADB_OCID:-$(cd "${TF_DIR}" && terraform output -raw adb_ocid 2>/dev/null || true)}"
-ORDS_URL="${ORDS_URL:-$(cd "${TF_DIR}" && terraform output -raw ords_base_url 2>/dev/null || true)}"
 ADB_PASSWORD="${ADB_ADMIN_PASSWORD:-$(tfvar "adb_admin_password" || true)}"
 DB_NAME="${ADB_DB_NAME:-$(tfvar "adb_db_name" || true)}"
 
@@ -122,29 +123,6 @@ DB_NAME="${ADB_DB_NAME:-$(tfvar "adb_db_name" || true)}"
 
 DB_NAME_LOWER="$(printf '%s' "${DB_NAME}" | tr '[:upper:]' '[:lower:]')"
 DB_SERVICE="${ADB_DB_SERVICE:-${DB_NAME_LOWER}_high}"
-
-if [[ "${CONFIRMED}" -eq 0 ]]; then
-  warn "This will DELETE all current test data and rebuild the database schema."
-  read -r -p "Continue with full reset? [y/N] " reply
-  case "${reply}" in
-    y|Y|yes|YES)
-      ;;
-    *)
-      error "Reset cancelled"
-      ;;
-  esac
-fi
-
-if [[ -n "${ORDS_URL}" ]]; then
-  info "Waiting for ORDS at ${ORDS_URL}"
-  attempts=0
-  max_attempts=24
-  until [[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${ORDS_URL}" || true)" != "000" ]]; do
-    attempts=$((attempts + 1))
-    [[ "${attempts}" -lt "${max_attempts}" ]] || error "ORDS not ready after $((max_attempts * 5)) seconds"
-    sleep 5
-  done
-fi
 
 WALLET_DIR="$(mktemp -d)"
 TEMP_WALLET_ZIP="${WALLET_DIR}/wallet.zip"
@@ -172,11 +150,11 @@ else
   fi
 fi
 
-if [[ "${CONFIRMED}" -eq 1 ]] && ! adb_wallet_password_for_zip "${WALLET_ZIP}" >/dev/null 2>&1; then
-  error "Set ADB_WALLET_PASSWORD for wallet ${WALLET_ZIP} (required with --yes for Console wallets)"
+if ! adb_wallet_password_for_zip "${WALLET_ZIP}" >/dev/null 2>&1; then
+  warn "Console wallet: set ADB_WALLET_PASSWORD or SQLcl will prompt for zip password"
 fi
 
-info "Running scripts/db/seed.sql against ${DB_SERVICE}"
-adb_wallet_run_sqlcl "${SQL_CMD}" "${WALLET_ZIP}" "${ADB_PASSWORD}" "${DB_SERVICE}" "${SCRIPT_DIR}/seed.sql"
+info "Running ${SQL_FILE} against ${DB_SERVICE}"
+adb_wallet_run_sqlcl "${SQL_CMD}" "${WALLET_ZIP}" "${ADB_PASSWORD}" "${DB_SERVICE}" "${SQL_FILE}"
 
-info "Database reset complete"
+info "SQL complete"

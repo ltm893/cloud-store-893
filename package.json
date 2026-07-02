@@ -31,6 +31,8 @@
     "ios-pos:local-config": "./scripts/ios/sync-pos-local-config.sh",
     "ios-lister:local-config": "./scripts/ios/sync-lister-local-config.sh",
     "migrate-db:till": "./scripts/db/migrate/migrate-login-approval-till.sh",
+    "db:run-sql": "./scripts/db/run-sql.sh",
+    "verify:test-sales-matrix": "./scripts/db/run-sql.sh scripts/db/verify-test-sales-matrix.sql",
     "ios:local-config": "./scripts/ios/sync-local-config.sh",
     "ios:testflight": "./scripts/ios/testflight-upload.sh both",
     "ios:testflight:admin": "./scripts/ios/testflight-upload.sh admin",

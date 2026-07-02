@@ -136,6 +136,7 @@ data class PosUiState(
     val receipt: SaleReceipt? = null,
     val receiptPrintMessage: String? = null,
     val receiptPrintProgress: Float = 0f,
+    val showStatusPanel: Boolean = false,
 ) {
     fun selectedCustomer(): StoreCustomer? =
         selectedCustomerId?.let { id -> customers.find { it.id == id } }
@@ -1109,6 +1110,23 @@ class PosViewModel(
                 }
             }
             session.ok -> {
+                if (session.tillOpenForSales == false) {
+                    oidcAuthStepCompletedThisSession = false
+                    stopApprovalPoll()
+                    val blockedMessage = session.saleBlockedMessage
+                        ?: "This till was closed by a supervisor. Sign out and start a new shift to continue selling."
+                    viewModelScope.launch {
+                        clearStaleSignInState(blockedMessage)
+                        _state.update {
+                            it.copy(
+                                showStatusPanel = true,
+                                cart = emptyList(),
+                                receipt = null,
+                            )
+                        }
+                    }
+                    return
+                }
                 oidcAuthStepCompletedThisSession = false
                 requireFreshIdpLogin = false
                 stopApprovalPoll()
@@ -1770,9 +1788,31 @@ class PosViewModel(
     private fun addItemErrorMessage(err: Throwable, label: String): String = when {
         err is HttpException && err.code() == 401 -> "Session expired — sign in again"
         err is HttpException && err.code() == 404 -> "Product not found: $label"
-        err is HttpException && err.code() == 409 -> err.message?.takeIf { it.isNotBlank() }
-            ?: "Insufficient stock"
+        err is HttpException && err.code() == 409 ->
+            NetworkErrorLogic.httpErrorMessage(err, "Insufficient stock")
+        err is HttpException ->
+            NetworkErrorLogic.httpErrorMessage(err, "Add failed")
         else -> "Add failed: ${err.message ?: "Unable to add item"}"
+    }
+
+    fun consumeStatusPanelPrompt() {
+        _state.update { it.copy(showStatusPanel = false) }
+    }
+
+    private fun promptAddItemFailure(message: String, authLost: Boolean = false) {
+        _state.value = _state.value.copy(
+            isAuthenticated = if (authLost) false else _state.value.isAuthenticated,
+            addItemError = message,
+            status = message,
+            showStatusPanel = true,
+        )
+    }
+
+    private fun promptStatusMessage(message: String) {
+        _state.value = _state.value.copy(
+            status = message,
+            showStatusPanel = true,
+        )
     }
 
     fun addProduct(productId: Int) {
@@ -1780,12 +1820,12 @@ class PosViewModel(
             val cid = _state.value.selectedCustomerId
             val product = _state.value.products.find { it.id == productId }
             if (product == null) {
-                _state.value = _state.value.copy(addItemError = "Product not found: ID $productId")
+                promptAddItemFailure("Product not found: ID $productId")
                 return@launch
             }
             if (!product.inStock) {
                 val stockMsg = product.quantityOnHand?.let { qty -> " (qty $qty)" }.orEmpty()
-                _state.value = _state.value.copy(addItemError = "${product.name} is out of stock$stockMsg")
+                promptAddItemFailure("${product.name} is out of stock$stockMsg")
                 return@launch
             }
             runCatching { repository.addProduct(productId, cid) }
@@ -1795,10 +1835,7 @@ class PosViewModel(
                 }
                 .onFailure { err ->
                     val authLost = err is HttpException && err.code() == 401
-                    _state.value = _state.value.copy(
-                        isAuthenticated = !authLost,
-                        addItemError = addItemErrorMessage(err, "ID $productId"),
-                    )
+                    promptAddItemFailure(addItemErrorMessage(err, "ID $productId"), authLost)
                 }
         }
     }
@@ -1810,7 +1847,7 @@ class PosViewModel(
     fun addByBarcodeValue(input: String) {
         val cleaned = input.trim()
         if (cleaned.isEmpty()) {
-            _state.value = _state.value.copy(addItemError = "Enter barcode or product ID")
+            promptAddItemFailure("Enter barcode or product ID")
             return
         }
 
@@ -1828,12 +1865,12 @@ class PosViewModel(
                 return
             }
             if (product == null) {
-                _state.value = _state.value.copy(addItemError = "Product not found: ID $cleaned")
+                promptAddItemFailure("Product not found: ID $cleaned")
                 return
             }
             if (!product.inStock) {
                 val stockMsg = product.quantityOnHand?.let { qty -> " (qty $qty)" }.orEmpty()
-                _state.value = _state.value.copy(addItemError = "${product.name} is out of stock$stockMsg")
+                promptAddItemFailure("${product.name} is out of stock$stockMsg")
                 return
             }
         }
@@ -1842,7 +1879,7 @@ class PosViewModel(
             val product = _state.value.products.find { it.barcode == cleaned }
             if (product != null && !product.inStock) {
                 val stockMsg = product.quantityOnHand?.let { qty -> " (qty $qty)" }.orEmpty()
-                _state.value = _state.value.copy(addItemError = "${product.name} is out of stock$stockMsg")
+                promptAddItemFailure("${product.name} is out of stock$stockMsg")
                 return
             }
         }
@@ -1862,10 +1899,7 @@ class PosViewModel(
                 .onFailure { err ->
                     val authLost = err is HttpException && err.code() == 401
                     val label = if (treatAsId) "ID $cleaned" else cleaned
-                    _state.value = _state.value.copy(
-                        isAuthenticated = !authLost,
-                        addItemError = addItemErrorMessage(err, label),
-                    )
+                    promptAddItemFailure(addItemErrorMessage(err, label), authLost)
                 }
         }
     }
@@ -1958,13 +1992,14 @@ class PosViewModel(
             result
                 .onSuccess { applyCartResponse(it, _state.value.customerDiscountActive()) }
                 .onFailure { err ->
-                    _state.value = _state.value.copy(
-                        status = if (qty <= 0) {
-                            "Remove failed: ${err.message}"
-                        } else {
-                            "Quantity update failed: ${err.message}"
-                        },
-                    )
+                    val message = if (qty <= 0) {
+                        "Remove failed: ${err.message}"
+                    } else if (err is HttpException) {
+                        "Quantity update failed: ${NetworkErrorLogic.httpErrorMessage(err, "Insufficient stock")}"
+                    } else {
+                        "Quantity update failed: ${err.message}"
+                    }
+                    promptStatusMessage(message)
                 }
         }
     }

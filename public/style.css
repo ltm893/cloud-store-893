@@ -51,6 +51,7 @@ h1, h2, h3 {
 }
 
 .auth-overlay[hidden],
+.status-overlay[hidden],
 .app-shell[hidden],
 .drawer[hidden],
 .drawer-backdrop[hidden] {
@@ -647,10 +648,47 @@ h1, h2, h3 {
   color: var(--muted);
 }
 
-.status-panel {
-  margin-bottom: 8px;
-  max-height: 180px;
+.app-shell--status-open .pos-header,
+.app-shell--status-open .pos-main,
+.app-shell--status-open .drawer,
+.app-shell--status-open .drawer-backdrop {
+  pointer-events: none;
+}
+
+.status-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.78);
+  pointer-events: auto;
+}
+
+.status-overlay-card {
+  position: relative;
+  z-index: 1;
+  width: min(320px, 72vw);
+  max-height: min(70vh, 420px);
   overflow-y: auto;
+  background: var(--panel);
+  border: 2px solid var(--primary);
+  box-shadow: 0 10px 36px rgba(15, 23, 42, 0.28);
+  pointer-events: auto;
+}
+
+.status-overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.status-overlay-head .section-title {
+  margin: 0;
 }
 
 .status-body {

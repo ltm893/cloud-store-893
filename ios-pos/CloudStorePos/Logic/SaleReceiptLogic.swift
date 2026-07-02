@@ -13,6 +13,9 @@ struct SaleReceiptInfo: Equatable {
     let customerName: String?
     let lines: [ReceiptLine]
     let itemCount: Int
+    let customerLinked: Bool
+    let shelfSubtotal: Double
+    let memberDiscount: Double
     let subtotal: Double
     let savings: Double
     let tax: Double
@@ -21,6 +24,8 @@ struct SaleReceiptInfo: Equatable {
     let payments: [CheckoutPayment]
     let changeTotal: Double
     var queuedOffline: Bool = false
+
+    var showMemberDiscount: Bool { customerLinked && memberDiscount > 0.005 }
 
     var orderLabel: String {
         if queuedOffline { return "Queued for sync" }
@@ -82,6 +87,9 @@ enum SaleReceiptLogic {
                 )
             },
             itemCount: totals.itemCount,
+            customerLinked: customerLinked && customerDiscount,
+            shelfSubtotal: totals.shelfSubtotal,
+            memberDiscount: totals.memberDiscount,
             subtotal: totals.itemPreTax,
             savings: totals.saleSavings,
             tax: taxAmount,

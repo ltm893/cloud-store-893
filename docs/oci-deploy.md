@@ -141,7 +141,7 @@ Live URLs:
 Optional read-only API smoke:
 
 ```bash
-BASE_URL="$APP" SKIP_DESTRUCTIVE=yes ./scripts/test-api-curl.sh
+BASE_URL="$APP" SKIP_DESTRUCTIVE=yes ./scripts/test/test-api-curl.sh
 ```
 
 ### Promote dev → prod
@@ -202,13 +202,24 @@ Full checklist: [oci-network-recovery.md](oci-network-recovery.md).
 
 ## 3. Database schema
 
-Schema source of truth: `scripts/seed.sql` (tables + ORDS enablement).
+Schema source of truth: `scripts/db/seed.sql` (tables + ORDS enablement).
 
 ### Destructive full reseed (wipes data)
 
+Wallet order: `wallet/adb.zip` (cached) → OCI `generate-wallet` (3 retries) → see fallbacks below.
+
 ```bash
-./scripts/reset-db.sh --yes
+# Optional: cache a Console wallet once (when OCI API returns HTTP 500)
+# cp ~/Downloads/Wallet_CLOUDSTORE893.zip wallet/adb.zip
+# export ADB_WALLET_PASSWORD='password-you-set-in-console'
+
+./scripts/db/reset-db.sh --yes
+
+# Or refresh OCI-generated cache only:
+./scripts/db/download-adb-wallet.sh
 ```
+
+**No wallet:** OCI Console → Database Actions → SQL → run `scripts/db/seed.sql` as ADMIN.
 
 ### Incremental (keep data)
 
@@ -216,8 +227,8 @@ Run only the new DDL in Database Actions / SQLcl. Examples in repo:
 
 | Migration | Script |
 |-----------|--------|
-| Login approval till columns | `./scripts/migrate-login-approval-till.sh` |
-| Shift close, `sales.shift_id`, etc. | Apply relevant sections from `scripts/seed.sql` manually (no dedicated migrate script yet) |
+| Login approval till columns | `./scripts/db/migrate/migrate-login-approval-till.sh` |
+| Shift close, `sales.shift_id`, etc. | Apply relevant sections from `scripts/db/seed.sql` manually (no dedicated migrate script yet) |
 
 After schema changes, redeploy app code (step 1).
 
