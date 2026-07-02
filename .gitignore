@@ -8,9 +8,6 @@ certs/
 # Local dev auth session persistence (DEV_PERSIST_AUTH_SESSIONS via dev-up.sh)
 .dev-auth-sessions.json
 
-# Local demo recordings (not for repo)
-docs/demos/
-
 # Node dependencies - reinstalled via npm install
 node_modules/
 
