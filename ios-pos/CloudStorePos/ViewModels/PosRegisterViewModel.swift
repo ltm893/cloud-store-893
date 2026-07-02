@@ -15,6 +15,7 @@ final class PosRegisterViewModel {
     )
     private(set) var status = "Loading…"
     private(set) var addItemError: String?
+    private(set) var showStatusPanel = false
     private(set) var isLoading = true
 
     var scanInput = ""
@@ -187,10 +188,25 @@ final class PosRegisterViewModel {
         scanInput = ""
     }
 
+    func consumeStatusPanelPrompt() {
+        showStatusPanel = false
+    }
+
+    private func promptAddItemFailure(_ message: String) {
+        addItemError = message
+        status = message
+        showStatusPanel = true
+    }
+
+    private func promptStatusMessage(_ message: String) {
+        status = message
+        showStatusPanel = true
+    }
+
     func addFromScanField() {
         let cleaned = scanInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else {
-            addItemError = "Enter barcode or product ID"
+            promptAddItemFailure("Enter barcode or product ID")
             return
         }
         if let productId = Int(cleaned), cleaned.count <= 6 {
@@ -201,19 +217,19 @@ final class PosRegisterViewModel {
                     addItemError = nil
                     return
                 }
-                addItemError = "Product not found: ID \(cleaned)"
+                promptAddItemFailure("Product not found: ID \(cleaned)")
                 return
             }
             if !product.inStock {
                 let stockMsg = product.quantityOnHand.map { " (qty \($0))" } ?? ""
-                addItemError = "\(product.name) is out of stock\(stockMsg)"
+                promptAddItemFailure("\(product.name) is out of stock\(stockMsg)")
                 return
             }
             addProduct(productId: productId)
         } else {
             if let product = products.first(where: { $0.barcode == cleaned }), !product.inStock {
                 let stockMsg = product.quantityOnHand.map { " (qty \($0))" } ?? ""
-                addItemError = "\(product.name) is out of stock\(stockMsg)"
+                promptAddItemFailure("\(product.name) is out of stock\(stockMsg)")
                 return
             }
             Task { await addByBarcode(cleaned) }
@@ -231,7 +247,7 @@ final class PosRegisterViewModel {
                 scanInput = ""
                 addItemError = nil
             } catch {
-                addItemError = error.localizedDescription
+                promptAddItemFailure(error.localizedDescription)
             }
         }
     }
@@ -246,7 +262,7 @@ final class PosRegisterViewModel {
             scanInput = ""
             addItemError = nil
         } catch {
-            addItemError = error.localizedDescription
+            promptAddItemFailure(error.localizedDescription)
         }
     }
 
@@ -320,9 +336,10 @@ final class PosRegisterViewModel {
                 }
                 applyCartResponse(response)
             } catch {
-                status = qty <= 0
+                let message = qty <= 0
                     ? "Remove failed — \(error.localizedDescription)"
                     : "Quantity update failed — \(error.localizedDescription)"
+                promptStatusMessage(message)
             }
         }
     }

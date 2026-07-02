@@ -5,7 +5,7 @@
 # Just verifies ADB/ORDS is reachable, prints the tablet URL,
 # and runs `node --watch server.js`.
 #
-#   ./scripts/dev-up.sh
+#   ./scripts/dev/up.sh
 #
 # Flags:
 #   --no-probe   Skip the ORDS health check (start the server even if cloud is down)
@@ -74,7 +74,7 @@ if [[ "$PROBE" = "1" ]]; then
       ;;
     404)
       warn "ORDS reachable but schema NOT enabled (HTTP 404)."
-      warn "Fix: paste the ORDS-only PL/SQL block (or scripts/seed.sql) into Database Actions → SQL."
+      warn "Fix: paste the ORDS-only PL/SQL block (or scripts/db/seed.sql) into Database Actions → SQL."
       warn "Server will start, but /api/* endpoints will return 500 until this is fixed."
       ;;
     000|"")
@@ -97,7 +97,7 @@ if command -v ipconfig &>/dev/null; then
   if [[ -n "$LAN_IP" ]]; then
     info "Tablet should target: http://${LAN_IP}:${PORT_VAL}/"
     warn "Oracle IdP must allow redirect http://${LAN_IP}:${PORT_VAL}/oauth/callback"
-    warn "  Run: ./scripts/dev-update-idp-redirects.sh (once per LAN IP change)"
+    warn "  Run: ./scripts/dev/update-idp-redirects.sh (once per LAN IP change)"
   else
     warn "Could not detect LAN IP — verify Wi-Fi is on if you intend to use the tablet."
   fi

@@ -1,6 +1,6 @@
 -- Migrate legacy register_shifts / login_approval_requests schema to pos_sessions + tills.
 -- Run once on an existing OCI DB before deploying the new server image.
--- Fresh installs should use scripts/seed.sql instead.
+-- Fresh installs should use scripts/db/seed.sql instead.
 
 SET SERVEROUTPUT ON
 

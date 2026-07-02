@@ -54,4 +54,36 @@ final class SaleReceiptLogicTests: XCTestCase {
         )
         XCTAssertEqual(receipt.orderLabel, "Queued for sync")
     }
+
+    func testBuildSaleReceiptShowsMemberDiscountForLinkedCustomer() {
+        let item = CartItem(
+            id: 1,
+            productId: 101,
+            name: "Widget",
+            regularPrice: 10,
+            salePrice: nil,
+            onSale: false,
+            quantity: 2,
+            unitPricePublic: 10,
+            unitPricePayable: 8,
+            lineSubtotalPublic: 20,
+            lineSubtotalPayable: 16
+        )
+        let receipt = SaleReceiptLogic.buildSaleReceipt(
+            cart: [item],
+            customerName: "Pat Example",
+            customerLinked: true,
+            customerDiscount: true,
+            salesFeeRate: 0,
+            taxRate: 0,
+            payments: [CheckoutPayment(method: "card", amount: 16)],
+            orderNumber: "ORD-99"
+        )
+
+        XCTAssertTrue(receipt.customerLinked)
+        XCTAssertEqual(receipt.shelfSubtotal, 20)
+        XCTAssertEqual(receipt.memberDiscount, 4)
+        XCTAssertEqual(receipt.subtotal, 16)
+        XCTAssertTrue(receipt.showMemberDiscount)
+    }
 }

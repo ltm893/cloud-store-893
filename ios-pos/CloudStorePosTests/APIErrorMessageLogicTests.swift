@@ -25,4 +25,13 @@ final class APIErrorMessageLogicTests: XCTestCase {
             "Server error (502)"
         )
     }
+
+    func testMessageIncludesMaxOrderable() {
+        XCTAssertEqual(
+            APIErrorMessageLogic.message(
+                fromBody: #"{"error":"Insufficient stock for Beans (only 3 available)","maxOrderable":3}"#
+            ),
+            "Insufficient stock for Beans (only 3 available) (max 3 can be ordered)"
+        )
+    }
 }

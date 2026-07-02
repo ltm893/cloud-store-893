@@ -9,6 +9,7 @@ struct RegisterStatusPanel: View {
     let syncing: Bool
     let onSyncQueued: () -> Void
     let onDiscardQueued: () -> Void
+    let onHide: () -> Void
 
     private var sessionLine: String? {
         var parts: [String] = []
@@ -23,9 +24,15 @@ struct RegisterStatusPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Status")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(PosColors.burgundy)
+            HStack {
+                Text("Status")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PosColors.burgundy)
+                Spacer(minLength: 8)
+                Button("Hide", action: onHide)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PosColors.teal)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("API URL")
@@ -58,6 +65,12 @@ struct RegisterStatusPanel: View {
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .posPanelStyle()
+        .padding(12)
+        .background(Color.white.opacity(0.95))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(PosColors.burgundy, lineWidth: 2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }

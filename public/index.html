@@ -97,11 +97,6 @@
       </section>
 
       <aside class="pos-right">
-        <div id="statusPanel" class="card-numpad status-panel" hidden>
-          <h3 class="section-title">Register status</h3>
-          <div id="statusPanelBody" class="status-body"></div>
-        </div>
-
         <div id="rightPanel" class="card-numpad right-panel">
           <div id="barcodeNumpadPanel">
             <div id="qtyEditHeader" class="qty-edit-header" hidden></div>
@@ -136,6 +131,16 @@
     </main>
 
     <div id="statusToast" class="status-toast" role="status"></div>
+
+    <div id="statusPanel" class="status-overlay" hidden>
+      <div class="status-overlay-card card-numpad">
+        <div class="status-overlay-head">
+          <h3 class="section-title">Register status</h3>
+          <button type="button" id="hideStatusBtn" class="text-btn">Hide</button>
+        </div>
+        <div id="statusPanelBody" class="status-body"></div>
+      </div>
+    </div>
   </div>
 
   <div id="processingOverlay" class="auth-overlay processing-overlay" hidden>

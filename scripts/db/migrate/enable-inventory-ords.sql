@@ -1,7 +1,7 @@
 -- enable-inventory-ords.sql — expose inventory tables/views to ORDS (admin + app)
 --
 -- Run in Database Actions as ADMIN after seed-inventory-backfill.sql if you did
--- not run the full scripts/seed.sql ORDS blocks (sections 17–19).
+-- not run the full scripts/db/seed.sql ORDS blocks (sections 17–19).
 -- Safe to re-run.
 
 -- ── Ensure objects exist ────────────────────────────────────────────────────

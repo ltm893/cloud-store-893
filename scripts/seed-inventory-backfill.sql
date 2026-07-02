@@ -1,1 +1,0 @@
-db/backfill/seed-inventory-backfill.sql

@@ -32,6 +32,7 @@ struct RegisterScreen: View {
                 PosRegisterTopBar(user: user) {
                     drawerOpen = true
                 }
+                .disabled(statusVisible)
                 GeometryReader { geo in
                     let gutter = PosLayoutMetrics.registerCenterGutter
                     let hPad = PosLayoutMetrics.registerSideGutter * 2
@@ -42,10 +43,35 @@ struct RegisterScreen: View {
                     }
                     .padding(.horizontal, PosLayoutMetrics.registerSideGutter)
                     .padding(.vertical, 8)
+                    .disabled(statusVisible)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(PosColors.cream)
+            .overlay {
+                if statusVisible {
+                    ZStack {
+                        Color(red: 15 / 255, green: 23 / 255, blue: 42 / 255)
+                            .opacity(0.78)
+                            .ignoresSafeArea()
+                            .allowsHitTesting(true)
+                        RegisterStatusPanel(
+                            apiBaseURL: AppConfig.apiBaseURL.absoluteString,
+                            tillId: session.activeTillId,
+                            posSessionId: session.activePosSessionId,
+                            statusMessage: viewModel.status,
+                            queuedCount: viewModel.queuedCheckoutCount,
+                            syncing: viewModel.queueSyncing,
+                            onSyncQueued: { Task { await viewModel.flushOfflineQueue() } },
+                            onDiscardQueued: { viewModel.clearOfflineQueue() },
+                            onHide: { statusVisible = false }
+                        )
+                        .frame(maxWidth: 320)
+                        .padding(.horizontal, 24)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
             .overlay {
                 if viewModel.processingCard {
                     processingOverlay(
@@ -63,6 +89,12 @@ struct RegisterScreen: View {
             .onChange(of: viewModel.queuedCheckoutCount) { _, count in
                 if count > 0 {
                     statusVisible = true
+                }
+            }
+            .onChange(of: viewModel.showStatusPanel) { _, show in
+                if show {
+                    statusVisible = true
+                    viewModel.consumeStatusPanelPrompt()
                 }
             }
             .fullScreenCover(isPresented: $adminOpen) {
@@ -263,25 +295,7 @@ struct RegisterScreen: View {
     }
 
     private var rightColumn: some View {
-        let showStatusPanel = statusVisible
-            && viewModel.receipt == nil
-            && !viewModel.checkoutOpen
-            && !viewModel.customerFindOpen
-
-        return VStack(spacing: 8) {
-            if showStatusPanel {
-                RegisterStatusPanel(
-                    apiBaseURL: AppConfig.apiBaseURL.absoluteString,
-                    tillId: session.activeTillId,
-                    posSessionId: session.activePosSessionId,
-                    statusMessage: viewModel.status,
-                    queuedCount: viewModel.queuedCheckoutCount,
-                    syncing: viewModel.queueSyncing,
-                    onSyncQueued: { Task { await viewModel.flushOfflineQueue() } },
-                    onDiscardQueued: { viewModel.clearOfflineQueue() }
-                )
-            }
-
+        VStack(spacing: 8) {
             if viewModel.receipt != nil {
                 ReceiptActionPanel(
                     onPrint: { viewModel.printReceipt() },

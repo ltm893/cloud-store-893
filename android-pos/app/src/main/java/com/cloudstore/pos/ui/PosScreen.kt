@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.focus.focusRequester
@@ -32,6 +34,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
@@ -123,6 +126,13 @@ fun PosScreen(viewModel: PosViewModel) {
     LaunchedEffect(state.queuedCheckoutCount) {
         if (state.queuedCheckoutCount > 0) {
             statusVisible = true
+        }
+    }
+
+    LaunchedEffect(state.showStatusPanel) {
+        if (state.showStatusPanel) {
+            statusVisible = true
+            viewModel.consumeStatusPanelPrompt()
         }
     }
 
@@ -371,10 +381,13 @@ fun PosScreen(viewModel: PosViewModel) {
             }
         },
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .navigationBarsPadding(),
+        ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
         ) {
             val salesFeeRate = BuildConfig.POS_SALES_FEE_RATE.toDoubleOrNull() ?: 0.0
             val taxRate = BuildConfig.POS_TAX_RATE.toDoubleOrNull() ?: 0.0
@@ -657,8 +670,7 @@ fun PosScreen(viewModel: PosViewModel) {
                 }
             }
 
-            // ── Status slot + fixed-size number pad (right) ───────────────────
-            val showStatusSlot = statusVisible
+            // ── Fixed-size number pad (right) ───────────────────────────────
             if (showReceipt && receipt != null) {
                 Column(
                     modifier = Modifier
@@ -678,27 +690,6 @@ fun PosScreen(viewModel: PosViewModel) {
                     .weight(0.35f)
                     .fillMaxHeight(),
             ) {
-                if (showStatusSlot) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 6.dp),
-                        colors = PosCardDefaults.contentColors(),
-                        elevation = PosCardDefaults.elevation(),
-                    ) {
-                        RegisterStatusPanel(
-                            apiBaseUrl = BuildConfig.API_BASE_URL,
-                            tillId = state.tillId,
-                            posSessionId = state.posSessionId,
-                            status = state.status,
-                            queuedCount = state.queuedCheckoutCount,
-                            syncing = state.queueSyncing,
-                            onSyncQueued = viewModel::flushOfflineQueue,
-                            onDiscardQueued = viewModel::clearOfflineQueue,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        )
-                    }
-                }
                 if (!checkout.open && !customerFindOpen) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
@@ -845,7 +836,21 @@ fun PosScreen(viewModel: PosViewModel) {
         }
             }
         }
+        }
     }
+
+    RegisterStatusOverlay(
+        visible = statusVisible,
+        onHide = { statusVisible = false },
+        apiBaseUrl = BuildConfig.API_BASE_URL,
+        tillId = state.tillId,
+        posSessionId = state.posSessionId,
+        status = state.status,
+        queuedCount = state.queuedCheckoutCount,
+        syncing = state.queueSyncing,
+        onSyncQueued = viewModel::flushOfflineQueue,
+        onDiscardQueued = viewModel::clearOfflineQueue,
+    )
 
     checkout.processingDialogMessage?.let { message ->
         ProcessingStatusDialog(
@@ -934,6 +939,61 @@ private fun DrawerMenuButton(
 }
 
 @Composable
+private fun RegisterStatusOverlay(
+    visible: Boolean,
+    onHide: () -> Unit,
+    apiBaseUrl: String,
+    tillId: Int?,
+    posSessionId: Int?,
+    status: String,
+    queuedCount: Int,
+    syncing: Boolean,
+    onSyncQueued: () -> Unit,
+    onDiscardQueued: () -> Unit,
+) {
+    if (!visible) return
+
+    Dialog(
+        onDismissRequest = onHide,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0F172A).copy(alpha = 0.78f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Card(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .fillMaxWidth(0.72f)
+                    .widthIn(max = 320.dp)
+                    .border(2.dp, PosPrimary, RoundedCornerShape(12.dp)),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = PosPanel,
+                    contentColor = PosText,
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            ) {
+                RegisterStatusPanel(
+                    apiBaseUrl = apiBaseUrl,
+                    tillId = tillId,
+                    posSessionId = posSessionId,
+                    status = status,
+                    queuedCount = queuedCount,
+                    syncing = syncing,
+                    onSyncQueued = onSyncQueued,
+                    onDiscardQueued = onDiscardQueued,
+                    onHide = onHide,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun RegisterStatusPanel(
     apiBaseUrl: String,
     tillId: Int?,
@@ -943,15 +1003,25 @@ private fun RegisterStatusPanel(
     syncing: Boolean,
     onSyncQueued: () -> Unit,
     onDiscardQueued: () -> Unit,
+    onHide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "Status",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Status",
+                style = MaterialTheme.typography.labelMedium,
+                color = PosPrimary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            TextButton(onClick = onHide) {
+                Text("Hide")
+            }
+        }
         Text(
             text = "API URL",
             style = MaterialTheme.typography.bodySmall,

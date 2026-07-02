@@ -180,7 +180,7 @@ info "Phase 3 — Seeding the database via SQLcl..."
 
 if [[ -z "$SQL_CMD" ]]; then
   warn "SQLcl not available — skipping seed."
-  warn "Run manually: paste scripts/seed.sql into OCI Database Actions → SQL"
+  warn "Run manually: paste scripts/db/seed.sql into OCI Database Actions → SQL"
 else
   cd "${TF_DIR}"
   ADB_OCID=$(cloud_store_tf_output adb_ocid)
@@ -216,7 +216,7 @@ else
   info "Running seed.sql against ${DB_SERVICE}..."
   "${SQL_CMD}" -cloudconfig "${WALLET_ZIP}" \
     "admin/${ADB_PASSWORD}@${DB_SERVICE}" \
-    @"${PROJECT_ROOT}/scripts/seed.sql"
+    @"${PROJECT_ROOT}/scripts/db/seed.sql"
 
   rm -rf "${WALLET_DIR}"
   success "Database seeded!"

@@ -126,7 +126,14 @@
 
   async function denyClose(closeToken, btn) {
     if (!closeToken) return;
-    const reason = window.prompt('Reason for denial (optional):', '') || '';
+    const reason = await AdminPrompt.ask({
+      title: 'Deny till close',
+      message: 'The cashier will need to submit a new close request.',
+      label: 'Reason for denial (optional)',
+      confirmText: 'Deny',
+    });
+    if (reason === null) return;
+
     btn.disabled = true;
     try {
       const res = await apiFetch(
@@ -134,7 +141,7 @@
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason }),
+          body: JSON.stringify({ reason: reason || undefined }),
         },
       );
       const payload = await res.json().catch(() => ({}));

@@ -1,1 +1,0 @@
-db/backfill/seed-bulk-inventory-migrate.sql

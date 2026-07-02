@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate docs/product-barcodes.pdf from product rows in scripts/seed.sql."""
+"""Generate docs/product-barcodes.pdf from product rows in scripts/db/seed.sql."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def render_pdf(products: list[dict[str, str]]) -> None:
         c.drawString(
             margin,
             page_h - margin - 14,
-            f"Source: scripts/seed.sql · {len(products)} products · Page {page_num}",
+            f"Source: scripts/db/seed.sql · {len(products)} products · Page {page_num}",
         )
 
     page_num = 1

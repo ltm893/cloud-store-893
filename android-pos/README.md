@@ -7,6 +7,7 @@ Kotlin + Jetpack Compose. Theming: **Lister palette** (`ui/theme/`).
 
 - **Cashier login** — on-screen numpad + **Done** when PIN is allowed; **Sign in with Oracle** (WebView → `/oauth/login?client_kind=tablet`) when IdP / Model B is on; supervisor approval waiting screen with poll + cancel
 - **☰ Menu** — **Show status** (API message + offline queue), **Find customer**, **Admin**, **Sign out**, **Close till**
+- **Status overlay** — full-screen dim + centered card (auto-opens on cart/API errors such as insufficient stock); hides register until dismissed
 - Barcode / product ID entry (`POST /api/cart`, `POST /api/cart/barcode`)
 - Camera scanning (CameraX + ML Kit)
 - Offline checkout queue — **Sync queued** in status panel (see caveats below)
@@ -68,7 +69,7 @@ USE_LOCAL=1 ./RebuildReinstall.sh
 
 **OCI self-signed LB cert:** `generate-lb-tls.sh` uses a self-signed cert. Browsers may warn; the **debug APK** trusts it automatically (`PocSelfSignedTls`, debug builds only). For production, install a public CA cert on the OCI load balancer instead.
 
-**PIN works on Mac but add-to-cart returns 401 on tablet:** the APK must target your Mac’s **current** Wi‑Fi IP (not `localhost`). Rebuild with the IP shown by `npm run lan-url` or `scripts/dev-up.sh`, then reinstall:
+**PIN works on Mac but add-to-cart returns 401 on tablet:** the APK must target your Mac’s **current** Wi‑Fi IP (not `localhost`). Rebuild with the IP shown by `npm run lan-url` or `scripts/dev/up.sh`, then reinstall:
 
 ```bash
 LAN_IP=$(ipconfig getifaddr en0) ./RebuildReinstall.sh
@@ -111,8 +112,8 @@ pre-tax line totals.
 Box diagrams (login, sale, drawer, customer find, payment) with color notes: [CONTENTS.md § Tablet POS UI layout (ASCII)](../CONTENTS.md#tablet-pos-ui-layout-ascii).
 
 1. **Header** — ☰ menu, title, version (burgundy bar)
-2. **Status card** (☰ → **Show status**) — API message, offline queue, **Sync queued**
-3. **Middle** — scan field, **Scan** / **Add**, cart (+ payments list during checkout) | right slot: status (optional) + numpad **or** customer find **or** payment panel
+2. **Status overlay** (☰ → **Show status**, or auto on errors) — API message, offline queue, **Sync queued**; blocks register while open
+3. **Middle** — scan field, **Scan** / **Add**, cart (+ payments list during checkout) | right slot: numpad **or** customer find **or** payment panel
 4. **Bottom** — totals, **Pay** → split tender on right (amount numpad, **Cash** / **Card** / **CardOnFile**); sale completes when balance is $0
 
 ```text

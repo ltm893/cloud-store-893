@@ -2,7 +2,7 @@
 
 Operational scripts for local dev, database, tests, iOS builds, TLS, and OCI deploy.
 
-**Layout (phased reorg):** scripts are grouped by purpose. Old paths at `scripts/<name>` remain as **compatibility wrappers** (shell) or **symlinks** (SQL) that forward to the new location. Prefer the paths in the tables below; wrappers may be removed in a future release.
+**Layout:** scripts are grouped by purpose under subfolders (`dev/`, `db/`, `test/`, etc.). Use the paths in the tables below.
 
 ```
 scripts/
@@ -40,7 +40,9 @@ OCI scripts are documented in [docs/oci-deploy.md](../docs/oci-deploy.md) and [d
 | Script | One line |
 |--------|----------|
 | `seed.sql` | Full ADB schema, ORDS endpoints, sample products (canonical bootstrap) |
-| `reset-db.sh` | Run `seed.sql` against live ADB via SQLcl (destructive) |
+| `reset-db.sh` | Run `seed.sql` against live ADB via SQLcl (destructive; wallet cache + retries) |
+| `download-adb-wallet.sh` | Download `wallet/adb.zip` via OCI CLI (3 retries) when `generateWallet` is flaky |
+| `run-sql.sh` | Run any `.sql` file via SQLcl + wallet (`npm run db:run-sql -- path.sql`) |
 | `truncate-shift-auth-tables.sh` | Clear till/session approval test data (keeps products/sales) |
 | `truncate-shift-auth-tables.sql` | SQL used by truncate script |
 
@@ -80,8 +82,9 @@ OCI scripts are documented in [docs/oci-deploy.md](../docs/oci-deploy.md) and [d
 | `test-login-approval-lib.js` | Smoke-test `lib/login-approval.js` against live ORDS |
 | `create-test-pending-approval.js` | Insert pending approval row for supervisor route tests |
 | `create-test-sales.js` | Create real test sales via checkout (`npm run create:test-sales`) |
-| `seed-test-sales-matrix.js` | 40-sale matrix: credit-only + cash/credit tills (`npm run seed:test-sales-matrix`) |
-| `verify-test-sales-matrix.sql` | SQL checks after matrix seed (`scripts/db/verify-test-sales-matrix.sql`) |
+| `seed-test-sales-matrix.js` | 40-sale matrix: credit-only + cash/credit tills (`npm run seed:test-sales-matrix`; preflight inventory) |
+| `lib/matrix-inventory.js` | Matrix stock baselines + post-matrix expectations (synced with verify SQL §5) |
+| `verify-test-sales-matrix.sql` | SQL checks after matrix seed — `npm run verify:test-sales-matrix` (sales §2 + inventory §5) |
 
 ---
 
@@ -166,22 +169,6 @@ See [docs/oci-deploy.md](../docs/oci-deploy.md) for the full decision table. Qui
 
 ---
 
-## Compatibility wrappers (deprecated paths)
-
-These forward to the new location. Update call sites when convenient.
-
-| Old path | New path |
-|----------|----------|
-| `scripts/dev-up.sh` | `scripts/dev/up.sh` |
-| `scripts/run-tests.sh` | `scripts/test/run-tests.sh` |
-| `scripts/seed.sql` | `scripts/db/seed.sql` (symlink) |
-| `scripts/reset-db.sh` | `scripts/db/reset-db.sh` |
-| `scripts/install-sqlcl.sh` | `scripts/tools/install-sqlcl.sh` |
-| `scripts/sync-ios-*.sh` | `scripts/ios/sync-*.sh` |
-| … | See `scripts/*.sh` wrappers at repo root of `scripts/` |
-
----
-
 ## Planned next phase
 
-- Sub-group `scripts/oci/` into `deploy/`, `container/`, `network/`, `idp/`, `certs/`, `terraform/`, `ops/` with wrappers at current paths.
+- Sub-group `scripts/oci/` into `deploy/`, `container/`, `network/`, `idp/`, `certs/`, `terraform/`, `ops/`.
