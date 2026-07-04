@@ -1,0 +1,112 @@
+
+
+Description
+Cloud Store 893 at oci.cloudstore893.com is a POS system running in a Node.js container on Oracle Cloud and protected by Oracle Identity Access Management. Cash register clients are available on iPad and Android tablets. The admin interface supports supervisor push notifications, reporting, and table access.
+
+Source Code Repo: github.com/ltm893/cloud-store-893
+
+The following screenshots show 2 transactions:
+1. a split cash/credit sale
+2. a sale with a stored customer that gets an automatic 10% discount. 
+
+# Cloud Store POS — Split Transaction with Linked Customer
+
+![Demo overview](cloud-store-demo-split-trans-linked-cust.jpg)
+
+End-to-end cashier flow: sign in, open till, split cash/card sale, link a customer with card on file, close till with supervisor approval.
+
+## 01 — Sign in
+
+![01 Sign in](images01/01-SignInn.jpg)
+
+Tap Sign into App
+
+## 02 — Oracle sign in
+
+![02 Oracle sign in](images01/02-OciSignIn.jpg)
+
+Sign into Oracle cloud-store-apps
+
+## 03 — Submit till count
+
+![03 Submit till](images01/03-SubmitTill.jpg)
+
+Complete cash till denominations and Submit Till Count
+
+## 04 — Supervisor approves till
+
+![04 Approved till](images01/04-ApprovedCashTill.jpg)
+
+Supervisor approves in Admin Console
+
+## 05 — Pay
+
+![05 Split pay](images01/05-SplitPay.jpg)
+
+Tap Pay
+
+## 06 — Cash payment
+
+![06 Split cash](images01/06-SplitCash.jpg)
+
+Tap Add Product, update quantity, pay $50 Cash
+
+## 07 — Card payment
+
+![07 Split card](images01/07-SplitCC.jpg)
+
+Tap Quick Pay 85.60 then Charge Card
+
+## 08 — Split receipt
+
+![08 Split receipt](images01/08-SplitReceipt.jpg)
+
+Split Cash/Card Sale Receipt
+
+## 09 — Find customer
+
+![09 Burger menu](images01/09-BurgerMenu.jpg)
+
+Tap Hamburger Menu and Find customer
+
+## 10 — Customer search
+
+![10 Find customer](images01/10-FindCustomer.jpg)
+
+Enter details to find customer
+
+## 11 — Link customer
+
+![11 Card on file](images01/11-CardOnFile.jpg)
+
+Tap Customer found to link to Sale
+
+## 12 — Pay with card on file
+
+![12 Confirm card](images01/12-Confirm4.jpg)
+
+Tap quick for balance and CreditOnFile
+
+## 13 — Confirm card
+
+![13 Linked customer product](images01/13-LinkedCustomerProdcut.jpg)
+
+Confirm last 4 of CardOnFile
+
+## 14 — Linked customer receipt
+
+![14 Linked customer receipt](images01/14-LinkedCustReceipt.jpg)
+
+Linked Customer Receipt
+
+## 15 — Close till
+
+![15 Approve close](images01/15-ApproveClose.jpg)
+
+Hamburger Menu → Close Till → Submit for Approval
+
+## 16 — Supervisor approval
+
+![16 Wait for supervisor](images01/16-WaitSuperApproval.jpg)
+
+Supervisor approves
