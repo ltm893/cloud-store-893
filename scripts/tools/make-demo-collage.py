@@ -71,7 +71,11 @@ def load_intro(path: Path) -> list[tuple[str, str]]:
             continue
         if line.startswith("Source Code Repo:"):
             flush_body()
-            blocks.append(("repo", line))
+            link = re.search(r"\[([^\]]+)\]\(([^)]+)\)", line)
+            if link:
+                blocks.append(("repo", f"Source Code Repo: {link.group(1)}"))
+            else:
+                blocks.append(("repo", line))
             continue
         if re.match(r"^\d+\.\s", line):
             flush_body()
@@ -220,6 +224,74 @@ def wrap_text(draw, text: str, font, max_width: int) -> list[str]:
     return lines
 
 
+def draw_wrapped_paragraph(
+    draw,
+    *,
+    x: int,
+    y: int,
+    text: str,
+    max_width: int,
+    font,
+    fill: str,
+    line_spacing: int,
+) -> int:
+    lines = wrap_text(draw, text, font, max_width)
+    bbox = draw.textbbox((0, 0), "Ay", font=font)
+    line_h = bbox[3] - bbox[1]
+    cursor_y = y
+    for line in lines:
+        draw.text((x, cursor_y), line, fill=fill, font=font)
+        cursor_y += line_h + line_spacing
+    return cursor_y - y
+
+
+def draw_step_column(
+    draw,
+    *,
+    x: int,
+    y: int,
+    step: str,
+    label: str,
+    max_width: int,
+    step_font,
+    label_font,
+    line_spacing: int,
+) -> int:
+    step_lines = wrap_text(draw, step, step_font, max_width)
+    label_lines = wrap_text(draw, label, label_font, max_width)
+
+    step_bbox = draw.textbbox((0, 0), "Ay", font=step_font)
+    label_bbox = draw.textbbox((0, 0), "Ay", font=label_font)
+    step_line_h = step_bbox[3] - step_bbox[1]
+    label_line_h = label_bbox[3] - label_bbox[1]
+
+    cursor_y = y
+    for line in step_lines:
+        draw.text((x, cursor_y), line, fill=COLOR_BURGUNDY, font=step_font)
+        cursor_y += step_line_h + 2
+
+    cursor_y += 4
+    for line in label_lines:
+        draw.text((x, cursor_y), line, fill=COLOR_MUTED, font=label_font)
+        cursor_y += label_line_h + line_spacing
+
+    return cursor_y - y
+
+
+def measure_step_column(draw, step: str, label: str, max_width: int, step_font, label_font, line_spacing: int) -> int:
+    return draw_step_column(
+        draw,
+        x=0,
+        y=0,
+        step=step,
+        label=label,
+        max_width=max_width,
+        step_font=step_font,
+        label_font=label_font,
+        line_spacing=line_spacing,
+    )
+
+
 def draw_text_block(
     draw,
     *,
@@ -348,35 +420,42 @@ def render_vertical(
     title_height: int,
     row_gap: int,
     intro_gap: int,
+    desc_gap: int,
     quality: int,
+    scale: float = 1.0,
+    steps_only: bool = False,
 ) -> None:
     from PIL import Image, ImageDraw
 
     labels = [description_for(p, descriptions) for p in images]
+    short_labels = [step_label(p) for p in images]
     sample = Image.open(images[0])
     aspect = sample.height / sample.width
     cell_height = int(cell_width * aspect)
     slide_w = cell_width + slide_padding * 2
     slide_h = cell_height + slide_padding * 2
 
-    text_x = padding
+    step_col_x = padding
     image_x = padding + text_width + padding
-    canvas_w = image_x + slide_w + padding
+    content_w = text_width + padding + slide_w
+    canvas_w = padding + content_w + padding
     intro_width = canvas_w - padding * 2
+    desc_width = content_w
 
-    step_font = find_font(28, bold=True)
-    desc_font = find_font(18)
-    title_font = find_font(34)
-    intro_heading_font = find_font(26, bold=True)
-    intro_body_font = find_font(18)
-    intro_repo_font = find_font(18, bold=True)
+    step_font = find_font(int(28 * scale), bold=True)
+    label_font = find_font(int(16 * scale))
+    desc_font = find_font(int(18 * scale))
+    title_font = find_font(int(34 * scale))
+    intro_heading_font = find_font(int(26 * scale), bold=True)
+    intro_body_font = find_font(int(18 * scale))
+    intro_repo_font = find_font(int(18 * scale), bold=True)
 
     probe = Image.new("RGB", (1, 1))
     probe_draw = ImageDraw.Draw(probe)
 
-    intro_panel_padding = 20
+    intro_panel_padding = max(1, int(20 * scale))
     intro_inner_h = 0
-    if intro_blocks:
+    if intro_blocks and not steps_only:
         intro_inner_h = draw_intro_block(
             probe_draw,
             x=0,
@@ -388,41 +467,55 @@ def render_vertical(
             repo_font=intro_repo_font,
             line_spacing=6,
         )
-    intro_panel_h = intro_inner_h + intro_panel_padding * 2 if intro_blocks else 0
+    intro_panel_h = intro_inner_h + intro_panel_padding * 2 if intro_blocks and not steps_only else 0
 
     row_heights: list[int] = []
-    text_heights: list[int] = []
+    desc_heights: list[int] = []
+    media_heights: list[int] = []
+    step_col_heights: list[int] = []
     for index, label in enumerate(labels):
         number = step_number(images[index]) or (index + 1)
-        text_h = draw_text_block(
+        desc_h = draw_wrapped_paragraph(
             probe_draw,
             x=0,
             y=0,
-            step=f"{number:02d}",
-            description=label,
-            max_width=text_width,
-            step_font=step_font,
-            desc_font=desc_font,
+            text=label,
+            max_width=desc_width,
+            font=desc_font,
+            fill=COLOR_TEXT,
             line_spacing=4,
         )
-        text_heights.append(text_h)
-        row_heights.append(max(slide_h, text_h))
+        step_h = measure_step_column(
+            probe_draw,
+            step=f"{number:02d}",
+            label=short_labels[index],
+            max_width=text_width,
+            step_font=step_font,
+            label_font=label_font,
+            line_spacing=3,
+        )
+        desc_heights.append(desc_h)
+        step_col_heights.append(step_h)
+        media_heights.append(max(slide_h, step_h))
+        row_heights.append(desc_h + desc_gap + media_heights[-1])
 
     body_h = sum(row_heights) + row_gap * (len(images) - 1)
-    intro_section_h = intro_panel_h + (intro_gap if intro_blocks else 0)
-    canvas_h = title_height + padding + intro_section_h + body_h + padding
+    header_h = 0 if steps_only else title_height
+    intro_section_h = intro_panel_h + (intro_gap if intro_blocks and not steps_only else 0)
+    canvas_h = header_h + padding + intro_section_h + body_h + padding
 
     canvas = Image.new("RGB", (canvas_w, canvas_h), COLOR_LIGHT_TEAL)
     draw = ImageDraw.Draw(canvas)
 
-    draw.rectangle((0, 0, canvas_w, title_height), fill=COLOR_BURGUNDY)
-    title_bbox = draw.textbbox((0, 0), title, font=title_font)
-    title_x = (canvas_w - (title_bbox[2] - title_bbox[0])) // 2
-    title_y = (title_height - (title_bbox[3] - title_bbox[1])) // 2
-    draw.text((title_x, title_y), title, fill=COLOR_TITLE_TEXT, font=title_font)
+    if not steps_only:
+        draw.rectangle((0, 0, canvas_w, title_height), fill=COLOR_BURGUNDY)
+        title_bbox = draw.textbbox((0, 0), title, font=title_font)
+        title_x = (canvas_w - (title_bbox[2] - title_bbox[0])) // 2
+        title_y = (title_height - (title_bbox[3] - title_bbox[1])) // 2
+        draw.text((title_x, title_y), title, fill=COLOR_TITLE_TEXT, font=title_font)
 
-    cursor_y = title_height + padding
-    if intro_blocks:
+    cursor_y = header_h + padding
+    if intro_blocks and not steps_only:
         panel_x = padding
         panel_y = cursor_y
         draw.rectangle(
@@ -451,18 +544,32 @@ def render_vertical(
         number = step_number(path) or (index + 1)
         step = f"{number:02d}"
 
-        text_y = cursor_y + (row_h - text_heights[index]) // 2
-        image_y = cursor_y + (row_h - slide_h) // 2
-        draw_text_block(
+        draw_wrapped_paragraph(
             draw,
-            x=text_x,
-            y=text_y,
+            x=padding,
+            y=cursor_y,
+            text=label,
+            max_width=desc_width,
+            font=desc_font,
+            fill=COLOR_TEXT,
+            line_spacing=4,
+        )
+
+        media_y = cursor_y + desc_heights[index] + desc_gap
+        media_h = media_heights[index]
+        step_y = media_y + (media_h - step_col_heights[index]) // 2
+        image_y = media_y + (media_h - slide_h) // 2
+
+        draw_step_column(
+            draw,
+            x=step_col_x,
+            y=step_y,
             step=step,
-            description=label,
+            label=short_labels[index],
             max_width=text_width,
             step_font=step_font,
-            desc_font=desc_font,
-            line_spacing=4,
+            label_font=label_font,
+            line_spacing=3,
         )
 
         with Image.open(path) as img:
@@ -503,40 +610,63 @@ def main() -> None:
     )
     parser.add_argument(
         "--title",
-        default="Cloud Store POS — Split Transaction with Linked Customer",
+        default="CloudStore893 POS - Demo",
         help="Title text across the top",
     )
     parser.add_argument(
         "--layout",
         choices=("vertical", "grid"),
         default="vertical",
-        help="vertical = text left, images stacked; grid = thumbnail grid (default: vertical)",
+        help="vertical = description on top, step label left, image right (default: vertical)",
     )
     parser.add_argument("--cols", type=int, default=3, help="Grid columns when --layout grid")
     parser.add_argument("--cell-width", type=int, default=600, help="Width of each screenshot")
-    parser.add_argument("--text-width", type=int, default=300, help="Text column width when vertical")
+    parser.add_argument("--text-width", type=int, default=100, help="Step column width when vertical")
     parser.add_argument("--padding", type=int, default=24, help="Outer padding (px)")
     parser.add_argument("--slide-padding", type=int, default=20, help="Padding around each image slide (px)")
     parser.add_argument("--row-gap", type=int, default=32, help="Space between vertical rows (px)")
     parser.add_argument("--intro-gap", type=int, default=36, help="Space below intro panel (px)")
+    parser.add_argument("--desc-gap", type=int, default=16, help="Space between step description and image row (px)")
+    parser.add_argument(
+        "--with-header",
+        action="store_true",
+        help="Include title bar and intro description in the image (use view-demo.html instead)",
+    )
     parser.add_argument("--title-height", type=int, default=80, help="Title bar height (px)")
-    parser.add_argument("--no-labels", action="store_true", help="Hide labels under images in grid layout")
     parser.add_argument("--quality", type=int, default=90, help="JPEG quality (default: 90)")
     parser.add_argument(
         "--full-width",
         action="store_true",
         help="Wider layout (~1900px) for full-screen browser viewing",
     )
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=1.0,
+        help="Multiply layout size (e.g. 3 for 3x wider/taller output)",
+    )
     args = parser.parse_args()
 
     if args.full_width:
         args.cell_width = 1400
-        args.text_width = 420
+        args.text_width = 120
         args.padding = 32
         args.slide_padding = 24
         args.row_gap = 40
         args.intro_gap = 40
+        args.desc_gap = 20
         args.title_height = 96
+
+    if args.scale != 1.0:
+        scale = args.scale
+        args.cell_width = max(1, int(args.cell_width * scale))
+        args.text_width = max(1, int(args.text_width * scale))
+        args.padding = max(1, int(args.padding * scale))
+        args.slide_padding = max(1, int(args.slide_padding * scale))
+        args.row_gap = max(1, int(args.row_gap * scale))
+        args.intro_gap = max(1, int(args.intro_gap * scale))
+        args.desc_gap = max(1, int(args.desc_gap * scale))
+        args.title_height = max(1, int(args.title_height * scale))
 
     try:
         from PIL import Image  # noqa: F401
@@ -564,7 +694,10 @@ def main() -> None:
             title_height=args.title_height,
             row_gap=args.row_gap,
             intro_gap=args.intro_gap,
+            desc_gap=args.desc_gap,
             quality=args.quality,
+            scale=args.scale,
+            steps_only=not args.with_header,
         )
     else:
         render_grid(

@@ -3,17 +3,19 @@
 Description
 Cloud Store 893 at oci.cloudstore893.com is a POS system running in a Node.js container on Oracle Cloud and protected by Oracle Identity Access Management. Cash register clients are available on iPad and Android tablets. The admin interface supports supervisor push notifications, reporting, and table access.
 
-Source Code Repo: github.com/ltm893/cloud-store-893
+Source Code Repo: https://github.com/ltm893/cloud-store-893
 
 The following screenshots show 2 transactions:
 1. a split cash/credit sale
 2. a sale with a stored customer that gets an automatic 10% discount. 
 
-# Cloud Store POS — Split Transaction with Linked Customer
+Video Demo:
+
+# CloudStore893 POS - Demo
 
 ![Demo overview](cloud-store-demo-split-trans-linked-cust.jpg)
 
-End-to-end cashier flow: sign in, open till, split cash/card sale, link a customer with card on file, close till with supervisor approval.
+
 
 ## 01 — Sign in
 
@@ -43,13 +45,13 @@ Supervisor approves in Admin Console
 
 ![05 Split pay](images01/05-SplitPay.jpg)
 
-Tap Pay
+Add a Product, update quantity, then Tap Pay
 
 ## 06 — Cash payment
 
 ![06 Split cash](images01/06-SplitCash.jpg)
 
-Tap Add Product, update quantity, pay $50 Cash
+Enter 50 and Tap Cash
 
 ## 07 — Card payment
 
