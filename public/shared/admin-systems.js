@@ -13,6 +13,7 @@
   const routesEl = document.getElementById('systemsRoutes');
   const clientsEl = document.getElementById('systemsClients');
   const overviewEl = document.getElementById('systemsOverview');
+  const demoLinkEl = document.getElementById('systemsDemoLink');
   const hostEl = document.getElementById('systemsHost');
   const healthPanelEl = document.getElementById('systemsHealthPanel');
   const infrastructurePanelEl = document.getElementById('systemsInfrastructurePanel');
@@ -212,6 +213,17 @@
     </div>`;
   }
 
+  function renderDemo(demo) {
+    if (!demoLinkEl) return;
+    const path = demo?.path;
+    const label = demo?.label || 'Demo';
+    if (!path) {
+      demoLinkEl.innerHTML = '';
+      return;
+    }
+    demoLinkEl.innerHTML = `<a href="${escapeHtml(path)}">${escapeHtml(label)}</a>`;
+  }
+
   function renderHost(host) {
     if (!hostEl) return;
     const title = host?.host?.title || 'Host OCI';
@@ -370,6 +382,7 @@
         : '—';
     }
     renderHost(data.host);
+    renderDemo(data.demo);
     renderRepo(data.repo);
     if (buildEl) {
       renderBuild(data.build);

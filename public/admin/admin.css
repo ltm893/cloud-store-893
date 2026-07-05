@@ -932,6 +932,17 @@ td.low-stock {
   color: var(--text);
 }
 
+.systems-demo-link {
+  margin: 12px 0 0;
+  font-size: 0.95rem;
+}
+
+.systems-demo-link a {
+  color: var(--accent-2);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .systems-host-card {
   display: flex;
   flex-direction: column;

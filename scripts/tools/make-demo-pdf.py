@@ -14,13 +14,13 @@ def main() -> None:
     parser.add_argument(
         "--input",
         type=Path,
-        default=ROOT / "docs" / "demos" / "cloud-store-demo-split-trans-linked-cust.jpg",
+        default=ROOT / "public" / "demos" / "cloud-store-demo-split-trans-linked-cust.jpg",
         help="Input collage JPG",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=ROOT / "docs" / "demos" / "cloud-store-demo-split-trans-linked-cust.pdf",
+        default=ROOT / "public" / "demos" / "cloud-store-demo-split-trans-linked-cust.pdf",
         help="Output PDF path",
     )
     args = parser.parse_args()

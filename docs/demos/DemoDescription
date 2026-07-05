@@ -5,11 +5,15 @@ Cloud Store 893 at oci.cloudstore893.com is a POS system running in a Node.js co
 
 Source Code Repo: https://github.com/ltm893/cloud-store-893
 
-The following screenshots show 2 transactions:
-1. a split cash/credit sale
-2. a sale with a stored customer that gets an automatic 10% discount. 
+The following screenshots show an End-to-end cashier flow with: 
+* sign in
+* open till
+* split cash/card sale
+* link a customer with card on file
+* close till with supervisor approval
 
-Video Demo:
+Also supported: web POS, offline checkout sync, and full admin CRUD/reporting.
+
 
 # CloudStore893 POS - Demo
 

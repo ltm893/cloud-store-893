@@ -44,9 +44,10 @@
       font-weight: 700;
       text-decoration: underline;
     }
-    .intro ol {
-      margin: 0;
-      padding-left: 24px;
+    .intro ol,
+    .intro ul {
+      margin: 0 0 12px;
+      padding-left: 48px;
     }
     img {
       display: block;
@@ -76,31 +77,21 @@
 
     <section class="intro">
       <h2>Description</h2>
-      <p>
-        Cloud Store 893 at
-        <a href="https://oci.cloudstore893.com">oci.cloudstore893.com</a>
-        is a POS system running in a Node.js container on Oracle Cloud and protected by
-        Oracle Identity Access Management. Cash register clients are available on iPad and
-        Android tablets. The admin interface supports supervisor push notifications,
-        reporting, and table access.
-      </p>
-      <p>
-        Source Code Repo:
-        <a href="https://github.com/ltm893/cloud-store-893">github.com/ltm893/cloud-store-893</a>
-      </p>
-      <p>The following screenshots show 2 transactions:</p>
-      <ol>
-        <li>a split cash/credit sale</li>
-        <li>a sale with a stored customer that gets an automatic 10% discount.</li>
-      </ol>
-      <p>
-        End-to-end cashier flow: sign in, open till, split cash/card sale, link a customer
-        with card on file, close till with supervisor approval.
-      </p>
+      <p>Cloud Store 893 at oci.cloudstore893.com is a POS system running in a Node.js container on Oracle Cloud and protected by Oracle Identity Access Management. Cash register clients are available on iPad and Android tablets. The admin interface supports supervisor push notifications, reporting, and table access.</p>
+      <p>Source Code Repo: <a href="https://github.com/ltm893/cloud-store-893">github.com/ltm893/cloud-store-893</a></p>
+      <p>The following screenshots show an End-to-end cashier flow with:</p>
+      <ul>
+        <li>sign in</li>
+        <li>open till</li>
+        <li>split cash/card sale</li>
+        <li>link a customer with card on file</li>
+        <li>close till with supervisor approval</li>
+      </ul>
+      <p>Also supported: web POS, offline checkout sync, and full admin CRUD/reporting.</p>
     </section>
 
     <img
-      src="cloud-store-demo-split-trans-linked-cust.jpg"
+      src="cloud-store-demo-split-trans-linked-cust.jpg?v=1783294480"
       alt="CloudStore893 POS demo screenshots"
     />
   </div>

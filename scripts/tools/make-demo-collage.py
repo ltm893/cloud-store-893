@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import re
 from pathlib import Path
 
@@ -81,6 +82,13 @@ def load_intro(path: Path) -> list[tuple[str, str]]:
             flush_body()
             blocks.append(("list", line))
             continue
+        if line.startswith("* "):
+            flush_body()
+            blocks.append(("list", f"• {line[2:].strip()}"))
+            continue
+        if line.lower().startswith("video demo"):
+            flush_body()
+            continue
         current_body.append(line)
 
     flush_body()
@@ -120,6 +128,82 @@ def draw_intro_block(
         cursor_y += 6
 
     return cursor_y - y
+
+
+def linkify_plain_urls(text: str) -> str:
+    escaped = html.escape(text)
+    return re.sub(
+        r"(https?://[^\s<]+)",
+        lambda match: f'<a href="{match.group(1)}">{html.escape(match.group(1).removeprefix("https://").removeprefix("http://"))}</a>',
+        escaped,
+    )
+
+
+def render_intro_html(blocks: list[tuple[str, str]]) -> str:
+    lines = ['    <section class="intro">']
+    list_items: list[str] = []
+
+    def flush_list() -> None:
+        nonlocal list_items
+        if not list_items:
+            return
+        lines.append("      <ul>")
+        for item in list_items:
+            item_html = linkify_plain_urls(item.removeprefix("• ").strip())
+            lines.append(f"        <li>{item_html}</li>")
+        lines.append("      </ul>")
+        list_items = []
+
+    for kind, text in blocks:
+        if kind == "list":
+            list_items.append(text)
+            continue
+        flush_list()
+        if kind == "heading":
+            lines.append(f"      <h2>{html.escape(text)}</h2>")
+        elif kind == "repo":
+            url_match = re.search(r"https?://\S+", text)
+            if url_match:
+                url = url_match.group(0)
+                label = url.removeprefix("https://").removeprefix("http://")
+                lines.append(
+                    f'      <p>Source Code Repo: <a href="{html.escape(url)}">{html.escape(label)}</a></p>'
+                )
+            else:
+                lines.append(f"      <p>{linkify_plain_urls(text)}</p>")
+        else:
+            lines.append(f"      <p>{linkify_plain_urls(text)}</p>")
+
+    flush_list()
+    lines.append("    </section>")
+    return "\n".join(lines)
+
+
+def update_demo_html(intro_blocks: list[tuple[str, str]], html_path: Path, *, title: str, jpg_path: Path) -> None:
+    if not html_path.exists():
+        return
+
+    intro_html = render_intro_html(intro_blocks)
+    content = html_path.read_text(encoding="utf-8")
+    updated = re.sub(
+        r"<header>.*?</header>\s*<section class=\"intro\">.*?</section>",
+        f"<header>{html.escape(title)}</header>\n\n{intro_html}",
+        content,
+        count=1,
+        flags=re.DOTALL,
+    )
+    if updated == content:
+        raise SystemExit(f"Could not update intro section in {html_path}")
+
+    cache_bust = int(jpg_path.stat().st_mtime) if jpg_path.exists() else 0
+    updated = re.sub(
+        r'src="cloud-store-demo-split-trans-linked-cust\.jpg(?:\?[^"]*)?"',
+        f'src="cloud-store-demo-split-trans-linked-cust.jpg?v={cache_bust}"',
+        updated,
+        count=1,
+    )
+    html_path.write_text(updated, encoding="utf-8")
+    print(f"Updated {html_path}")
 
 
 def load_descriptions(path: Path) -> dict[int, str]:
@@ -605,7 +689,7 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=ROOT / "docs" / "demos" / "cloud-store-demo-split-trans-linked-cust.jpg",
+        default=ROOT / "public" / "demos" / "cloud-store-demo-split-trans-linked-cust.jpg",
         help="Output JPG path",
     )
     parser.add_argument(
@@ -628,9 +712,20 @@ def main() -> None:
     parser.add_argument("--intro-gap", type=int, default=36, help="Space below intro panel (px)")
     parser.add_argument("--desc-gap", type=int, default=16, help="Space between step description and image row (px)")
     parser.add_argument(
+        "--html",
+        type=Path,
+        default=ROOT / "public" / "demos" / "index.html",
+        help="Demo HTML page to refresh from DemoDescription intro (default: public/demos/index.html)",
+    )
+    parser.add_argument(
         "--with-header",
         action="store_true",
-        help="Include title bar and intro description in the image (use view-demo.html instead)",
+        help="Include title bar and intro description in the image (use /demos/ instead)",
+    )
+    parser.add_argument(
+        "--skip-html",
+        action="store_true",
+        help="Do not update public/demos/index.html from DemoDescription",
     )
     parser.add_argument("--title-height", type=int, default=80, help="Title bar height (px)")
     parser.add_argument("--quality", type=int, default=90, help="JPEG quality (default: 90)")
@@ -713,6 +808,9 @@ def main() -> None:
             show_labels=not args.no_labels,
             quality=args.quality,
         )
+
+    if not args.skip_html:
+        update_demo_html(intro_blocks, args.html, title=args.title, jpg_path=args.output)
 
 
 if __name__ == "__main__":
