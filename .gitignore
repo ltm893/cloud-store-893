@@ -1,3 +1,6 @@
+# Demo video recordings — keep local only
+*.mp4
+
 # Environment variables - never commit these
 .env
 
