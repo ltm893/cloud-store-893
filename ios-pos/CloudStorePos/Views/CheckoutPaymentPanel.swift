@@ -8,6 +8,7 @@ struct CheckoutPaymentPanel: View {
     let cashEnabled: Bool
     let creditOnlyPayments: Bool
     let amountInput: String
+    let errorMessage: String?
     let processingCard: Bool
     let onAmountDigit: (Character) -> Void
     let onAmountClear: () -> Void
@@ -15,8 +16,10 @@ struct CheckoutPaymentPanel: View {
     let onAmountDecimal: () -> Void
     let onFillRemaining: () -> Void
     let onQuickBill: (Int) -> Void
+    let showCardOnFileButton: Bool
     let onApplyCash: () -> Void
     let onApplyCard: () -> Void
+    let onPayCardOnFile: () -> Void
     let onRemovePayment: (Int) -> Void
     let onBack: () -> Void
 
@@ -55,6 +58,13 @@ struct CheckoutPaymentPanel: View {
             }
             amountRow("Balance due", CartTotalsLogic.formatMoney(balanceDue), bold: true)
             amountRow("Amount entered", CashEntryLogic.displayCashEntry(amountInput))
+
+            if let errorMessage, !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             if let entered = CashEntryLogic.parseCashTendered(amountInput) {
                 let changeDelta = CartTotalsLogic.roundMoney(entered - tenderTarget)
@@ -121,14 +131,21 @@ struct CheckoutPaymentPanel: View {
             let canPayCard = balanceDue > 0.005
                 && nextAmount.map { $0 > 0 && $0 <= balanceDue + 0.005 } ?? false
 
-            if cashEnabled && !creditOnlyPayments {
-                Button("Cash") { onApplyCash() }
+            HStack(spacing: 6) {
+                if cashEnabled && !creditOnlyPayments {
+                    Button("Cash") { onApplyCash() }
+                        .buttonStyle(PosFullWidthButtonStyle())
+                        .disabled(processingCard || balanceDue <= 0.005)
+                }
+                Button(processingCard ? "Processing…" : "Charge Card") { onApplyCard() }
                     .buttonStyle(PosFullWidthButtonStyle())
-                    .disabled(processingCard || balanceDue <= 0.005)
+                    .disabled(processingCard || !canPayCard)
+                if showCardOnFileButton {
+                    Button("CardOnFile") { onPayCardOnFile() }
+                        .buttonStyle(PosFullWidthButtonStyle())
+                        .disabled(processingCard || !canPayCard)
+                }
             }
-            Button(processingCard ? "Processing…" : "Charge Card") { onApplyCard() }
-                .buttonStyle(PosFullWidthButtonStyle())
-                .disabled(processingCard || !canPayCard)
         }
         .padding(4)
         .frame(maxHeight: .infinity)

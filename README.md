@@ -1,15 +1,13 @@
 # Cloud Store 893
 
-A containerized Node.js shopping cart deployed on Oracle Cloud Infrastructure (OCI).
+Is an open source containerized Node.js Point of Sale System running Oracle Cloud Infrastructure (OCI).
 
 
 ---
 
 ## Project Overview
 
-A simple Express.js shopping cart with product listing, cart management, and an
-Autonomous Database (ATP) backend via ORDS. The app is fully containerized with Docker
-and all OCI infrastructure is managed by Terraform.
+The Point of Sale system features an Android and Ipad cash register integrated with supervisor approvals via push notifications. Along with an Andorid, IOS and Web Admin console to access tables and predefined reports. The data flows through through Oracle Rest Data Service ORDS into am Autonomous Database and secured with Oracle Identity and Access Management (IAM).
 
 **Stack:**
 - Node.js + Express (backend)
@@ -17,6 +15,7 @@ and all OCI infrastructure is managed by Terraform.
 - Kotlin + Jetpack Compose (Samsung tablet POS in `android-pos/`)
 - Docker / Colima (containerization)
 - Terraform (infrastructure as code)
+- OCI Identity and Access Management
 - OCI Container Registry (image storage)
 - OCI Container Instances — CI.Standard.A1.Flex (Always Free, ARM64)
 - OCI Autonomous Database ATP (Always Free, ORDS API)
@@ -37,9 +36,16 @@ Two **separate** app sessions — cashier (POS) and admin — each with its own 
 - **Public:** `GET /api/products` (catalog only).
 - **Local dev:** PINs and IdP settings in **`.env`** (see `.env.example`).
 - **OCI container:** PINs from **`terraform.tfvars`** (`cashier_pin`, `admin_pin`); IdP vars are **not** copied from `.env` automatically — add them via Terraform or the container console, then re-apply/restart.
-- **IdP:** Optional Oracle Identity Domain confidential clients; redirect URIs must match `APP_PUBLIC_URL` / callback paths on the host you deploy. Details: [docs/idp-setup.md](docs/idp-setup.md), app reset: [docs/idp-level1-reset.md](docs/idp-level1-reset.md).
+- **IdP:** Oracle Identity Domain confidential clients; redirect URIs must match deploy hostname. **Prod:** manual setup — [docs/idp-setup.md](docs/idp-setup.md). **Dev:** automated bootstrap — [docs/oci-dev-environment.md](docs/oci-dev-environment.md) § IdP, [scripts/oci/idp/README.md](scripts/oci/idp/README.md). App reset: [docs/idp-level1-reset.md](docs/idp-level1-reset.md).
 
 With IdP configured, `IDP_ALLOW_PIN=true` (default) keeps PIN login available alongside Oracle sign-in. With Model B enabled, PIN unlock is blocked (`403`) and IdP sign-in is required.
+
+---
+
+## Development
+
+Cloud Store 893 is built and maintained by [ltm893](https://github.com/ltm893) with the assitance of 
+[Cursor](https://cursor.com) AI agent. What ships are human-led. Cursor helps with architecture options,code, refactors, tests, and documentation as a pair-programming partner.
 
 ---
 
@@ -65,7 +71,6 @@ Full Terraform documentation (file layout, dependency graph, outputs, workload t
 ### 2. Run the deploy script
 
 ```bash
-chmod +x scripts/oci/deploy.sh   # first time only
 ./scripts/oci/deploy.sh
 ```
 
@@ -80,7 +85,7 @@ The script handles everything end-to-end:
 > See **Creating an OCI Auth Token** below if you haven't done this yet.
 
 > **SQLcl not installed?** The deploy will complete but skip the seed.
-> Run `./scripts/reset-db.sh` after installing SQLcl, or run `scripts/seed.sql` manually via OCI Database Actions:
+> Run `./scripts/db/reset-db.sh` after installing SQLcl, or run `scripts/db/seed.sql` manually via OCI Database Actions:
 > `OCI Console → Autonomous Database → adb-cloud-store → Database Actions → SQL`
 
 ---
@@ -107,8 +112,7 @@ this automatically.
 ### Install
 
 ```bash
-chmod +x scripts/install-sqlcl.sh   # first time only
-./scripts/install-sqlcl.sh
+./scripts/tools/install-sqlcl.sh
 ```
 
 The script:
@@ -133,7 +137,7 @@ To wipe and reinstall cleanly (e.g. after a failed install):
 
 ```bash
 sudo rm -rf /opt/sqlcl
-./scripts/install-sqlcl.sh
+./scripts/tools/install-sqlcl.sh
 ```
 
 ---
@@ -159,11 +163,21 @@ The username format is: `<object_storage_namespace>/<your_email>`
 
 ## Tear down workloads (compartment kept)
 
+**Prod:**
+
 ```bash
 ./scripts/oci/terraform-destroy-workloads.sh
 ```
 
-Removes Terraform-managed **workloads** in the `cloud-store` compartment (default
+**Dev:**
+
+```bash
+./scripts/oci/terraform-destroy-workloads-dev.sh
+```
+
+Identity Domains (e.g. `cloud-store-app-1`) are **not** removed by these scripts. See [docs/oci-dev-environment.md](docs/oci-dev-environment.md) for dev rebuild with `--resume`.
+
+Removes Terraform-managed **workloads** in the project compartment (default
 `project_name`; change in `terraform.tfvars` if needed). The **compartment is not
 destroyed** (`lifecycle { prevent_destroy = true }` in `terraform/compartment.tf`).
 Targets are derived from `terraform state list`, so you do not maintain a static
@@ -185,7 +199,7 @@ npm install
 npm run dev:up
 ```
 
-`dev:up` runs `scripts/dev-up.sh`, which:
+`dev:up` runs `scripts/dev/up.sh`, which:
 
 1. Verifies `.env` has an `ORDS_BASE_URL`
 2. Compares it to `terraform output -raw ords_base_url` and warns on drift
@@ -213,6 +227,8 @@ Available npm scripts:
 | `npm run test:supervisor-routes` | HTTP smoke test for supervisor approval routes (manual; server + env — see [docs/cashier-supervisor-approval.md](docs/cashier-supervisor-approval.md#testing-manual-today)) |
 | `npm run test:cashier-approval-session` | Pending cookie + `/api/cashier/session` for Model B (manual; server needs `CASHIER_SUPERVISOR_APPROVAL=true`) |
 | `npm run test:cashier-approval-poll` | Poll → supervisor approve → session cookie E2E (manual; server + supervisor env) |
+| `npm run create:test-sales` | Create real test sales via checkout (manual; server running; destructive — see [docs/testing.md](docs/testing.md)) |
+| `npm run seed:test-sales-matrix` | Seed 40-sale checkout matrix: credit-only + cash/credit tills (manual; destructive — see [docs/testing.md](docs/testing.md)) |
 
 `npm test` runs unit tests on every push (GitHub Actions). Integration tests run when `ORDS_BASE_URL` is configured as a repo secret, or via **Actions → Test → Run workflow**. Full guide: [docs/testing.md](docs/testing.md). Model B scripts below remain opt-in.
 
@@ -262,7 +278,7 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 2. **`.env` for sync** — `APP_PUBLIC_URL_FROM_REQUEST=true`; keep `APP_PUBLIC_URL` for local dev only (same host as step 1 is optional on OCI).
 3. **Push env via Terraform (once per env change)** — `./scripts/oci/sync-container-env-to-terraform.sh` then `./scripts/oci/terraform-apply-container.sh` (warns before replace/new IP). Then run the **network recovery** steps in [docs/oci-network-recovery.md](docs/oci-network-recovery.md) — **do not** apply again just to “fix” the URL.
 4. **Oracle Identity** — prefer hostname redirect URIs on `oci.cloudstore893.com`; use `./scripts/oci/idp-update-redirect-uris.sh` when adding IPs or after hostname changes.
-5. **App code** — `./scripts/oci/redeploy-app-code.sh` (build, push, restart; does not change IP). Required for Model B fields on `/api/admin/session`.
+5. **App code** — `./scripts/oci/redeploy-app-code.sh "label"` (build, push unique tag, terraform apply). See [docs/oci-deploy.md](docs/oci-deploy.md). Pre-prod: `./scripts/oci/redeploy-app-code-dev.sh "label"`.
 6. **Verify:**
    ```bash
    APP=$(./scripts/oci/confirm-public-url.sh)
@@ -277,6 +293,7 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 - **Sign-in:** `/admin/login.html` — PIN and/or “Sign in with Oracle” when IdP env is set
 - **API:** `/api/admin/*` — CRUD on `products`, `customers`, `cart_items`, `sales`, `sale_items`; read-only `cart_view`
 - **Implementation:** `lib/admin-auth.js`, `lib/admin-routes.js`, `lib/cashier-auth.js`, `lib/oidc-*.js`, `public/admin/`
+- **Colors:** shared Lister-aligned palette — [docs/color-palette.md](docs/color-palette.md) (web admin, Platform tab, POS, Android, iOS)
 
 ### Web POS
 
@@ -288,10 +305,14 @@ After changing only PINs on OCI: edit `terraform.tfvars`, then `cd terraform && 
 
 **Full guide:** [docs/oci-deploy.md](docs/oci-deploy.md) — decision table (code vs env vs DB vs IdP vs tablet), verify steps, troubleshooting.
 
-**App code only** (preferred — keeps public IP). Requires a short deploy label; see [docs/versioning.md](docs/versioning.md) for PR → deploy workflow.
+**App code only.** Requires a short deploy label; see [docs/versioning.md](docs/versioning.md). Pre-prod: [docs/oci-dev-environment.md](docs/oci-dev-environment.md).
 
 ```bash
+# Production:
 ./scripts/oci/redeploy-app-code.sh "describe this deploy"
+
+# Pre-production (dev stack):
+./scripts/oci/redeploy-app-code-dev.sh "describe this deploy"
 ```
 
 Quick verify (expect **200**, not **404** on unlock):
@@ -306,12 +327,13 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 | What changed | Command |
 |--------------|---------|
-| Server / admin UI | `redeploy-app-code.sh` |
+| Server / admin UI (prod) | `redeploy-app-code.sh "label"` |
+| Server / admin UI (dev) | `redeploy-app-code-dev.sh "label"` |
 | `.env` / IdP / Model B flags | `sync-container-env-to-terraform.sh` → `terraform-apply-container.sh` |
 | DB schema | `reset-db.sh` or manual SQL — see [oci-deploy.md](docs/oci-deploy.md#3-database-schema) |
 | Tablet APK | `android-pos/RebuildReinstall.sh` |
 
-**Env apply** may replace the instance (detach reserved IP): [docs/oci-network-recovery.md](docs/oci-network-recovery.md). **New image tag via Terraform:** `./scripts/oci/deploy-app-oci.sh <tag>`.
+**Env apply** may replace the instance (detach reserved IP): [docs/oci-network-recovery.md](docs/oci-network-recovery.md). **App code deploy** also replaces the instance when the image tag changes; prod may need `reattach-reserved-ip.sh`, dev auto-syncs DNS.
 
 ---
 
@@ -319,7 +341,8 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 A native Android POS client lives in `android-pos/` (Kotlin + Jetpack
 Compose). Theming uses the **Lister palette** via `CloudStorePosTheme` in
-`android-pos/app/src/main/java/com/cloudstore/pos/ui/theme/`. See
+`android-pos/app/src/main/java/com/cloudstore/pos/ui/theme/`. Full swatches
+and hex values: [docs/color-palette.md](docs/color-palette.md). See
 `android-pos/README.md` for module-specific notes.
 
 Quick start (local backend on Mac):
@@ -358,7 +381,7 @@ Full tablet notes: [android-pos/README.md](android-pos/README.md).
 
 POS UI (high level):
 
-- **☰ Menu** — **Show/Hide status** (connection + offline queue), **Admin** (opens `/admin/` in browser), **Lock**
+- **☰ Menu** — **Show/Hide status** (connection + offline queue; full-screen overlay on errors), **Admin** (opens `/admin/` in browser), **Lock**
 - **Login** — on-screen number pad + **Done** (calls `POST /api/cashier/unlock`)
 - **Sale screen** — scan field, **Scan** / **Add**, numpad, cart, **Pay** → **Complete Sale**
 - Numeric input ≤ 6 digits → `POST /api/cart {productId}`; longer → `POST /api/cart/barcode`
@@ -423,6 +446,8 @@ cloud-store-893/
 ├── Dockerfile             # node:20-alpine, linux/arm64
 ├── .env.example           # ORDS, PINs, optional IdP (see Authentication)
 ├── CONTENTS.md            # session resume / handoff notes
+├── docs/
+│   └── color-palette.md   # brand colors (web admin, POS, Android, iOS)
 ├── android-pos/           # Kotlin + Compose tablet POS (see android-pos/README.md)
 ├── terraform/
 │   ├── main.tf            # OCI provider
@@ -490,6 +515,8 @@ allowing your user/group to read usage-report in the tenancy.
 - [ ] CI/CD (GitHub Actions → OCIR → container refresh) — tests run in [`.github/workflows/test.yml`](.github/workflows/test.yml); deploy workflow not added yet.
 - [ ] Restrict ingress (`ingress_allowed_cidrs` in `terraform.tfvars`) when not on public IP — still default `0.0.0.0/0`; LB fronts the container but SSH/app rules remain open per [terraform/variables.tf](terraform/variables.tf).
 - [x] Tablet: OIDC sign-in (WebView), offline queue sync/discard, cart snapshot on queue — see `CashierOidcWebScreen`, `OfflineQueueStore.cartLines`, `clearOfflineQueue`.
+- [x] **ADB wallet / `reset-db.sh`** — `wallet/adb.zip` cache, `download-adb-wallet.sh` (3 retries), `ADB_WALLET_ZIP` / `ADB_WALLET_PASSWORD`, or Database Actions → `scripts/db/seed.sql`.
+- [x] **Admin force-close till** — Approvals tab → **Open tills — force close** (`POST /api/admin/open-tills/:id/force-close`); reason via `AdminPrompt` dialog. Force-close ends POS session and blocks further sales on that register until cashier signs in again — see [CONTENTS.md](CONTENTS.md#admin-till-ops--db-reseed-todo).
 - [ ] **Cash rounding (web POS only)** — server, tablets, and admin reports persist `register_total` / `cash_due`; web cart still has no tax/cash tender UI — see [CONTENTS.md](CONTENTS.md#cash-rounding).
 - [ ] **Card terminal / payment pad** — no pad API today; Card is manual “paid” only — see [CONTENTS.md](CONTENTS.md#card-terminal--payment-pad-todo).
 - [ ] **Receipt / print after Complete Sale** — tablet shows `SaleReceipt` after checkout; `printReceipt()` is a UI stub (no hardware printer integration yet).

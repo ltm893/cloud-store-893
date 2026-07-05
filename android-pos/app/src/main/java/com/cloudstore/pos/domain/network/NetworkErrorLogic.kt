@@ -9,9 +9,15 @@ object NetworkErrorLogic {
 
     fun isRetryableSyncError(err: Throwable): Boolean = isOfflineLike(err)
 
-    fun httpErrorMessage(err: HttpException, fallback: String): String {
-        val body = err.response()?.errorBody()?.use { it.string() }.orEmpty()
+    fun httpErrorMessage(err: HttpException, fallback: String): String =
+        formatApiError(err.response()?.errorBody()?.use { it.string() }.orEmpty(), fallback, err.code())
+
+    fun formatApiError(body: String, fallback: String, statusCode: Int? = null): String {
         val jsonError = Regex(""""error"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.getOrNull(1)
-        return jsonError?.takeIf { it.isNotBlank() } ?: "$fallback (${err.code()})"
+        val maxOrderable = Regex(""""maxOrderable"\s*:\s*(\d+)""")
+            .find(body)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        val base = jsonError?.takeIf { it.isNotBlank() }
+            ?: if (statusCode != null) "$fallback ($statusCode)" else fallback
+        return if (maxOrderable != null && maxOrderable > 0) "$base (max $maxOrderable can be ordered)" else base
     }
 }

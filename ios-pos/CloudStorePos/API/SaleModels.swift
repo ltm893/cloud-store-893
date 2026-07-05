@@ -1,5 +1,20 @@
 import Foundation
 
+private enum FlexibleJSONBool {
+    static func decode<K: CodingKey>(from container: KeyedDecodingContainer<K>, forKey key: K) -> Bool {
+        if let value = try? container.decode(Bool.self, forKey: key) {
+            return value
+        }
+        if let value = try? container.decode(Int.self, forKey: key) {
+            return value != 0
+        }
+        if let value = try? container.decode(String.self, forKey: key) {
+            return value == "1" || value.lowercased() == "true"
+        }
+        return false
+    }
+}
+
 struct Product: Codable, Equatable, Identifiable {
     let id: Int
     let barcode: String?
@@ -7,11 +22,12 @@ struct Product: Codable, Equatable, Identifiable {
     let regularPrice: Double
     let salePrice: Double?
     let onSale: Bool
+    let taxExempt: Bool
     let inStock: Bool
     let quantityOnHand: Int?
 
     enum CodingKeys: String, CodingKey {
-        case id, barcode, name, regularPrice, salePrice, onSale, inStock, quantityOnHand
+        case id, barcode, name, regularPrice, salePrice, onSale, taxExempt, inStock, quantityOnHand
     }
 
     init(from decoder: Decoder) throws {
@@ -22,6 +38,7 @@ struct Product: Codable, Equatable, Identifiable {
         regularPrice = try c.decode(Double.self, forKey: .regularPrice)
         salePrice = try c.decodeIfPresent(Double.self, forKey: .salePrice)
         onSale = try c.decodeIfPresent(Bool.self, forKey: .onSale) ?? false
+        taxExempt = FlexibleJSONBool.decode(from: c, forKey: .taxExempt)
         inStock = try c.decodeIfPresent(Bool.self, forKey: .inStock) ?? true
         quantityOnHand = try c.decodeIfPresent(Int.self, forKey: .quantityOnHand)
     }
@@ -88,11 +105,61 @@ struct CartItem: Codable, Equatable, Identifiable {
     let regularPrice: Double
     let salePrice: Double?
     let onSale: Bool
+    let taxExempt: Bool
     let quantity: Int
     let unitPricePublic: Double
     let unitPricePayable: Double
     let lineSubtotalPublic: Double
     let lineSubtotalPayable: Double
+
+    enum CodingKeys: String, CodingKey {
+        case id, productId, name, regularPrice, salePrice, onSale, taxExempt, quantity
+        case unitPricePublic, unitPricePayable, lineSubtotalPublic, lineSubtotalPayable
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        productId = try c.decode(Int.self, forKey: .productId)
+        name = try c.decode(String.self, forKey: .name)
+        regularPrice = try c.decode(Double.self, forKey: .regularPrice)
+        salePrice = try c.decodeIfPresent(Double.self, forKey: .salePrice)
+        onSale = try c.decodeIfPresent(Bool.self, forKey: .onSale) ?? false
+        taxExempt = FlexibleJSONBool.decode(from: c, forKey: .taxExempt)
+        quantity = try c.decode(Int.self, forKey: .quantity)
+        unitPricePublic = try c.decode(Double.self, forKey: .unitPricePublic)
+        unitPricePayable = try c.decode(Double.self, forKey: .unitPricePayable)
+        lineSubtotalPublic = try c.decode(Double.self, forKey: .lineSubtotalPublic)
+        lineSubtotalPayable = try c.decode(Double.self, forKey: .lineSubtotalPayable)
+    }
+
+    init(
+        id: Int,
+        productId: Int,
+        name: String,
+        regularPrice: Double,
+        salePrice: Double?,
+        onSale: Bool,
+        quantity: Int,
+        unitPricePublic: Double,
+        unitPricePayable: Double,
+        lineSubtotalPublic: Double,
+        lineSubtotalPayable: Double,
+        taxExempt: Bool = false
+    ) {
+        self.id = id
+        self.productId = productId
+        self.name = name
+        self.regularPrice = regularPrice
+        self.salePrice = salePrice
+        self.onSale = onSale
+        self.taxExempt = taxExempt
+        self.quantity = quantity
+        self.unitPricePublic = unitPricePublic
+        self.unitPricePayable = unitPricePayable
+        self.lineSubtotalPublic = lineSubtotalPublic
+        self.lineSubtotalPayable = lineSubtotalPayable
+    }
 
     func withPayablePrices(unit: Double, line: Double) -> CartItem {
         CartItem(
@@ -106,7 +173,8 @@ struct CartItem: Codable, Equatable, Identifiable {
             unitPricePublic: unitPricePublic,
             unitPricePayable: unit,
             lineSubtotalPublic: lineSubtotalPublic,
-            lineSubtotalPayable: line
+            lineSubtotalPayable: line,
+            taxExempt: taxExempt
         )
     }
 }
@@ -128,7 +196,7 @@ struct CartResponse: Codable, Equatable {
         subtotalPreMember = try c.decodeIfPresent(Double.self, forKey: .subtotalPreMember) ?? 0
         subtotalPayable = try c.decodeIfPresent(Double.self, forKey: .subtotalPayable) ?? 0
         memberDiscountPreTax = try c.decodeIfPresent(Double.self, forKey: .memberDiscountPreTax) ?? 0
-        linked893 = try c.decodeIfPresent(Bool.self, forKey: .linked893) ?? false
+        linked893 = FlexibleJSONBool.decode(from: c, forKey: .linked893)
     }
 }
 

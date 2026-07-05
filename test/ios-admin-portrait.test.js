@@ -98,7 +98,7 @@ function runScript(source, dom) {
 }
 
 before(() => {
-  execSync('node scripts/sync-ios-portrait-resources.js', {
+  execSync('node scripts/ios/sync-portrait-resources.js', {
     cwd: path.join(__dirname, '..'),
     stdio: 'pipe',
   });

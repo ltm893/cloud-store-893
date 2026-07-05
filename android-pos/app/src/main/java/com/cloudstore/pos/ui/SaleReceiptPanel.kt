@@ -133,7 +133,20 @@ private fun ReceiptLineRow(line: ReceiptLine) {
 @Composable
 private fun ReceiptTotalsSection(receipt: SaleReceipt) {
     ReceiptTotalRow(label = "Items", value = receipt.itemCount.toString())
-    ReceiptTotalRow(label = "Subtotal", value = formatMoney(receipt.subtotal))
+    if (receipt.customerLinked) {
+        ReceiptTotalRow(label = "Subtotal", value = formatMoney(receipt.shelfSubtotal))
+        ReceiptTotalRow(
+            label = "Discount",
+            value = if (receipt.showMemberDiscount) {
+                "−${formatMoney(receipt.memberDiscount)}"
+            } else {
+                formatMoney(0.0)
+            },
+        )
+        ReceiptTotalRow(label = "PreTax", value = formatMoney(receipt.subtotal))
+    } else {
+        ReceiptTotalRow(label = "Subtotal", value = formatMoney(receipt.subtotal))
+    }
     ReceiptTotalRow(
         label = "Savings",
         value = if (receipt.savings > 0.005) "−${formatMoney(receipt.savings)}" else formatMoney(0.0),

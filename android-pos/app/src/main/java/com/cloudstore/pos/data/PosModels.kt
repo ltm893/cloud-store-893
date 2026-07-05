@@ -9,6 +9,7 @@ data class Product(
     @Json(name = "regularPrice") val regularPrice: Double,
     @Json(name = "salePrice") val salePrice: Double? = null,
     @Json(name = "onSale") val onSale: Boolean = false,
+    @Json(name = "taxExempt") val taxExempt: Boolean = false,
     @Json(name = "inStock") val inStock: Boolean = true,
     @Json(name = "quantityOnHand") val quantityOnHand: Int? = null,
 )
@@ -31,6 +32,7 @@ data class CartItem(
     @Json(name = "regularPrice") val regularPrice: Double,
     @Json(name = "salePrice") val salePrice: Double? = null,
     @Json(name = "onSale") val onSale: Boolean = false,
+    @Json(name = "taxExempt") val taxExempt: Boolean = false,
     val quantity: Int,
     @Json(name = "unitPricePublic") val unitPricePublic: Double,
     @Json(name = "unitPricePayable") val unitPricePayable: Double,
@@ -58,6 +60,9 @@ data class Sale(
 
 data class OkResponse(
     val ok: Boolean = false,
+    @Json(name = "awaitingTill") val awaitingTill: Boolean = false,
+    @Json(name = "awaitingTillToken") val awaitingTillToken: String? = null,
+    val resumed: Boolean = false,
 )
 
 /** @deprecated Use [CashierSessionResponse] for session probe. */
@@ -145,6 +150,7 @@ data class CloseTillStatusResponse(
 data class SubmitOpeningTillResponse(
     val ok: Boolean = false,
     val pending: Boolean = false,
+    val resumed: Boolean = false,
     @Json(name = "awaitingTill") val awaitingTill: Boolean = false,
     @Json(name = "requestToken") val requestToken: String? = null,
     @Json(name = "cashMode") val cashMode: String? = null,
@@ -175,6 +181,10 @@ data class CashierSessionResponse(
     @Json(name = "expectedOpeningFloat") val expectedOpeningFloat: Double? = null,
     @Json(name = "tillId") val tillId: Int? = null,
     @Json(name = "posSessionId") val posSessionId: Int? = null,
+    @Json(name = "tillOpenForSales") val tillOpenForSales: Boolean? = null,
+    @Json(name = "tillClosedBySupervisor") val tillClosedBySupervisor: Boolean? = null,
+    @Json(name = "saleBlockedMessage") val saleBlockedMessage: String? = null,
+    @Json(name = "saleBlockedCode") val saleBlockedCode: String? = null,
     val approval: PendingApprovalInfo? = null,
     val error: String? = null,
 ) {

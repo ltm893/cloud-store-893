@@ -14,10 +14,6 @@ app.use(express.json());
 
 const { getBuildInfo } = require('./lib/build-info');
 
-app.get('/api/build-info', (req, res) => {
-  res.json(getBuildInfo());
-});
-
 const { registerSystemsRoutes } = require('./lib/systems-routes');
 registerSystemsRoutes(app);
 
@@ -76,6 +72,28 @@ const {
   getActiveCashierSession,
   sessionAllowsCashPayments,
 } = require('./lib/cashier-auth');
+const { createTillSaleGuard } = require('./lib/till-sale-guard');
+
+const tillSaleGuard = createTillSaleGuard({
+  tillStore,
+  posSessionStore,
+  shiftCloseStore,
+  getActiveCashierSession,
+});
+
+async function rejectClosedTillSale(req, res) {
+  const check = await tillSaleGuard.assertOpenForSale(req);
+  if (!check.ok) {
+    res.status(check.status).json({
+      error: check.error,
+      code: check.code,
+      tillClosedBySupervisor: Boolean(check.tillClosedBySupervisor),
+    });
+    return true;
+  }
+  return false;
+}
+
 const {
   resolveCheckoutSettlement,
   normalizePaymentMethod,
@@ -87,6 +105,10 @@ const {
 const { posRatesFromEnv } = require('./lib/pos-pricing');
 
 const POS_RATES = posRatesFromEnv();
+
+app.get('/api/build-info', (req, res) => {
+  res.json({ ...getBuildInfo(), posRates: POS_RATES });
+});
 
 /** Post sales row; retry without cash-rounding columns when DB migration is not applied yet. */
 async function postSaleRow(payload) {
@@ -102,7 +124,14 @@ async function postSaleRow(payload) {
 }
 
 const { registerAdminAuth, requireAdminSession, protectAdminPages } = require('./lib/admin-auth');
-registerCashierAuth(app, { loginApprovalStore, tillStore, posSessionStore, shiftCloseStore, ordsGet });
+registerCashierAuth(app, {
+  loginApprovalStore,
+  tillStore,
+  posSessionStore,
+  shiftCloseStore,
+  tillSaleGuard,
+  ordsGet,
+});
 registerAdminAuth(app);
 app.use('/admin', protectAdminPages);
 app.use('/api/admin', requireAdminSession);
@@ -191,7 +220,7 @@ function is893Member(customerRow) {
   return customerDiscountApplies(customerRow);
 }
 
-function enrichCartRow(row, linked893) {
+function enrichCartRow(row, linked893, productRow = null) {
   const qty = Number(row.quantity);
   const regularPrice = roundMoney(Number(row.price));
   const onSale = isOnSale(row);
@@ -212,11 +241,15 @@ function enrichCartRow(row, linked893) {
     unitPricePayable: unitPay,
     lineSubtotalPublic: linePublic,
     lineSubtotalPayable: linePay,
+    taxExempt: resolveCartLineTaxExempt(row, productRow),
   };
 }
 
-function summarizeCart(cartRows, linked893) {
-  const items = cartRows.map((r) => enrichCartRow(r, linked893));
+function summarizeCart(cartRows, linked893, productsById = null) {
+  const items = cartRows.map((r) => {
+    const product = productsById?.get(Number(r.product_id)) ?? null;
+    return enrichCartRow(r, linked893, product);
+  });
   const subtotalPreMember = roundMoney(items.reduce((s, it) => s + it.lineSubtotalPublic, 0));
   const subtotalPayable = roundMoney(items.reduce((s, it) => s + it.lineSubtotalPayable, 0));
   const memberDiscountPreTax = roundMoney(subtotalPreMember - subtotalPayable);
@@ -236,7 +269,9 @@ const {
   loadBulkInventoryMap,
   loadConsumptionRulesMap,
   loadInventoryMap,
+  lookupProductByQuery,
   mapProductForCashier,
+  resolveCartLineTaxExempt,
   recordInventoryMovement,
   tracksInventory,
 } = require('./lib/inventory');
@@ -249,6 +284,11 @@ app.get('/api/products', asyncHandler(async (req, res) => {
     loadInventoryMap(ordsGet),
   ]);
   res.json(products.map((p) => mapProductForCashier(p, inventoryMap)));
+}));
+
+app.get('/api/inventory/lookup', asyncHandler(async (req, res) => {
+  const result = await lookupProductByQuery(ordsGet, req.query.q);
+  res.status(result.status).json(result.body);
 }));
 
 // ── Customers (for linking at checkout / cart preview) ────────────────────
@@ -283,9 +323,12 @@ async function resolveLinked893FromRequest(req) {
 }
 
 async function fetchCartSummary(linked893) {
-  const cart = await ordsGet('cart_view/');
+  const [cart, productsById] = await Promise.all([
+    ordsGet('cart_view/'),
+    loadProductsById(),
+  ]);
   const rows = Array.isArray(cart) ? cart : [];
-  return summarizeCart(rows, linked893);
+  return summarizeCart(rows, linked893, productsById);
 }
 
 async function respondWithCart(req, res) {
@@ -323,7 +366,11 @@ async function validateCartLines(cartLines) {
     }
     const stockCheck = canFulfillQuantity(product, inventoryMap, quantity);
     if (!stockCheck.ok) {
-      return { error: stockCheck.error, status: 409 };
+      return {
+        error: stockCheck.error,
+        status: 409,
+        maxOrderable: stockCheck.maxOrderable,
+      };
     }
   }
 
@@ -369,7 +416,11 @@ async function upsertCartLine(productId, quantityDelta = 1) {
   const cartLines = cartLinesAfterQuantityChange(cartItems, productId, newQty);
   const validation = await validateCartLines(cartLines);
   if (validation.error) {
-    return { error: validation.error, status: validation.status || 409 };
+    return {
+      error: validation.error,
+      status: validation.status || 409,
+      maxOrderable: validation.maxOrderable,
+    };
   }
 
   if (existing.length > 0) {
@@ -389,19 +440,32 @@ app.get('/api/cart', asyncHandler(async (req, res) => {
 }));
 
 app.post('/api/cart', asyncHandler(async (req, res) => {
+  if (await rejectClosedTillSale(req, res)) return;
   const productId = Number(req.body?.productId);
   if (!Number.isFinite(productId)) {
     return res.status(400).json({ error: 'productId is required' });
   }
 
-  const result = await upsertCartLine(productId);
+  const quantityRaw = req.body?.quantity;
+  let quantityDelta = 1;
+  if (quantityRaw !== undefined && quantityRaw !== null && String(quantityRaw).trim() !== '') {
+    quantityDelta = Number(quantityRaw);
+    if (!Number.isFinite(quantityDelta) || quantityDelta < 1) {
+      return res.status(400).json({ error: 'quantity must be a positive number' });
+    }
+  }
+
+  const result = await upsertCartLine(productId, quantityDelta);
   if (result.error) {
-    return res.status(result.status || 400).json({ error: result.error });
+    const body = { error: result.error };
+    if (result.maxOrderable != null && result.maxOrderable > 0) body.maxOrderable = result.maxOrderable;
+    return res.status(result.status || 400).json(body);
   }
   await respondWithCart(req, res);
 }));
 
 app.post('/api/cart/barcode', asyncHandler(async (req, res) => {
+  if (await rejectClosedTillSale(req, res)) return;
   const { barcode } = req.body;
   if (!barcode) {
     return res.status(400).json({ error: 'barcode is required' });
@@ -415,13 +479,16 @@ app.post('/api/cart/barcode', asyncHandler(async (req, res) => {
 
   const result = await upsertCartLine(Number(products[0].id));
   if (result.error) {
-    return res.status(result.status || 400).json({ error: result.error });
+    const body = { error: result.error };
+    if (result.maxOrderable != null && result.maxOrderable > 0) body.maxOrderable = result.maxOrderable;
+    return res.status(result.status || 400).json(body);
   }
   await respondWithCart(req, res);
 }));
 
 /** Replace server cart with exact line quantities (used when replaying offline checkouts). */
 app.post('/api/cart/replace', asyncHandler(async (req, res) => {
+  if (await rejectClosedTillSale(req, res)) return;
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
 
   const existing = await ordsGet('cart_items/');
@@ -444,7 +511,9 @@ app.post('/api/cart/replace', asyncHandler(async (req, res) => {
   }));
   const validation = await validateCartLines(cartLines);
   if (validation.error) {
-    return res.status(validation.status || 409).json({ error: validation.error });
+    const body = { error: validation.error };
+    if (validation.maxOrderable != null && validation.maxOrderable > 0) body.maxOrderable = validation.maxOrderable;
+    return res.status(validation.status || 409).json(body);
   }
 
   for (const [productId, quantity] of requestedByProduct.entries()) {
@@ -455,6 +524,7 @@ app.post('/api/cart/replace', asyncHandler(async (req, res) => {
 }));
 
 app.put('/api/cart/:id', asyncHandler(async (req, res) => {
+  if (await rejectClosedTillSale(req, res)) return;
   const cartItemId = req.params.id;
   const quantity = Number(req.body?.quantity);
   if (!Number.isFinite(quantity)) {
@@ -472,7 +542,9 @@ app.put('/api/cart/:id', asyncHandler(async (req, res) => {
     const cartLines = cartLinesAfterQuantityChange(cartItems, existing.product_id, quantity);
     const validation = await validateCartLines(cartLines);
     if (validation.error) {
-      return res.status(validation.status || 409).json({ error: validation.error });
+      const body = { error: validation.error };
+      if (validation.maxOrderable != null && validation.maxOrderable > 0) body.maxOrderable = validation.maxOrderable;
+      return res.status(validation.status || 409).json(body);
     }
     await ordsPut(`cart_items/${cartItemId}`, {
       product_id: existing.product_id,
@@ -484,11 +556,13 @@ app.put('/api/cart/:id', asyncHandler(async (req, res) => {
 }));
 
 app.delete('/api/cart/:id', asyncHandler(async (req, res) => {
+  if (await rejectClosedTillSale(req, res)) return;
   await ordsDelete(`cart_items/${req.params.id}`);
   await respondWithCart(req, res);
 }));
 
 app.post('/api/checkout', asyncHandler(async (req, res) => {
+  if (await rejectClosedTillSale(req, res)) return;
   const paymentMethod = normalizePaymentMethod(req.body?.paymentMethod);
   const customerIdRaw = req.body?.customerId;
   const checkoutTotalResult = normalizeCheckoutTotal(req.body?.checkoutTotal);
@@ -517,15 +591,19 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
   }
 
   const linked893 = is893Member(customerRow);
-  const summary = summarizeCart(rows, linked893);
+  const productsById = await loadProductsById();
+  const summary = summarizeCart(rows, linked893, productsById);
   const validation = await validateCartLines(summary.items);
   if (validation.error) {
     return res.status(validation.status || 409).json({ error: validation.error });
   }
-  const { productsById, rulesByType } = validation;
+  const { rulesByType } = validation;
 
   const settlement = resolveCheckoutSettlement({
-    subtotalPayable: summary.subtotalPayable,
+    cartItems: summary.items.map((it) => ({
+      lineSubtotalPayable: it.lineSubtotalPayable,
+      taxExempt: !!it.taxExempt,
+    })),
     paymentMethod,
     rawPayments: req.body?.payments ?? null,
     clientCheckoutTotal,
@@ -649,7 +727,12 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
 const { registerAdminRoutes } = require('./lib/admin-routes');
 const { registerSupervisorRoutes } = require('./lib/supervisor-routes');
 
-registerSupervisorRoutes(app, { loginApprovalStore, shiftCloseStore });
+registerSupervisorRoutes(app, {
+  loginApprovalStore,
+  shiftCloseStore,
+  tillStore,
+  posSessionStore,
+});
 registerAdminRoutes(app, { ordsGet, ordsPost, ordsPut, ordsDelete, ordsTimestamp });
 
 app.get('/api/sales/recent', asyncHandler(async (req, res) => {

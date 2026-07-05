@@ -15,6 +15,7 @@ final class PosRegisterViewModel {
     )
     private(set) var status = "Loading…"
     private(set) var addItemError: String?
+    private(set) var showStatusPanel = false
     private(set) var isLoading = true
 
     var scanInput = ""
@@ -23,6 +24,7 @@ final class PosRegisterViewModel {
     var checkoutOpen = false
     var checkoutAmountInput = ""
     var checkoutPayments: [CheckoutPayment] = []
+    var checkoutError: String?
     var saleItemsLocked = false
     var processingCard = false
     var processingMessage: String?
@@ -61,7 +63,7 @@ final class PosRegisterViewModel {
     }
 
     var customerLinked: Bool { selectedCustomerId != nil }
-    var customerDiscountActive: Bool { selectedCustomerId != nil }
+    var customerDiscountActive: Bool { memberPricingActive }
 
     var registerTotal: Double {
         CartTotalsLogic.computeSaleGrandTotal(
@@ -148,7 +150,11 @@ final class PosRegisterViewModel {
         }
         selectedCustomerId = id
         customerFindOpen = false
-        status = "Linked \(customer.name) — customer discount"
+        if customer.hasCardOnFile, let last4 = customer.cardLast4, !last4.isEmpty {
+            status = "Linked \(customer.name) — 10% discount · card ····\(last4)"
+        } else {
+            status = "Linked \(customer.name) — 10% discount"
+        }
         Task { await reloadCart() }
     }
 
@@ -182,10 +188,25 @@ final class PosRegisterViewModel {
         scanInput = ""
     }
 
+    func consumeStatusPanelPrompt() {
+        showStatusPanel = false
+    }
+
+    private func promptAddItemFailure(_ message: String) {
+        addItemError = message
+        status = message
+        showStatusPanel = true
+    }
+
+    private func promptStatusMessage(_ message: String) {
+        status = message
+        showStatusPanel = true
+    }
+
     func addFromScanField() {
         let cleaned = scanInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else {
-            addItemError = "Enter barcode or product ID"
+            promptAddItemFailure("Enter barcode or product ID")
             return
         }
         if let productId = Int(cleaned), cleaned.count <= 6 {
@@ -196,19 +217,19 @@ final class PosRegisterViewModel {
                     addItemError = nil
                     return
                 }
-                addItemError = "Product not found: ID \(cleaned)"
+                promptAddItemFailure("Product not found: ID \(cleaned)")
                 return
             }
             if !product.inStock {
                 let stockMsg = product.quantityOnHand.map { " (qty \($0))" } ?? ""
-                addItemError = "\(product.name) is out of stock\(stockMsg)"
+                promptAddItemFailure("\(product.name) is out of stock\(stockMsg)")
                 return
             }
             addProduct(productId: productId)
         } else {
             if let product = products.first(where: { $0.barcode == cleaned }), !product.inStock {
                 let stockMsg = product.quantityOnHand.map { " (qty \($0))" } ?? ""
-                addItemError = "\(product.name) is out of stock\(stockMsg)"
+                promptAddItemFailure("\(product.name) is out of stock\(stockMsg)")
                 return
             }
             Task { await addByBarcode(cleaned) }
@@ -226,7 +247,7 @@ final class PosRegisterViewModel {
                 scanInput = ""
                 addItemError = nil
             } catch {
-                addItemError = error.localizedDescription
+                promptAddItemFailure(error.localizedDescription)
             }
         }
     }
@@ -241,7 +262,7 @@ final class PosRegisterViewModel {
             scanInput = ""
             addItemError = nil
         } catch {
-            addItemError = error.localizedDescription
+            promptAddItemFailure(error.localizedDescription)
         }
     }
 
@@ -315,9 +336,10 @@ final class PosRegisterViewModel {
                 }
                 applyCartResponse(response)
             } catch {
-                status = qty <= 0
+                let message = qty <= 0
                     ? "Remove failed — \(error.localizedDescription)"
                     : "Quantity update failed — \(error.localizedDescription)"
+                promptStatusMessage(message)
             }
         }
     }
@@ -328,15 +350,28 @@ final class PosRegisterViewModel {
         closeCustomerFind()
         checkoutOpen = true
         checkoutPayments = []
+        checkoutError = nil
         saleItemsLocked = false
-        checkoutAmountInput = "0"
+        checkoutAmountInput = ""
     }
 
     func closeCheckout() {
         guard checkoutPayments.isEmpty else { return }
         checkoutOpen = false
         checkoutAmountInput = ""
+        checkoutError = nil
         saleItemsLocked = false
+    }
+
+    private func resetCheckoutAfterFailure(_ message: String) {
+        checkoutError = message
+        status = message
+        checkoutPayments = []
+        checkoutAmountInput = ""
+        saleItemsLocked = false
+        checkoutOpen = false
+        processingCard = false
+        processingMessage = nil
     }
 
     func appendCheckoutDigit(_ digit: Character) {
@@ -349,11 +384,17 @@ final class PosRegisterViewModel {
     }
 
     func clearCheckoutAmount() {
-        checkoutAmountInput = "0"
+        checkoutAmountInput = ""
     }
 
     func backspaceCheckoutAmount() {
-        checkoutAmountInput = CashEntryLogic.backspaceCashEntry(checkoutAmountInput)
+        let trimmed = checkoutAmountInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "0" {
+            checkoutAmountInput = ""
+            return
+        }
+        let next = CashEntryLogic.backspaceCashEntry(checkoutAmountInput)
+        checkoutAmountInput = next == "0" ? "" : next
     }
 
     func fillRemainingBalance() {
@@ -368,9 +409,16 @@ final class PosRegisterViewModel {
         checkoutAmountInput = CashEntryLogic.normalizeCashEntryInput(String(amount))
     }
 
+    func applyCardOnFilePayment() {
+        applyPayment(method: "card")
+    }
+
     func applyPayment(method: String) {
+        checkoutError = nil
         guard let entered = CashEntryLogic.parseCashTendered(checkoutAmountInput) else {
-            status = "Enter a valid amount for \(CheckoutPaymentLogic.paymentMethodLabel(method))"
+            let message = "Enter a valid amount for \(CheckoutPaymentLogic.paymentMethodLabel(method))"
+            checkoutError = message
+            status = message
             return
         }
         let due = CheckoutPaymentLogic.balanceDueForMethod(
@@ -382,14 +430,19 @@ final class PosRegisterViewModel {
             method: method,
             enteredAmount: entered,
             balanceDue: due
-        ) else { return }
+        ) else {
+            let message = "Enter a valid amount for \(CheckoutPaymentLogic.paymentMethodLabel(method))"
+            checkoutError = message
+            status = message
+            return
+        }
 
         saleItemsLocked = true
         if method == "card" {
             Task { await processCardPayment(payment) }
         } else {
             checkoutPayments.append(payment)
-            checkoutAmountInput = "0"
+            checkoutAmountInput = ""
             if CheckoutPaymentLogic.isCheckoutComplete(registerTotal: registerTotal, payments: checkoutPayments) {
                 Task { await finalizeCheckout() }
             }
@@ -401,7 +454,7 @@ final class PosRegisterViewModel {
         processingMessage = "Sending \(CartTotalsLogic.formatMoney(payment.amount)) to terminal…"
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         checkoutPayments.append(payment)
-        checkoutAmountInput = "0"
+        checkoutAmountInput = ""
         processingCard = false
         processingMessage = nil
         if CheckoutPaymentLogic.isCheckoutComplete(registerTotal: registerTotal, payments: checkoutPayments) {
@@ -419,6 +472,7 @@ final class PosRegisterViewModel {
     }
 
     private func finalizeCheckout() async {
+        checkoutError = nil
         let payments = checkoutPayments
         let total = CartTotalsLogic.collectedTotal(registerTotal)
         let method = CheckoutPaymentLogic.checkoutFinalizeMethod(payments)
@@ -428,7 +482,7 @@ final class PosRegisterViewModel {
             CustomerFindLogic.displayName(selectedCustomer, customerId: $0)
         }
         let customerLinked = customerId != nil
-        let customerDiscount = customerLinked
+        let customerDiscount = memberPricingActive
         let changeTotal = CheckoutPaymentLogic.checkoutChangeTotal(payments)
         status = changeTotal > 0.005
             ? "Give change \(CartTotalsLogic.formatMoney(changeTotal)) — completing sale…"
@@ -454,7 +508,8 @@ final class PosRegisterViewModel {
             )
             checkoutOpen = false
             checkoutPayments = []
-            checkoutAmountInput = "0"
+            checkoutAmountInput = ""
+            checkoutError = nil
             saleItemsLocked = false
             selectedCustomerId = nil
             status = "Sale complete"
@@ -462,10 +517,9 @@ final class PosRegisterViewModel {
         } catch let error as PosAPIError {
             switch error {
             case .httpStatus(401, _):
-                status = "Session expired — sign in again"
+                resetCheckoutAfterFailure("Session expired — sign in again")
             default:
-                status = error.localizedDescription
-                saleItemsLocked = false
+                resetCheckoutAfterFailure(error.localizedDescription)
             }
         } catch {
             if NetworkErrorLogic.isOfflineLike(error) {
@@ -477,8 +531,7 @@ final class PosRegisterViewModel {
                     checkoutTotal: total
                 )
             } else {
-                status = error.localizedDescription
-                saleItemsLocked = false
+                resetCheckoutAfterFailure(error.localizedDescription)
             }
         }
     }
@@ -505,7 +558,7 @@ final class PosRegisterViewModel {
             cart: cartSnapshot,
             customerName: customerName,
             customerLinked: customerId != nil,
-            customerDiscount: customerId != nil,
+            customerDiscount: memberPricingActive,
             salesFeeRate: salesFeeRate,
             taxRate: taxRate,
             payments: payments,
@@ -628,7 +681,7 @@ final class PosRegisterViewModel {
 
     private func applyCartResponse(_ response: CartResponse) {
         memberPricingActive = response.linked893
-        let discount = customerDiscountActive
+        let discount = response.linked893
         let items = CartTotalsLogic.normalizeCartItems(response.items, customerDiscount: discount)
         cart = items
         cartTotals = CartTotalsLogic.computeCartTotals(items, customerDiscount: discount)

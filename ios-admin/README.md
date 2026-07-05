@@ -65,5 +65,5 @@ npm test
 After editing `lib/ios-admin-portrait-scripts.js`, sync bundled resources:
 
 ```bash
-node scripts/sync-ios-portrait-resources.js
+node scripts/ios/sync-portrait-resources.js
 ```

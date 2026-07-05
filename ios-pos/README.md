@@ -12,6 +12,7 @@ Native SwiftUI register for **Cloud Store 893**, mirroring `android-pos/`. **iPa
 |---------|----------------|
 | Launch session probe | `GET /api/cashier/session` |
 | Oracle OIDC sign-in | `WKWebView` → `/oauth/login?client_kind=ios&register_id=…` |
+| **PIN unlock** | Numpad → `POST /api/cashier/unlock` (`clientKind=ios`, `register_id`) |
 | Cookie bridge | `WebViewCookieSync` → `CookieStore` → `URLSession` |
 | Waiting for supervisor | Poll `GET /api/cashier/approval/status` every **2.5s** |
 | Cancel approval | `POST /api/cashier/approval/cancel` |
@@ -21,12 +22,13 @@ Native SwiftUI register for **Cloud Store 893**, mirroring `android-pos/`. **iPa
 | **Customer find** | Link/unlink member; scan customer ID without product |
 | **Admin WebView** | ☰ menu → `/admin/?client_kind=ios` |
 | **Offline queue** | Network failure at checkout → queue sale locally → **Sync queued** replays `POST /api/cart/replace` + checkout |
-| **Show status** | ☰ menu → status panel (API message + offline queue) above numpad |
+| **Show status** | ☰ menu → status overlay (API message + offline queue); auto-opens on cart errors; blocks register while open |
+| **Receipt** | Subtotal, member discount (linked customer), pre-tax, savings, total |
 | **Till close** | **Close till** in menu → count/confirm → supervisor close approval → sign-in gate |
+| **Force-close guard** | If supervisor force-closes till, session probe signs out; cart/checkout return 403 |
 
 ## Not implemented yet
 
-- PIN numpad unlock
 - Camera barcode scan
 - Card on file
 - Receipt print

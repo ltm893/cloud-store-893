@@ -1,0 +1,63 @@
+# Copy to terraform.dev.tfvars and fill in values (never commit terraform.dev.tfvars).
+#
+# OCI pre-production stack — separate compartment, ADB, VCN, LB from prod.
+# Public URL target: https://dev.oci.cloudstore893.com/
+#
+# Greenfield: CLOUD_STORE_ENV=dev ./scripts/oci/deploy-dev.sh
+# Docs: docs/oci-dev-environment.md
+
+# ── OCI Auth (same tenancy/user as prod — copy from terraform.tfvars) ─────────
+
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaa..."
+user_ocid        = "ocid1.user.oc1..aaaa..."
+fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
+private_key_path = "~/.oci/oci_api_key.pem"
+region           = "us-ashburn-1"
+
+object_storage_namespace = "your_namespace_here"
+ocir_region_key          = "iad"
+
+# Separate compartment + OCIR repo from prod (cloud-store)
+project_name = "cloud-store-dev"
+
+# Non-overlapping CIDR if you ever peer VCNs; isolated VCNs may reuse 10.0.0.0/24
+vcn_cidr    = "10.1.0.0/24"
+subnet_cidr = "10.1.0.0/24"
+
+# ── Database (second Always Free ADB — tenancy limit: 2) ──────────────────────
+
+adb_db_name        = "CLOUDSTOREDEV"
+adb_admin_password = "YourStr0ng!DevPassword98"
+
+# ── PINs (dev-only values recommended) ────────────────────────────────────────
+
+cashier_pin = "8930"
+admin_pin   = "8930"
+
+# ── HTTPS / DNS ───────────────────────────────────────────────────────────────
+
+enable_load_balancer = true
+lb_public_hostname   = "dev.oci.cloudstore893.com"
+lb_enable_http_listener = true
+
+# After Let's Encrypt + OCI Certificates import (docs/oci-load-balancer-https.md):
+# lb_certificate_ocid = "ocid1.certificate.oc1.iad...."
+
+# Skip automated cert renewal on dev (renew prod on schedule only)
+enable_cert_renew_function  = false
+enable_cert_renew_schedule  = false
+
+# OAuth uses request Host — browse via dev.oci.cloudstore893.com
+app_public_url_from_request = true
+cashier_session_secure      = false   # set true after lb_certificate_ocid is set
+
+# Optional — copy IdP settings from prod after first boot, or use PIN-only dev
+# idp_pos_issuer = "..."
+# idp_pos_client_id = "..."
+# idp_pos_client_secret = "..."
+# idp_admin_issuer = "..."
+# idp_admin_client_id = "..."
+# idp_admin_client_secret = "..."
+
+# Model B off on dev unless testing supervisor flows
+# cashier_supervisor_approval = false

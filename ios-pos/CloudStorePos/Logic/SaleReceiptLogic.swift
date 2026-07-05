@@ -13,6 +13,9 @@ struct SaleReceiptInfo: Equatable {
     let customerName: String?
     let lines: [ReceiptLine]
     let itemCount: Int
+    let customerLinked: Bool
+    let shelfSubtotal: Double
+    let memberDiscount: Double
     let subtotal: Double
     let savings: Double
     let tax: Double
@@ -21,6 +24,8 @@ struct SaleReceiptInfo: Equatable {
     let payments: [CheckoutPayment]
     let changeTotal: Double
     var queuedOffline: Bool = false
+
+    var showMemberDiscount: Bool { customerLinked && memberDiscount > 0.005 }
 
     var orderLabel: String {
         if queuedOffline { return "Queued for sync" }
@@ -53,10 +58,20 @@ enum SaleReceiptLogic {
             ? CartTotalsLogic.normalizeCartItems(cart, customerDiscount: customerDiscount)
             : cart
         let totals = CartTotalsLogic.computeCartTotals(items, customerDiscount: customerLinked && customerDiscount)
-        let salesFee = totals.itemPreTax * salesFeeRate
-        let taxable = totals.itemPreTax + salesFee
-        let taxAmount = CartTotalsLogic.roundMoney(taxable * taxRate)
-        let grandTotal = CartTotalsLogic.roundMoney(taxable + taxAmount)
+        let taxAmount = CartTotalsLogic.computeTaxAmount(
+            cart: cart,
+            customerLinked: customerLinked,
+            customerDiscount: customerDiscount,
+            salesFeeRate: salesFeeRate,
+            taxRate: taxRate
+        )
+        let grandTotal = CartTotalsLogic.computeSaleGrandTotal(
+            cart: cart,
+            customerLinked: customerLinked,
+            customerDiscount: customerDiscount,
+            salesFeeRate: salesFeeRate,
+            taxRate: taxRate
+        )
         let collectedTotal = CartTotalsLogic.roundMoney(payments.reduce(0) { $0 + $1.amount })
 
         return SaleReceiptInfo(
@@ -72,6 +87,9 @@ enum SaleReceiptLogic {
                 )
             },
             itemCount: totals.itemCount,
+            customerLinked: customerLinked && customerDiscount,
+            shelfSubtotal: totals.shelfSubtotal,
+            memberDiscount: totals.memberDiscount,
             subtotal: totals.itemPreTax,
             savings: totals.saleSavings,
             tax: taxAmount,

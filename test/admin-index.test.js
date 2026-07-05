@@ -22,3 +22,11 @@ test('logged-in admin index wires Platform tab script before admin.js', () => {
   const adminIdx = indexHtml.indexOf('admin.js');
   assert.ok(systemsIdx >= 0 && adminIdx > systemsIdx);
 });
+
+test('admin index includes in-page prompt for WebView supervisor actions', () => {
+  assert.match(indexHtml, /id="adminPromptDialog"/);
+  assert.match(indexHtml, /admin-prompt\.js/);
+  const promptIdx = indexHtml.indexOf('admin-prompt.js');
+  const openTillsIdx = indexHtml.indexOf('admin-open-tills.js');
+  assert.ok(promptIdx >= 0 && openTillsIdx > promptIdx);
+});

@@ -9,19 +9,21 @@ struct TillCountScreenOptions {
     var submitButtonText = "Submit Till Count"
     var showNoCashButton = true
     var requireExactMatch = true
+    var supervisorApprovalRequired = true
     var defaultStatus = "Count opening till"
     var secondaryHeaderLine: String?
 
     static let opening = TillCountScreenOptions()
 
-    static func closing(headerHint: String?) -> TillCountScreenOptions {
+    static func closing(headerHint: String?, supervisorApprovalRequired: Bool) -> TillCountScreenOptions {
         TillCountScreenOptions(
             screenTitle: "Close till",
             referenceLabel: "Expected",
             headerHint: "Tap row -> count · ↑↓ to move",
-            submitButtonText: "Submit for approval",
+            submitButtonText: supervisorApprovalRequired ? "Submit for approval" : "Close till",
             showNoCashButton: false,
             requireExactMatch: false,
+            supervisorApprovalRequired: supervisorApprovalRequired,
             defaultStatus: "Count closing till",
             secondaryHeaderLine: headerHint
         )
@@ -252,7 +254,8 @@ struct OpeningTillScreen: View {
                 submitting: submitting,
                 status: status,
                 defaultStatus: options.defaultStatus,
-                requireExactMatch: options.requireExactMatch
+                requireExactMatch: options.requireExactMatch,
+                supervisorApprovalRequired: options.supervisorApprovalRequired
             ))
             .font(.subheadline)
             .foregroundStyle(.secondary)

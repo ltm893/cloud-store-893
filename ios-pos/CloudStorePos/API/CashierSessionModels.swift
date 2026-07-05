@@ -27,20 +27,27 @@ struct CashierSessionResponse: Codable, Equatable {
     let idpLoginUrl: String?
     let pinAllowed: Bool
     let awaitingTill: Bool
+    let awaitingTillToken: String?
     let cashTillEnabled: Bool
     let cashEnabled: Bool?
     let cashMode: String?
     let expectedOpeningFloat: Double?
     let tillId: Int?
     let posSessionId: Int?
+    let tillOpenForSales: Bool?
+    let tillClosedBySupervisor: Bool?
+    let saleBlockedMessage: String?
+    let saleBlockedCode: String?
     let approval: PendingApprovalInfo?
     let error: String?
 
     enum CodingKeys: String, CodingKey {
         case ok, pending, auth, sub, email, name, user, cashierEmail
         case supervisorApprovalRequired, idpEnabled, idpLoginUrl, pinAllowed
-        case awaitingTill, cashTillEnabled, cashEnabled, cashMode
-        case expectedOpeningFloat, tillId, posSessionId, approval, error
+        case awaitingTill, awaitingTillToken, cashTillEnabled, cashEnabled, cashMode
+        case expectedOpeningFloat, tillId, posSessionId
+        case tillOpenForSales, tillClosedBySupervisor, saleBlockedMessage, saleBlockedCode
+        case approval, error
     }
 
     init(from decoder: Decoder) throws {
@@ -58,12 +65,17 @@ struct CashierSessionResponse: Codable, Equatable {
         idpLoginUrl = try c.decodeIfPresent(String.self, forKey: .idpLoginUrl)
         pinAllowed = try c.decodeIfPresent(Bool.self, forKey: .pinAllowed) ?? true
         awaitingTill = try c.decodeIfPresent(Bool.self, forKey: .awaitingTill) ?? false
+        awaitingTillToken = try c.decodeIfPresent(String.self, forKey: .awaitingTillToken)
         cashTillEnabled = try c.decodeIfPresent(Bool.self, forKey: .cashTillEnabled) ?? false
         cashEnabled = try c.decodeIfPresent(Bool.self, forKey: .cashEnabled)
         cashMode = try c.decodeIfPresent(String.self, forKey: .cashMode)
         expectedOpeningFloat = try c.decodeIfPresent(Double.self, forKey: .expectedOpeningFloat)
         tillId = try c.decodeIfPresent(Int.self, forKey: .tillId)
         posSessionId = try c.decodeIfPresent(Int.self, forKey: .posSessionId)
+        tillOpenForSales = try c.decodeIfPresent(Bool.self, forKey: .tillOpenForSales)
+        tillClosedBySupervisor = try c.decodeIfPresent(Bool.self, forKey: .tillClosedBySupervisor)
+        saleBlockedMessage = try c.decodeIfPresent(String.self, forKey: .saleBlockedMessage)
+        saleBlockedCode = try c.decodeIfPresent(String.self, forKey: .saleBlockedCode)
         approval = try c.decodeIfPresent(PendingApprovalInfo.self, forKey: .approval)
         error = try c.decodeIfPresent(String.self, forKey: .error)
     }
@@ -81,4 +93,19 @@ struct CashierSessionResponse: Codable, Equatable {
 
 struct OkResponse: Codable {
     let ok: Bool?
+    let awaitingTill: Bool?
+    let awaitingTillToken: String?
+}
+
+struct UnlockCashierResponse: Codable {
+    let ok: Bool?
+    let awaitingTill: Bool?
+    let awaitingTillToken: String?
+    let resumed: Bool?
+}
+
+struct UnlockCashierRequest: Encodable {
+    let pin: String
+    let clientKind: String
+    let registerId: String
 }

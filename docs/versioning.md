@@ -53,14 +53,28 @@ Release PRs can include feature work or be a thin “version bump only” PR aft
 
 ## Deploy after merge (OCI)
 
-Deploy from **`dev`** at the commit you intend to run:
+Deploy from **`dev`** at the commit you intend to run.
+
+### Pre-production (smoke test first)
+
+```bash
+git checkout dev && git pull
+./scripts/oci/redeploy-app-code-dev.sh "short description of this deploy"
+```
+
+Verify on `https://dev.oci.cloudstore893.com/` before promoting.
+
+### Production
 
 ```bash
 git checkout dev && git pull
 ./scripts/oci/redeploy-app-code.sh "short description of this deploy"
+# same label as dev when promoting a tested SHA
 ```
 
-- **`BUILD_ID`** — set automatically (timestamp).
+Use `AUTO_YES=1` or `--yes` to skip the interactive prompt when Terraform will replace the container instance.
+
+- **`BUILD_ID`** — set automatically (timestamp); also used as OCIR image tag.
 - **`BUILD_LABEL`** — your quoted string; reuse PR title or CHANGELOG bullet.
 - **`GIT_SHA`** — set automatically from `git rev-parse --short HEAD`.
 - **`appVersion`** — baked from `package.json` in the image.
@@ -68,7 +82,11 @@ git checkout dev && git pull
 Verify:
 
 ```bash
+# Prod:
 APP=$(./scripts/oci/confirm-public-url.sh)
+# Dev:
+# APP=$(CLOUD_STORE_ENV=dev ./scripts/oci/confirm-public-url.sh)
+
 curl -s "$APP/api/build-info" | jq .
 ```
 

@@ -16,6 +16,8 @@
 
 set -euo pipefail
 
+OCI_REGION="${OCI_REGION:-us-ashburn-1}"
+
 RAW_ENDPOINT="${IDP_DOMAIN_ENDPOINT:?Set IDP_DOMAIN_ENDPOINT (domain base URL)}"
 # CLI appends /admin/v1 itself — strip if you already included it
 ENDPOINT="${RAW_ENDPOINT%/admin/v1}"
@@ -23,15 +25,17 @@ ENDPOINT="${ENDPOINT%/}"
 ENDPOINT="${ENDPOINT%:443}"
 HOST="${APP_PUBLIC_HOST:?Set APP_PUBLIC_HOST (e.g. oci.cloudstore893.com)}"
 SCHEME="${APP_PUBLIC_SCHEME:-http}"
-PORT="${APP_PUBLIC_PORT:-${APP_PORT:-3000}}"
+LOCAL_PORT="${APP_PORT:-3000}"
 
 port_suffix=""
-if [[ -n "$PORT" ]]; then
-  if [[ "$SCHEME" == "https" && "$PORT" == "443" ]] || [[ "$SCHEME" == "http" && "$PORT" == "80" ]]; then
+if [[ -n "${APP_PUBLIC_PORT:-}" ]]; then
+  if [[ "$SCHEME" == "https" && "$APP_PUBLIC_PORT" == "443" ]] \
+    || [[ "$SCHEME" == "http" && "$APP_PUBLIC_PORT" == "80" ]]; then
     port_suffix=""
   else
-    port_suffix=":${PORT}"
+    port_suffix=":${APP_PUBLIC_PORT}"
   fi
+  LOCAL_PORT="$APP_PUBLIC_PORT"
 fi
 BASE="${SCHEME}://${HOST}${port_suffix}"
 
@@ -44,7 +48,7 @@ add_redirects_for_app() {
   local filter
   filter=$(printf 'displayName eq "%s"' "$name")
   local app_id
-  app_id=$(oci --region us-ashburn-1 identity-domains apps list \
+  app_id=$(oci --region "$OCI_REGION" identity-domains apps list \
     --endpoint "$ENDPOINT" \
     --filter "$filter" \
     --attributes id,displayName \
@@ -58,23 +62,23 @@ add_redirects_for_app() {
 
   echo "    App id: ${app_id}"
 
-  local tmp existing add_json merged
-  tmp=$(mktemp)
-  oci --region us-ashburn-1 identity-domains app get \
+  local existing add_json merged
+  echo "    Reading current redirect URIs..."
+  existing=$(oci --region "$OCI_REGION" identity-domains apps list \
     --endpoint "$ENDPOINT" \
-    --app-id "$app_id" \
-    >"$tmp"
-
-  if ! jq -e '.data' "$tmp" >/dev/null 2>&1; then
-    echo "ERROR: app get returned unexpected JSON for ${name}" >&2
-    head -c 500 "$tmp" >&2 || true
-    exit 1
-  fi
-
-  existing=$(jq -c '.data.redirectUris // [] | if type != "array" then [] else . end' "$tmp")
-  add_json=$(printf '%s\n' "${new_uris[@]}" | jq -R '{value: .}' | jq -s '.')
-  merged=$(jq -c --argjson existing "$existing" --argjson add "$add_json" \
-    '$existing + $add | unique_by(.value)')
+    --filter "$filter" \
+    --attributes redirectUris \
+    --query 'data.resources[0]."redirect-uris"' \
+    --raw-output 2>/dev/null || true)
+  [[ -n "$existing" && "$existing" != "null" ]] || existing='[]'
+  existing=$(jq -c 'if type != "array" then [] else . end | map(if type == "string" then . elif type == "object" then (.value // empty) else empty end) | map(select(length > 0))' <<<"$existing")
+  add_json=$(printf '%s\n' "${new_uris[@]}" | jq -R 'select(length > 0)' | jq -s .)
+  merged=$(
+    {
+      jq -r '.[]?' <<<"$existing"
+      jq -r '.[]?' <<<"$add_json"
+    } | sort -u | jq -R . | jq -s .
+  )
 
   local patch_ops
   patch_ops=$(jq -nc --argjson uris "$merged" \
@@ -84,9 +88,10 @@ add_redirects_for_app() {
   schemas='[{"value":"urn:ietf:params:scim:api:messages:2.0:PatchOp","type":"string"}]'
 
   echo "    Setting redirectUris:"
-  echo "$merged" | jq -r '.[].value' | sed 's/^/      /'
+  echo "$merged" | jq -r '.[]' | sed 's/^/      /'
 
-  oci --region us-ashburn-1 identity-domains app patch \
+  echo "    Patching app..."
+  oci --region "$OCI_REGION" identity-domains app patch \
     --endpoint "$ENDPOINT" \
     --app-id "$app_id" \
     --schemas "$schemas" \
@@ -94,7 +99,6 @@ add_redirects_for_app() {
     >/dev/null
 
   echo "    Done."
-  rm -f "$tmp"
 }
 
 # Optional extra hosts for local dev (space-separated): LAN IP, etc.
@@ -108,8 +112,8 @@ if [[ -n "${EXTRA_REDIRECT_HOSTS:-}" ]]; then
 fi
 for host in "${LOCAL_HOSTS[@]}"; do
   [[ -z "$host" ]] && continue
-  POS_EXTRA+=("http://${host}:${PORT}/" "http://${host}:${PORT}/oauth/callback")
-  ADMIN_EXTRA+=("http://${host}:${PORT}/admin/" "http://${host}:${PORT}/oauth/admin/callback")
+  POS_EXTRA+=("http://${host}:${LOCAL_PORT}/" "http://${host}:${LOCAL_PORT}/oauth/callback")
+  ADMIN_EXTRA+=("http://${host}:${LOCAL_PORT}/admin/" "http://${host}:${LOCAL_PORT}/oauth/admin/callback")
 done
 
 add_redirects_for_app "cloud-store-pos" \

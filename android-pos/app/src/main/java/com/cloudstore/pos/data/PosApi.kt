@@ -288,9 +288,16 @@ class PosRepository(baseUrl: String) {
         normalizedBaseUrl.toHttpUrlOrNull()?.host?.let { cookieJar.clearHost(it) }
     }
 
-    suspend fun unlockCashier(pin: String): CashierSessionResponse {
-        val res = api.unlockCashier(mapOf("pin" to pin))
+    suspend fun unlockCashier(pin: String, registerId: String): CashierSessionResponse {
+        val res = api.unlockCashier(
+            mapOf(
+                "pin" to pin,
+                "registerId" to registerId,
+                "clientKind" to "tablet",
+            ),
+        )
         if (!res.ok) throw IllegalStateException("Unlock failed")
+        stashAwaitingTillToken(res.awaitingTillToken)
         val session = api.cashierSession()
         if (!session.ok && !session.awaitingTill) {
             throw IllegalStateException("Sign-in did not persist — rebuild APK with correct LAN_IP")

@@ -83,7 +83,9 @@ That ordering avoids the container failing immediately on a missing image.
 
 **Day-to-day deploy:** [docs/oci-deploy.md](../docs/oci-deploy.md) (decision table, env, DB, IdP, tablet).
 
-**App code only (keeps IP):** [`../scripts/oci/redeploy-app-code.sh`](../scripts/oci/redeploy-app-code.sh) — build, push, restart, verify. For a new tag via apply: [`../scripts/oci/deploy-app-oci.sh`](../scripts/oci/deploy-app-oci.sh).
+**Pre-production (dev):** [docs/oci-dev-environment.md](../docs/oci-dev-environment.md) — `deploy-dev.sh`, separate state `terraform.dev.tfstate`, hostname `dev.oci.cloudstore893.com`.
+
+**App code deploy:** [`../scripts/oci/redeploy-app-code.sh`](../scripts/oci/redeploy-app-code.sh) — build, push unique OCIR tag (`BUILD_ID`), terraform apply, verify `/api/build-info`. Dev: `redeploy-app-code-dev.sh`. Legacy alias: [`deploy-app-oci.sh`](../scripts/oci/deploy-app-oci.sh).
 
 ---
 
@@ -104,10 +106,10 @@ container_instance_ocid  = "ocid1.containerinstance..."
 | `container_instance_ocid` | Shell helpers / `CLOUD_STORE_OCID` in `~/.zshrc` (see root README). |
 | `app_url` | `http://{public_ip}:{app_port}` — cart app. |
 | `ocir_image_path` | Exact `docker tag` / `docker push` target. |
-| `ords_base_url` | ORDS admin base — synced into `.env` as `ORDS_BASE_URL` via `npm run sync-env` / [`../scripts/sync-env.sh`](../scripts/sync-env.sh). |
+| `ords_base_url` | ORDS admin base — synced into `.env` as `ORDS_BASE_URL` via `npm run sync-env` / [`../scripts/dev/sync-env.sh`](../scripts/dev/sync-env.sh). |
 | `adb_ocid`, `vcn_ocid` | Support, console deep links, debugging. |
 
-[`../scripts/dev-up.sh`](../scripts/dev-up.sh) compares `.env`’s `ORDS_BASE_URL` to `terraform output -raw ords_base_url` and warns on drift.
+[`../scripts/dev/up.sh`](../scripts/dev/up.sh) compares `.env`’s `ORDS_BASE_URL` to `terraform output -raw ords_base_url` and warns on drift.
 
 **After first apply:**
 
@@ -204,7 +206,7 @@ Terraform replace assigns a **new ephemeral IP**; the **reserved public IP does 
 
 - **Automated:** `./scripts/oci/reattach-reserved-ip.sh` — post-apply hook on `deploy-app-oci.sh` / `terraform-apply-container.sh` (`--recover-network`)
 - **Manual CLI reference:** [docs/oci-network-recovery.md](../docs/oci-network-recovery.md)
-- **Safe for code-only deploys:** `docker push` + `./scripts/oci/restart-container-instance.sh` (no instance replace)
+- **App code deploys:** `./scripts/oci/redeploy-app-code.sh` — new OCIR tag + terraform apply (replaces instance when tag changes)
 
 ---
 

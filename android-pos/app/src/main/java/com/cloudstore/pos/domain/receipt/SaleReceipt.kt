@@ -5,6 +5,8 @@ import com.cloudstore.pos.data.CheckoutPayment
 import com.cloudstore.pos.data.StoreCustomer
 import com.cloudstore.pos.domain.checkout.checkoutChangeTotal
 import com.cloudstore.pos.domain.pricing.computeCartTotals
+import com.cloudstore.pos.domain.pricing.computeSaleGrandTotal
+import com.cloudstore.pos.domain.pricing.computeTaxAmount
 import com.cloudstore.pos.domain.pricing.normalizeCartItems
 import com.cloudstore.pos.domain.pricing.roundMoney
 import java.time.Instant
@@ -24,6 +26,9 @@ data class SaleReceipt(
     val customerName: String?,
     val lines: List<ReceiptLine>,
     val itemCount: Int,
+    val customerLinked: Boolean,
+    val shelfSubtotal: Double,
+    val memberDiscount: Double,
     val subtotal: Double,
     val savings: Double,
     val tax: Double,
@@ -33,6 +38,7 @@ data class SaleReceipt(
     val changeTotal: Double,
     val queuedOffline: Boolean = false,
 ) {
+    val showMemberDiscount: Boolean get() = customerLinked && memberDiscount > 0.005
     fun formattedTimestamp(): String {
         val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy  h:mm a")
         return Instant.ofEpochMilli(completedAtMillis)
@@ -68,10 +74,14 @@ fun buildSaleReceipt(
 ): SaleReceipt {
     val items = if (customerLinked) normalizeCartItems(cart, customerDiscount) else cart
     val totals = computeCartTotals(items, customerLinked && customerDiscount)
-    val salesFee = totals.itemPreTax * salesFeeRate
-    val taxable = totals.itemPreTax + salesFee
-    val taxAmt = roundMoney(taxable * taxRate)
-    val grandTotal = roundMoney(taxable + taxAmt)
+    val taxAmt = computeTaxAmount(cart, customerLinked, customerDiscount, salesFeeRate, taxRate)
+    val grandTotal = computeSaleGrandTotal(
+        cart = cart,
+        customerLinked = customerLinked,
+        customerDiscount = customerDiscount,
+        salesFeeRate = salesFeeRate,
+        taxRate = taxRate,
+    )
     val collectedTotal = roundMoney(payments.sumOf { it.amount })
 
     return SaleReceipt(
@@ -87,6 +97,9 @@ fun buildSaleReceipt(
             )
         },
         itemCount = totals.itemCount,
+        customerLinked = customerLinked && customerDiscount,
+        shelfSubtotal = totals.shelfSubtotal,
+        memberDiscount = totals.memberDiscount,
         subtotal = totals.itemPreTax,
         savings = totals.saleSavings,
         tax = taxAmt,

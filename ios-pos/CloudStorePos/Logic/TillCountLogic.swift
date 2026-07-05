@@ -64,7 +64,8 @@ enum TillCountLogic {
         submitting: Bool,
         status: String,
         defaultStatus: String = "Count opening till",
-        requireExactMatch: Bool = true
+        requireExactMatch: Bool = true,
+        supervisorApprovalRequired: Bool = true
     ) -> String {
         if submitting { return "Submitting till count…" }
         if !status.isEmpty && status != "Ready" && status != defaultStatus { return status }
@@ -82,7 +83,9 @@ enum TillCountLogic {
                     return "Variance \(sign)\(formatMoney(variance)) — ready to submit"
                 }
             }
-            if hasCounts { return "Ready to submit for approval" }
+            if hasCounts {
+                return supervisorApprovalRequired ? "Ready to submit for approval" : "Ready to close till"
+            }
         }
 
         if let expected = expectedOpeningFloat {

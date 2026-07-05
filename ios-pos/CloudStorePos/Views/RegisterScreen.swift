@@ -9,6 +9,7 @@ struct RegisterScreen: View {
     @State private var drawerOpen = false
     @State private var adminOpen = false
     @State private var statusVisible = false
+    @State private var showCardOnFileConfirm = false
 
     init(
         user: String,
@@ -31,6 +32,7 @@ struct RegisterScreen: View {
                 PosRegisterTopBar(user: user) {
                     drawerOpen = true
                 }
+                .disabled(statusVisible)
                 GeometryReader { geo in
                     let gutter = PosLayoutMetrics.registerCenterGutter
                     let hPad = PosLayoutMetrics.registerSideGutter * 2
@@ -41,10 +43,35 @@ struct RegisterScreen: View {
                     }
                     .padding(.horizontal, PosLayoutMetrics.registerSideGutter)
                     .padding(.vertical, 8)
+                    .disabled(statusVisible)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(PosColors.cream)
+            .overlay {
+                if statusVisible {
+                    ZStack {
+                        Color(red: 15 / 255, green: 23 / 255, blue: 42 / 255)
+                            .opacity(0.78)
+                            .ignoresSafeArea()
+                            .allowsHitTesting(true)
+                        RegisterStatusPanel(
+                            apiBaseURL: AppConfig.apiBaseURL.absoluteString,
+                            tillId: session.activeTillId,
+                            posSessionId: session.activePosSessionId,
+                            statusMessage: viewModel.status,
+                            queuedCount: viewModel.queuedCheckoutCount,
+                            syncing: viewModel.queueSyncing,
+                            onSyncQueued: { Task { await viewModel.flushOfflineQueue() } },
+                            onDiscardQueued: { viewModel.clearOfflineQueue() },
+                            onHide: { statusVisible = false }
+                        )
+                        .frame(maxWidth: 320)
+                        .padding(.horizontal, 24)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
             .overlay {
                 if viewModel.processingCard {
                     processingOverlay(
@@ -64,8 +91,27 @@ struct RegisterScreen: View {
                     statusVisible = true
                 }
             }
+            .onChange(of: viewModel.showStatusPanel) { _, show in
+                if show {
+                    statusVisible = true
+                    viewModel.consumeStatusPanelPrompt()
+                }
+            }
             .fullScreenCover(isPresented: $adminOpen) {
                 AdminWebScreen { adminOpen = false }
+            }
+            .alert("Confirm CardOnFile", isPresented: $showCardOnFileConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Confirm") {
+                    viewModel.applyCardOnFilePayment()
+                }
+                .disabled(viewModel.selectedCustomer?.cardLast4?.isEmpty != false)
+            } message: {
+                if let last4 = viewModel.selectedCustomer?.cardLast4, !last4.isEmpty {
+                    Text("Charge card ending in \(last4)?")
+                } else {
+                    Text("No card on file for this customer.")
+                }
             }
         }
     }
@@ -139,6 +185,11 @@ struct RegisterScreen: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 scanBar
+                if let checkoutError = viewModel.checkoutError, !viewModel.checkoutOpen {
+                    Text(checkoutError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
                 if let error = viewModel.addItemError {
                     Text(error)
                         .font(.caption)
@@ -244,25 +295,7 @@ struct RegisterScreen: View {
     }
 
     private var rightColumn: some View {
-        let showStatusPanel = statusVisible
-            && viewModel.receipt == nil
-            && !viewModel.checkoutOpen
-            && !viewModel.customerFindOpen
-
-        return VStack(spacing: 8) {
-            if showStatusPanel {
-                RegisterStatusPanel(
-                    apiBaseURL: AppConfig.apiBaseURL.absoluteString,
-                    tillId: session.activeTillId,
-                    posSessionId: session.activePosSessionId,
-                    statusMessage: viewModel.status,
-                    queuedCount: viewModel.queuedCheckoutCount,
-                    syncing: viewModel.queueSyncing,
-                    onSyncQueued: { Task { await viewModel.flushOfflineQueue() } },
-                    onDiscardQueued: { viewModel.clearOfflineQueue() }
-                )
-            }
-
+        VStack(spacing: 8) {
             if viewModel.receipt != nil {
                 ReceiptActionPanel(
                     onPrint: { viewModel.printReceipt() },
@@ -293,6 +326,7 @@ struct RegisterScreen: View {
                     cashEnabled: viewModel.cashEnabled,
                     creditOnlyPayments: viewModel.creditOnlyPayments,
                     amountInput: viewModel.checkoutAmountInput,
+                    errorMessage: viewModel.checkoutError,
                     processingCard: viewModel.processingCard,
                     onAmountDigit: { viewModel.appendCheckoutDigit($0) },
                     onAmountClear: { viewModel.clearCheckoutAmount() },
@@ -300,8 +334,10 @@ struct RegisterScreen: View {
                     onAmountDecimal: { viewModel.appendCheckoutDigit(".") },
                     onFillRemaining: { viewModel.fillRemainingBalance() },
                     onQuickBill: { viewModel.applyQuickBill($0) },
+                    showCardOnFileButton: viewModel.selectedCustomer?.hasCardOnFile == true,
                     onApplyCash: { viewModel.applyPayment(method: "cash") },
                     onApplyCard: { viewModel.applyPayment(method: "card") },
+                    onPayCardOnFile: { showCardOnFileConfirm = true },
                     onRemovePayment: { viewModel.removePayment(at: $0) },
                     onBack: { viewModel.closeCheckout() }
                 )
@@ -446,6 +482,11 @@ private struct CartLineRow: View {
             Text("ID \(item.productId) · Reg \(CartTotalsLogic.formatMoney(item.regularPrice))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+        if item.taxExempt {
+            Text("Tax-free")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(PosColors.teal)
         }
     }
 }
