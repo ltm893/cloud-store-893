@@ -2004,6 +2004,18 @@ class PosViewModel(
         }
     }
 
+    private fun effectivePaymentMethod(
+        fallbackMethod: String,
+        payments: List<CheckoutPayment>?,
+    ): String {
+        val normalized = payments?.takeIf { it.isNotEmpty() } ?: return fallbackMethod
+        return if (normalized.size == 1) {
+            normalized.first().method
+        } else {
+            "split"
+        }
+    }
+
     fun checkout(
         payments: List<CheckoutPayment>? = null,
         checkoutTotal: Double? = null,
