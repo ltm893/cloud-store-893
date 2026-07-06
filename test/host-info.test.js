@@ -10,6 +10,7 @@ test('getHostInfo includes overview and OCI host fields', () => {
   assert.match(info.overview, /Node\.js container/);
   assert.match(info.overview, /protected by Oracle Identity Access Management/);
   assert.match(info.overview, /iPad and Android tablets/);
+  assert.match(info.overview, /inventory checker Lister/i);
   assert.match(info.overview, /supervisor push notifications/);
   assert.equal(info.host.title, 'Host OCI');
   assert.ok(info.host.fields.some((f) => f.label === 'Service' && f.value === 'OCI Container Instance'));

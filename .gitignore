@@ -73,6 +73,16 @@ android-pos/captures/
 android-pos/.externalNativeBuild/
 android-pos/.cxx/
 
+# Android Lister — Gradle, Studio, and build outputs
+android-lister/.gradle/
+android-lister/**/build/
+android-lister/local.properties
+android-lister/.idea/
+android-lister/*.iml
+android-lister/captures/
+android-lister/.externalNativeBuild/
+android-lister/.cxx/
+
 # iOS admin — Xcode local overrides and user state
 ios-admin/Config/Local.xcconfig
 ios-admin/**/xcuserdata/
