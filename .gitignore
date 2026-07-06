@@ -17,6 +17,10 @@ node_modules/
 # Mac junk files
 .DS_Store
 
+# Python bytecode
+__pycache__/
+*.py[cod]
+
 # Logs
 *.log
 npm-debug.log*

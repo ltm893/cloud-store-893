@@ -71,6 +71,25 @@ test('parseOrderNumber requires a non-empty value', () => {
   assert.equal(parseOrderNumber('0000001'), '0000001');
 });
 
+test('buildBarcodeReport returns sorted products with barcode fields', async () => {
+  const ordsGet = async (path) => {
+    if (path === 'products/') {
+      return [
+        { id: 2, name: 'Zebra', barcode: '222', product_type: 'Retail', manufacturer: 'JR' },
+        { id: 1, name: 'Alpha', barcode: '111', product_type: 'Coffee', manufacturer: null },
+      ];
+    }
+    return [];
+  };
+  const reports = createStoreReports({ ordsGet });
+  const report = await reports.buildBarcodeReport();
+  assert.equal(report.kind, 'barcodes');
+  assert.equal(report.count, 2);
+  assert.deepEqual(report.products.map((p) => p.name), ['Alpha', 'Zebra']);
+  assert.equal(report.products[0].barcode, '111');
+  assert.equal(report.products[1].product_type, 'Retail');
+});
+
 test('buildOrderDetailsByOrderNumber assembles touchpoints for an order', async () => {
   const ordsGet = async (path) => {
     if (path.startsWith('sales/?q=')) {

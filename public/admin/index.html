@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="screen-orientation" content="landscape">
   <title>Cloud Store 893 — Admin</title>
-  <link rel="stylesheet" href="/admin/admin.css?v=20260620d">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260706c">
   <script src="/admin/admin-orientation.js?v=20260611c"></script>
 </head>
 <body class="admin-landscape tab-tables">
@@ -64,47 +64,87 @@
     <section id="reportsPanel" class="reports-panel" hidden>
       <h2>Store reports</h2>
       <p class="hint">On-demand totals from live sales and inventory. Ranges use UTC calendar dates.</p>
-      <div class="reports-controls">
-        <label>
-          Period
-          <select id="reportsPeriod">
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
-        </label>
-        <label>
-          Anchor date
-          <input id="reportsAnchor" type="date">
-        </label>
-        <button type="button" id="reportsLoadBtn">Refresh</button>
+
+      <div class="reports-chevron-section">
+        <button type="button" class="reports-chevron-toggle open" data-reports-section="salesInventory" aria-expanded="true" aria-controls="reportsSalesInventoryPanel">
+          <span class="reports-chevron" aria-hidden="true"></span>
+          <span class="reports-chevron-label">Sales &amp; inventory</span>
+        </button>
+        <div id="reportsSalesInventoryPanel" class="reports-chevron-panel">
+          <div class="reports-controls">
+            <label>
+              Period
+              <select id="reportsPeriod">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </label>
+            <label>
+              Anchor date
+              <input id="reportsAnchor" type="date">
+            </label>
+            <button type="button" id="reportsLoadBtn">Refresh</button>
+          </div>
+          <p id="reportsRangeLabel" class="reports-range-label hint"></p>
+          <h3>Sales</h3>
+          <div id="reportsSalesSummary" class="report-stats"></div>
+          <h4>Daily breakdown</h4>
+          <div id="reportsSalesByDay" class="report-table-wrap"></div>
+          <h4>Top products</h4>
+          <div id="reportsTopProducts" class="report-table-wrap"></div>
+          <h3>Inventory</h3>
+          <div id="reportsInventorySummary" class="report-stats"></div>
+          <h4>Low stock now</h4>
+          <div id="reportsLowStock" class="report-table-wrap"></div>
+          <h4>Movements in period</h4>
+          <div id="reportsMovements" class="report-table-wrap"></div>
+        </div>
       </div>
-      <p id="reportsRangeLabel" class="reports-range-label hint"></p>
-      <h3>Sales</h3>
-      <div id="reportsSalesSummary" class="report-stats"></div>
-      <h4>Daily breakdown</h4>
-      <div id="reportsSalesByDay" class="report-table-wrap"></div>
-      <h4>Top products</h4>
-      <div id="reportsTopProducts" class="report-table-wrap"></div>
-      <h3>Inventory</h3>
-      <div id="reportsInventorySummary" class="report-stats"></div>
-      <h4>Low stock now</h4>
-      <div id="reportsLowStock" class="report-table-wrap"></div>
-      <h4>Movements in period</h4>
-      <div id="reportsMovements" class="report-table-wrap"></div>
-      <h3>OrderDetailsByOrdernumber</h3>
-      <p class="hint">All touchpoints for one sale — header, customer, lines, payments, inventory, till.</p>
-      <div class="reports-controls">
-        <label>
-          Order number
-          <input id="reportsOrderNumber" type="text" placeholder="0000001" autocomplete="off" inputmode="numeric" maxlength="7">
-        </label>
-        <button type="button" id="reportsOrderLookupBtn">Lookup</button>
+
+      <div class="reports-chevron-section">
+        <button type="button" class="reports-chevron-toggle" data-reports-section="orderLookup" aria-expanded="false" aria-controls="reportsOrderLookupPanel">
+          <span class="reports-chevron" aria-hidden="true"></span>
+          <span class="reports-chevron-label">Order lookup</span>
+        </button>
+        <div id="reportsOrderLookupPanel" class="reports-chevron-panel" hidden>
+          <p class="hint">All touchpoints for one sale — header, customer, lines, payments, inventory, till.</p>
+          <div class="reports-controls">
+            <label>
+              Order number
+              <input id="reportsOrderNumber" type="text" placeholder="0000001" autocomplete="off" inputmode="numeric" maxlength="7">
+            </label>
+            <button type="button" id="reportsOrderLookupBtn">Lookup</button>
+          </div>
+          <p id="reportsOrderLabel" class="reports-range-label hint"></p>
+          <div id="reportsOrderSummary" class="report-stats"></div>
+          <h4>Touchpoints</h4>
+          <div id="reportsOrderTouchpoints" class="report-table-wrap"></div>
+        </div>
       </div>
-      <p id="reportsOrderLabel" class="reports-range-label hint"></p>
-      <div id="reportsOrderSummary" class="report-stats"></div>
-      <h4>Touchpoints</h4>
-      <div id="reportsOrderTouchpoints" class="report-table-wrap"></div>
+
+      <div class="reports-chevron-section">
+        <button type="button" class="reports-chevron-toggle" data-reports-section="barcodes" aria-expanded="false" aria-controls="reportsBarcodesPanel">
+          <span class="reports-chevron" aria-hidden="true"></span>
+          <span class="reports-chevron-label">Product barcodes</span>
+        </button>
+        <div id="reportsBarcodesPanel" class="reports-chevron-panel" hidden>
+          <p class="hint">Live catalog barcodes for supervisors — search, select rows, and print label sheets.</p>
+          <div class="barcodes-report-controls reports-controls">
+            <label class="barcodes-search-label">
+              Search
+              <input id="barcodesSearchInput" type="search" placeholder="Name, barcode, product ID, type…" autocomplete="off">
+            </label>
+            <button type="button" id="barcodesRefreshBtn">Refresh</button>
+            <button type="button" id="barcodesPrintAllBtn">Print all</button>
+            <button type="button" id="barcodesPrintSelectedBtn" disabled>Print selected</button>
+          </div>
+          <p id="barcodesSummary" class="reports-range-label hint"></p>
+          <div id="barcodesTableWrap" class="report-table-wrap barcodes-table-wrap">
+            <p class="hint">Loading barcodes…</p>
+          </div>
+        </div>
+      </div>
     </section>
     <section id="systemsPanel" class="systems-panel" hidden>
       <div class="systems-description-row">
@@ -205,7 +245,8 @@
   <script src="/admin/admin-approvals.js?v=20260702a"></script>
   <script src="/admin/admin-shift-closes.js?v=20260702a"></script>
   <script src="/admin/admin-open-tills.js?v=20260702a"></script>
-  <script src="/admin/admin-reports.js?v=20260618a"></script>
+  <script src="/admin/admin-reports.js?v=20260706c"></script>
+  <script src="/admin/admin-barcodes-report.js?v=20260706b"></script>
   <script src="/shared/admin-systems.js?v=20260628a"></script>
   <script src="/admin/admin.js?v=20260619f"></script>
 </body>

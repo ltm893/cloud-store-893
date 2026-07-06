@@ -10,4 +10,12 @@ enum AppConfig {
     static var apiHostLabel: String {
         apiBaseURL.host ?? apiBaseURL.absoluteString
     }
+
+    static var registerId: String {
+        RegisterId.current
+    }
+
+    static var oidcLoginURL: URL {
+        AppConfigLogic.oidcLoginURL(base: apiBaseURL, registerId: registerId)
+    }
 }

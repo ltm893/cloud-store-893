@@ -20,4 +20,37 @@ enum AppConfigLogic {
         components?.queryItems = [URLQueryItem(name: "q", value: query)]
         return components?.url
     }
+
+    static func apiRequestURL(
+        base: URL,
+        path: String,
+        queryItems: [URLQueryItem] = []
+    ) -> URL? {
+        var components = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false)
+        if !queryItems.isEmpty {
+            components?.queryItems = queryItems
+        }
+        return components?.url
+    }
+
+    /// Oracle OIDC entry for lister (`client_kind=lister`, no till or supervisor approval).
+    static func oidcLoginURL(
+        base: URL,
+        registerId: String,
+        freshLogin: Bool = false
+    ) -> URL {
+        var components = URLComponents(
+            url: base.appendingPathComponent("oauth/login"),
+            resolvingAgainstBaseURL: false
+        )!
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "client_kind", value: "lister"),
+            URLQueryItem(name: "register_id", value: registerId),
+        ]
+        if freshLogin {
+            queryItems.append(URLQueryItem(name: "prompt", value: "login"))
+        }
+        components.queryItems = queryItems
+        return components.url!
+    }
 }

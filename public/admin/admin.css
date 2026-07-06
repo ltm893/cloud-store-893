@@ -555,6 +555,61 @@ td.low-stock {
   font-size: 1.05rem;
 }
 
+.reports-chevron-section {
+  border-top: 1px solid var(--border);
+}
+
+.reports-chevron-section:first-of-type {
+  margin-top: 12px;
+}
+
+.reports-chevron-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  border: none;
+  background: transparent;
+  padding: 12px 4px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent-2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.reports-chevron {
+  display: inline-flex;
+  width: 1.25rem;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.reports-chevron::before {
+  content: '›';
+}
+
+.reports-chevron-toggle.open .reports-chevron {
+  transform: rotate(90deg);
+}
+
+.reports-chevron-label {
+  flex: 0 0 auto;
+}
+
+.reports-chevron-panel {
+  padding: 0 4px 12px;
+}
+
+.reports-chevron-panel > h3:first-child,
+.reports-chevron-panel > .hint:first-child {
+  margin-top: 0;
+}
+
 .reports-panel h4 {
   margin: 14px 0 6px;
   font-size: 0.95rem;
@@ -649,6 +704,73 @@ td.low-stock {
 
 .report-table-wrap th {
   background: var(--table-header-teal);
+}
+
+.barcodes-report-controls {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.barcodes-search-label {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.barcodes-search-label input[type="search"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.barcodes-table-wrap table {
+  font-size: 0.88rem;
+}
+
+.barcodes-col-select {
+  width: 42px;
+  text-align: center;
+}
+
+.barcodes-col-select input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.barcodes-code-cell code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+}
+
+@media print {
+  .admin-topbar,
+  .admin-tabs,
+  .side-nav,
+  .reports-controls,
+  .barcodes-report-controls,
+  #status,
+  .reports-panel h2,
+  .reports-panel > .hint,
+  .reports-chevron-toggle,
+  .reports-chevron-panel > h3,
+  .reports-chevron-panel > h4,
+  .reports-chevron-panel > .hint,
+  .report-stats,
+  .report-table-wrap:not(.barcodes-table-wrap) {
+    display: none !important;
+  }
+
+  .reports-panel,
+  .reports-chevron-panel[hidden],
+  .barcodes-table-wrap {
+    display: block !important;
+  }
+
+  .barcodes-col-select {
+    display: none;
+  }
 }
 
 #editDialog {

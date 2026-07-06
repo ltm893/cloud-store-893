@@ -18,7 +18,44 @@
 		L10000010000000000000009 /* ListerColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000009 /* ListerColors.swift */; };
 		L1000001000000000000000A /* NumericKeypadGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000A /* NumericKeypadGrid.swift */; };
 		L1000001000000000000000B /* ProductCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000B /* ProductCardView.swift */; };
-		L1000001000000000000000C /* InventoryLookupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000C /* InventoryLookupView.swift */; };
+		L10000010000000000000013 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000018 /* ContentView.swift */; };
+		L10000010000000000000014 /* LookupInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000019 /* LookupInputView.swift */; };
+		L10000010000000000000015 /* LookupResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000001A /* LookupResultsView.swift */; };
+		L10000010000000000000016 /* ListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000001B /* ListsView.swift */; };
+		L10000010000000000000017 /* ListStoreLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000001C /* ListStoreLogic.swift */; };
+		L10000010000000000000018 /* InventoryListModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000001D /* InventoryListModels.swift */; };
+		L10000010000000000000019 /* ProductFieldRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000001E /* ProductFieldRow.swift */; };
+		L1000001000000000000001A /* ListItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000001F /* ListItemRow.swift */; };
+		L1000001000000000000001B /* AllListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000020 /* AllListsView.swift */; };
+		L1000001000000000000001C /* ListStoreLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000021 /* ListStoreLogicTests.swift */; };
+		L1000001000000000000001D /* ListOperationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000022 /* ListOperationsView.swift */; };
+		L1000001000000000000001E /* ListQueryLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000023 /* ListQueryLogic.swift */; };
+		L1000001000000000000001F /* ListQueryOperationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000024 /* ListQueryOperationView.swift */; };
+		L10000010000000000000020 /* ListQueryLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000025 /* ListQueryLogicTests.swift */; };
+		L10000010000000000000021 /* ListExportLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000026 /* ListExportLogic.swift */; };
+		L10000010000000000000022 /* ActivityShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000027 /* ActivityShareSheet.swift */; };
+		L10000010000000000000023 /* ListExportLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000028 /* ListExportLogicTests.swift */; };
+		L10000010000000000000024 /* ListSortLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000029 /* ListSortLogic.swift */; };
+		L10000010000000000000025 /* ListSortLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002A /* ListSortLogicTests.swift */; };
+		L10000010000000000000026 /* ManualInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002B /* ManualInputView.swift */; };
+		L10000010000000000000027 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002C /* BarcodeScannerView.swift */; };
+		L10000010000000000000028 /* CSVImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002D /* CSVImportView.swift */; };
+		L10000010000000000000029 /* CSVImportLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002E /* CSVImportLogic.swift */; };
+		L1000001000000000000002A /* CSVImportLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002F /* CSVImportLogicTests.swift */; };
+		L1000001000000000000002B /* RegisterIdLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000030 /* RegisterIdLogic.swift */; };
+		L1000001000000000000002C /* RegisterId.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000031 /* RegisterId.swift */; };
+		L1000001000000000000002D /* CookieStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000032 /* CookieStore.swift */; };
+		L1000001000000000000002E /* ListerOidcRedirectLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000033 /* ListerOidcRedirectLogic.swift */; };
+		L1000001000000000000002F /* WebViewCookieSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000034 /* WebViewCookieSync.swift */; };
+		L10000010000000000000030 /* CashierSessionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000035 /* CashierSessionModels.swift */; };
+		L10000010000000000000031 /* ListerAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000036 /* ListerAPIClient.swift */; };
+		L10000010000000000000032 /* ListerAuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000037 /* ListerAuthViewModel.swift */; };
+		L10000010000000000000033 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000038 /* SignInView.swift */; };
+		L10000010000000000000034 /* OidcWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000039 /* OidcWebView.swift */; };
+		L10000010000000000000035 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000003A /* RootView.swift */; };
+		L10000010000000000000036 /* RegisterIdLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000003B /* RegisterIdLogicTests.swift */; };
+		L10000010000000000000038 /* BarcodeNormalizeLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000003D /* BarcodeNormalizeLogic.swift */; };
+		L10000010000000000000039 /* BarcodeNormalizeLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000003E /* BarcodeNormalizeLogicTests.swift */; };
 		L1000001000000000000000D /* AppConfigLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000D /* AppConfigLogicTests.swift */; };
 		L1000001000000000000000E /* InventoryDisplayLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000E /* InventoryDisplayLogicTests.swift */; };
 		L1000001000000000000000F /* InfoPlistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000F /* InfoPlistTests.swift */; };
@@ -36,7 +73,45 @@
 		L10000020000000000000009 /* ListerColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListerColors.swift; sourceTree = "<group>"; };
 		L1000002000000000000000A /* NumericKeypadGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericKeypadGrid.swift; sourceTree = "<group>"; };
 		L1000002000000000000000B /* ProductCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCardView.swift; sourceTree = "<group>"; };
-		L1000002000000000000000C /* InventoryLookupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryLookupView.swift; sourceTree = "<group>"; };
+		L10000020000000000000018 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		L10000020000000000000019 /* LookupInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookupInputView.swift; sourceTree = "<group>"; };
+		L1000002000000000000001A /* LookupResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookupResultsView.swift; sourceTree = "<group>"; };
+		L1000002000000000000001B /* ListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListsView.swift; sourceTree = "<group>"; };
+		L1000002000000000000001C /* ListStoreLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListStoreLogic.swift; sourceTree = "<group>"; };
+		L1000002000000000000001D /* InventoryListModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryListModels.swift; sourceTree = "<group>"; };
+		L1000002000000000000001E /* ProductFieldRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductFieldRow.swift; sourceTree = "<group>"; };
+		L1000002000000000000001F /* ListItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemRow.swift; sourceTree = "<group>"; };
+		L10000020000000000000020 /* AllListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllListsView.swift; sourceTree = "<group>"; };
+		L10000020000000000000021 /* ListStoreLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListStoreLogicTests.swift; sourceTree = "<group>"; };
+		L10000020000000000000022 /* ListOperationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListOperationsView.swift; sourceTree = "<group>"; };
+		L10000020000000000000023 /* ListQueryLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListQueryLogic.swift; sourceTree = "<group>"; };
+		L10000020000000000000024 /* ListQueryOperationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListQueryOperationView.swift; sourceTree = "<group>"; };
+		L10000020000000000000025 /* ListQueryLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListQueryLogicTests.swift; sourceTree = "<group>"; };
+		L10000020000000000000026 /* ListExportLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListExportLogic.swift; sourceTree = "<group>"; };
+		L10000020000000000000027 /* ActivityShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityShareSheet.swift; sourceTree = "<group>"; };
+		L10000020000000000000028 /* ListExportLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListExportLogicTests.swift; sourceTree = "<group>"; };
+		L10000020000000000000029 /* ListSortLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSortLogic.swift; sourceTree = "<group>"; };
+		L1000002000000000000002A /* ListSortLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSortLogicTests.swift; sourceTree = "<group>"; };
+		L1000002000000000000002B /* ManualInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualInputView.swift; sourceTree = "<group>"; };
+		L1000002000000000000002C /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
+		L1000002000000000000002D /* CSVImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportView.swift; sourceTree = "<group>"; };
+		L1000002000000000000002E /* CSVImportLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportLogic.swift; sourceTree = "<group>"; };
+		L1000002000000000000003D /* BarcodeNormalizeLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeNormalizeLogic.swift; sourceTree = "<group>"; };
+		L1000002000000000000003E /* BarcodeNormalizeLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeNormalizeLogicTests.swift; sourceTree = "<group>"; };
+		L1000002000000000000002F /* CSVImportLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportLogicTests.swift; sourceTree = "<group>"; };
+		L10000020000000000000030 /* RegisterIdLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterIdLogic.swift; sourceTree = "<group>"; };
+		L10000020000000000000031 /* RegisterId.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterId.swift; sourceTree = "<group>"; };
+		L10000020000000000000032 /* CookieStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieStore.swift; sourceTree = "<group>"; };
+		L10000020000000000000033 /* ListerOidcRedirectLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListerOidcRedirectLogic.swift; sourceTree = "<group>"; };
+		L10000020000000000000034 /* WebViewCookieSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewCookieSync.swift; sourceTree = "<group>"; };
+		L10000020000000000000035 /* CashierSessionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashierSessionModels.swift; sourceTree = "<group>"; };
+		L10000020000000000000036 /* ListerAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListerAPIClient.swift; sourceTree = "<group>"; };
+		L10000020000000000000037 /* ListerAuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListerAuthViewModel.swift; sourceTree = "<group>"; };
+		L10000020000000000000038 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
+		L10000020000000000000039 /* OidcWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OidcWebView.swift; sourceTree = "<group>"; };
+		L1000002000000000000003A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		L1000002000000000000003B /* RegisterIdLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterIdLogicTests.swift; sourceTree = "<group>"; };
+		L1000002000000000000003C /* ListerOidcRedirectLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListerOidcRedirectLogicTests.swift; sourceTree = "<group>"; };
 		L1000002000000000000000D /* AppConfigLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigLogicTests.swift; sourceTree = "<group>"; };
 		L1000002000000000000000E /* InventoryDisplayLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryDisplayLogicTests.swift; sourceTree = "<group>"; };
 		L1000002000000000000000F /* InfoPlistTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoPlistTests.swift; sourceTree = "<group>"; };
@@ -92,6 +167,7 @@
 				L10000020000000000000002 /* Config.swift */,
 				L10000020000000000000003 /* AppConfigLogic.swift */,
 				L10000040000000000000006 /* API */,
+				L1000004000000000000000F /* Session */,
 				L10000040000000000000007 /* Models */,
 				L10000040000000000000008 /* Logic */,
 				L10000040000000000000009 /* ViewModels */,
@@ -125,6 +201,14 @@
 			children = (
 				L1000002000000000000000D /* AppConfigLogicTests.swift */,
 				L1000002000000000000000E /* InventoryDisplayLogicTests.swift */,
+				L10000020000000000000021 /* ListStoreLogicTests.swift */,
+				L10000020000000000000025 /* ListQueryLogicTests.swift */,
+				L10000020000000000000028 /* ListExportLogicTests.swift */,
+				L1000002000000000000002A /* ListSortLogicTests.swift */,
+				L1000002000000000000002F /* CSVImportLogicTests.swift */,
+				L1000002000000000000003B /* RegisterIdLogicTests.swift */,
+				L1000002000000000000003C /* ListerOidcRedirectLogicTests.swift */,
+				L1000002000000000000003E /* BarcodeNormalizeLogicTests.swift */,
 				L1000002000000000000000F /* InfoPlistTests.swift */,
 			);
 			path = CloudStoreListerTests;
@@ -134,14 +218,38 @@
 			isa = PBXGroup;
 			children = (
 				L10000020000000000000005 /* InventoryAPIClient.swift */,
+				L10000020000000000000035 /* CashierSessionModels.swift */,
+				L10000020000000000000036 /* ListerAPIClient.swift */,
 			);
 			path = API;
+			sourceTree = "<group>";
+		};
+		L1000004000000000000000F /* Session */ = {
+			isa = PBXGroup;
+			children = (
+				L10000020000000000000030 /* RegisterIdLogic.swift */,
+				L10000020000000000000031 /* RegisterId.swift */,
+				L10000020000000000000032 /* CookieStore.swift */,
+				L10000020000000000000033 /* ListerOidcRedirectLogic.swift */,
+				L10000020000000000000034 /* WebViewCookieSync.swift */,
+			);
+			path = Session;
+			sourceTree = "<group>";
+		};
+		L10000040000000000000010 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				L10000020000000000000038 /* SignInView.swift */,
+				L10000020000000000000039 /* OidcWebView.swift */,
+			);
+			path = Auth;
 			sourceTree = "<group>";
 		};
 		L10000040000000000000007 /* Models */ = {
 			isa = PBXGroup;
 			children = (
 				L10000020000000000000006 /* InventoryProduct.swift */,
+				L1000002000000000000001D /* InventoryListModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -150,6 +258,12 @@
 			isa = PBXGroup;
 			children = (
 				L10000020000000000000007 /* InventoryDisplayLogic.swift */,
+				L1000002000000000000001C /* ListStoreLogic.swift */,
+				L10000020000000000000023 /* ListQueryLogic.swift */,
+				L10000020000000000000026 /* ListExportLogic.swift */,
+				L10000020000000000000029 /* ListSortLogic.swift */,
+				L1000002000000000000002E /* CSVImportLogic.swift */,
+				L1000002000000000000003D /* BarcodeNormalizeLogic.swift */,
 			);
 			path = Logic;
 			sourceTree = "<group>";
@@ -158,6 +272,7 @@
 			isa = PBXGroup;
 			children = (
 				L10000020000000000000008 /* InventoryLookupViewModel.swift */,
+				L10000020000000000000037 /* ListerAuthViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -165,12 +280,58 @@
 		L1000004000000000000000A /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				L10000020000000000000018 /* ContentView.swift */,
+				L1000002000000000000003A /* RootView.swift */,
 				L10000020000000000000009 /* ListerColors.swift */,
 				L1000002000000000000000A /* NumericKeypadGrid.swift */,
 				L1000002000000000000000B /* ProductCardView.swift */,
-				L1000002000000000000000C /* InventoryLookupView.swift */,
+				L1000002000000000000001E /* ProductFieldRow.swift */,
+				L1000004000000000000000B /* Input */,
+				L1000004000000000000000C /* Results */,
+				L1000004000000000000000D /* Lists */,
+				L1000004000000000000000E /* Operations */,
+				L10000040000000000000010 /* Auth */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		L1000004000000000000000B /* Input */ = {
+			isa = PBXGroup;
+			children = (
+				L10000020000000000000019 /* LookupInputView.swift */,
+				L1000002000000000000002B /* ManualInputView.swift */,
+				L1000002000000000000002C /* BarcodeScannerView.swift */,
+				L1000002000000000000002D /* CSVImportView.swift */,
+			);
+			path = Input;
+			sourceTree = "<group>";
+		};
+		L1000004000000000000000C /* Results */ = {
+			isa = PBXGroup;
+			children = (
+				L1000002000000000000001A /* LookupResultsView.swift */,
+			);
+			path = Results;
+			sourceTree = "<group>";
+		};
+		L1000004000000000000000D /* Lists */ = {
+			isa = PBXGroup;
+			children = (
+				L1000002000000000000001B /* ListsView.swift */,
+				L1000002000000000000001F /* ListItemRow.swift */,
+				L10000020000000000000020 /* AllListsView.swift */,
+				L10000020000000000000027 /* ActivityShareSheet.swift */,
+			);
+			path = Lists;
+			sourceTree = "<group>";
+		};
+		L1000004000000000000000E /* Operations */ = {
+			isa = PBXGroup;
+			children = (
+				L10000020000000000000022 /* ListOperationsView.swift */,
+				L10000020000000000000024 /* ListQueryOperationView.swift */,
+			);
+			path = Operations;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -282,7 +443,37 @@
 				L10000010000000000000009 /* ListerColors.swift in Sources */,
 				L1000001000000000000000A /* NumericKeypadGrid.swift in Sources */,
 				L1000001000000000000000B /* ProductCardView.swift in Sources */,
-				L1000001000000000000000C /* InventoryLookupView.swift in Sources */,
+				L10000010000000000000013 /* ContentView.swift in Sources */,
+				L10000010000000000000014 /* LookupInputView.swift in Sources */,
+				L10000010000000000000015 /* LookupResultsView.swift in Sources */,
+				L10000010000000000000016 /* ListsView.swift in Sources */,
+				L10000010000000000000017 /* ListStoreLogic.swift in Sources */,
+				L10000010000000000000018 /* InventoryListModels.swift in Sources */,
+				L10000010000000000000019 /* ProductFieldRow.swift in Sources */,
+				L1000001000000000000001A /* ListItemRow.swift in Sources */,
+				L1000001000000000000001B /* AllListsView.swift in Sources */,
+				L1000001000000000000001D /* ListOperationsView.swift in Sources */,
+				L1000001000000000000001E /* ListQueryLogic.swift in Sources */,
+				L1000001000000000000001F /* ListQueryOperationView.swift in Sources */,
+				L10000010000000000000021 /* ListExportLogic.swift in Sources */,
+				L10000010000000000000022 /* ActivityShareSheet.swift in Sources */,
+				L10000010000000000000024 /* ListSortLogic.swift in Sources */,
+				L10000010000000000000026 /* ManualInputView.swift in Sources */,
+				L10000010000000000000027 /* BarcodeScannerView.swift in Sources */,
+				L10000010000000000000028 /* CSVImportView.swift in Sources */,
+				L10000010000000000000029 /* CSVImportLogic.swift in Sources */,
+				L10000010000000000000038 /* BarcodeNormalizeLogic.swift in Sources */,
+				L1000001000000000000002B /* RegisterIdLogic.swift in Sources */,
+				L1000001000000000000002C /* RegisterId.swift in Sources */,
+				L1000001000000000000002D /* CookieStore.swift in Sources */,
+				L1000001000000000000002E /* ListerOidcRedirectLogic.swift in Sources */,
+				L1000001000000000000002F /* WebViewCookieSync.swift in Sources */,
+				L10000010000000000000030 /* CashierSessionModels.swift in Sources */,
+				L10000010000000000000031 /* ListerAPIClient.swift in Sources */,
+				L10000010000000000000032 /* ListerAuthViewModel.swift in Sources */,
+				L10000010000000000000033 /* SignInView.swift in Sources */,
+				L10000010000000000000034 /* OidcWebView.swift in Sources */,
+				L10000010000000000000035 /* RootView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -292,6 +483,14 @@
 			files = (
 				L1000001000000000000000D /* AppConfigLogicTests.swift in Sources */,
 				L1000001000000000000000E /* InventoryDisplayLogicTests.swift in Sources */,
+				L1000001000000000000001C /* ListStoreLogicTests.swift in Sources */,
+				L10000010000000000000020 /* ListQueryLogicTests.swift in Sources */,
+				L10000010000000000000023 /* ListExportLogicTests.swift in Sources */,
+				L10000010000000000000025 /* ListSortLogicTests.swift in Sources */,
+				L1000001000000000000002A /* CSVImportLogicTests.swift in Sources */,
+				L10000010000000000000036 /* RegisterIdLogicTests.swift in Sources */,
+				L10000010000000000000037 /* ListerOidcRedirectLogicTests.swift in Sources */,
+				L10000010000000000000039 /* BarcodeNormalizeLogicTests.swift in Sources */,
 				L1000001000000000000000F /* InfoPlistTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

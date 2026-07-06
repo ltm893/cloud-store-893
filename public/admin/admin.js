@@ -436,6 +436,12 @@ async function loadTable(name) {
         setStatus,
       });
     }
+    if (window.AdminBarcodesReport) {
+      window.AdminBarcodesReport.configure({
+        apiFetch,
+        setStatus,
+      });
+    }
     if (window.AdminSystems) {
       window.AdminSystems.configure({
         apiFetch,

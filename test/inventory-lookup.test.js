@@ -67,6 +67,30 @@ test('lookupProductByQuery finds product by id', async () => {
   assert.ok(calls.some((p) => p.startsWith('products/?q=')));
 });
 
+test('lookupProductByQuery finds product by barcode variants', async () => {
+  const product = {
+    id: 18,
+    barcode: '872000000402',
+    name: 'Crystal Spring 1L Bottled Water',
+    price: 2.5,
+    sale_price: null,
+    track_inventory: 1,
+    tax_exempt: 0,
+  };
+  const ordsGet = async (path) => {
+    if (!path.startsWith('products/?q=')) return [];
+    const decoded = decodeURIComponent(path.slice('products/?q='.length));
+    const filter = JSON.parse(decoded);
+    if (filter.barcode?.$eq === '872000000402') return [product];
+    return [];
+  };
+
+  const result = await lookupProductByQuery(ordsGet, '8720000004021');
+  assert.equal(result.status, 200);
+  assert.equal(result.body.id, 18);
+  assert.equal(result.body.name, 'Crystal Spring 1L Bottled Water');
+});
+
 test('lookupProductByQuery returns 404 when not found', async () => {
   const ordsGet = async () => [];
   const result = await lookupProductByQuery(ordsGet, '404missing');
