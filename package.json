@@ -29,6 +29,7 @@
     "test:ios-pos": "./scripts/ios/run-pos-tests.sh",
     "test:ios-lister": "./scripts/ios/run-lister-tests.sh",
     "test:android-lister": "cd android-lister && ./gradlew :app:testDebugUnitTest",
+    "icons:install": "./scripts/tools/generate-app-icons.sh",
     "android-lister:local-config": "echo \"Use LAN_IP or RELEASE_API_BASE_URL when running ./gradlew in android-lister/\"",
     "ios-pos:local-config": "./scripts/ios/sync-pos-local-config.sh",
     "ios-lister:local-config": "./scripts/ios/sync-lister-local-config.sh",
