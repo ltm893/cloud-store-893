@@ -555,6 +555,61 @@ td.low-stock {
   font-size: 1.05rem;
 }
 
+.reports-chevron-section {
+  border-top: 1px solid var(--border);
+}
+
+.reports-chevron-section:first-of-type {
+  margin-top: 12px;
+}
+
+.reports-chevron-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  border: none;
+  background: transparent;
+  padding: 12px 4px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent-2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.reports-chevron {
+  display: inline-flex;
+  width: 1.25rem;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.reports-chevron::before {
+  content: '›';
+}
+
+.reports-chevron-toggle.open .reports-chevron {
+  transform: rotate(90deg);
+}
+
+.reports-chevron-label {
+  flex: 0 0 auto;
+}
+
+.reports-chevron-panel {
+  padding: 0 4px 12px;
+}
+
+.reports-chevron-panel > h3:first-child,
+.reports-chevron-panel > .hint:first-child {
+  margin-top: 0;
+}
+
 .reports-panel h4 {
   margin: 14px 0 6px;
   font-size: 0.95rem;
@@ -697,14 +752,18 @@ td.low-stock {
   .barcodes-report-controls,
   #status,
   .reports-panel h2,
-  .reports-panel h3:not(:has(+ .barcodes-table-wrap)),
-  .reports-panel h4,
+  .reports-panel > .hint,
+  .reports-chevron-toggle,
+  .reports-chevron-panel > h3,
+  .reports-chevron-panel > h4,
+  .reports-chevron-panel > .hint,
   .report-stats,
   .report-table-wrap:not(.barcodes-table-wrap) {
     display: none !important;
   }
 
   .reports-panel,
+  .reports-chevron-panel[hidden],
   .barcodes-table-wrap {
     display: block !important;
   }

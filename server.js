@@ -270,6 +270,7 @@ const {
   loadConsumptionRulesMap,
   loadInventoryMap,
   lookupProductByQuery,
+  findProductByBarcode,
   mapProductForCashier,
   resolveCartLineTaxExempt,
   recordInventoryMovement,
@@ -471,13 +472,12 @@ app.post('/api/cart/barcode', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'barcode is required' });
   }
 
-  const filter = encodeURIComponent(JSON.stringify({ barcode: { $eq: String(barcode) } }));
-  const products = await ordsGet(`products/?q=${filter}`);
-  if (!products.length) {
+  const product = await findProductByBarcode(ordsGet, String(barcode));
+  if (!product) {
     return res.status(404).json({ error: 'Product not found' });
   }
 
-  const result = await upsertCartLine(Number(products[0].id));
+  const result = await upsertCartLine(Number(product.id));
   if (result.error) {
     const body = { error: result.error };
     if (result.maxOrderable != null && result.maxOrderable > 0) body.maxOrderable = result.maxOrderable;

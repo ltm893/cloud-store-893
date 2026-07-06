@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = InventoryLookupViewModel()
+    @ObservedObject var viewModel: InventoryLookupViewModel
+    let signedInUser: String
+    let onSignOut: () -> Void
     @State private var selectedTab = 0
 
     var body: some View {
@@ -9,6 +11,7 @@ struct ContentView: View {
             NavigationStack {
                 LookupInputView()
             }
+            .listerAccountToolbar(user: signedInUser, onSignOut: onSignOut)
             .tabItem {
                 Label("Input", systemImage: "keyboard")
             }
@@ -17,6 +20,7 @@ struct ContentView: View {
             NavigationStack {
                 LookupResultsView()
             }
+            .listerAccountToolbar(user: signedInUser, onSignOut: onSignOut)
             .tabItem {
                 Label("Results", systemImage: "magnifyingglass")
             }
@@ -25,6 +29,7 @@ struct ContentView: View {
             NavigationStack {
                 ListsView()
             }
+            .listerAccountToolbar(user: signedInUser, onSignOut: onSignOut)
             .tabItem {
                 Label("Lists", systemImage: "list.bullet")
             }
@@ -33,6 +38,21 @@ struct ContentView: View {
         .tint(Color.listerAccent)
         .environmentObject(viewModel)
         .environment(\.selectedTab, $selectedTab)
+    }
+}
+
+private extension View {
+    func listerAccountToolbar(user: String, onSignOut: @escaping () -> Void) -> some View {
+        toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Text(user)
+                    Button("Sign out", role: .destructive, action: onSignOut)
+                } label: {
+                    Image(systemName: "person.circle")
+                }
+            }
+        }
     }
 }
 
@@ -49,6 +69,10 @@ extension EnvironmentValues {
 
 #if DEBUG
 #Preview {
-    ContentView()
+    ContentView(
+        viewModel: InventoryLookupViewModel(),
+        signedInUser: "preview@example.com",
+        onSignOut: {}
+    )
 }
 #endif

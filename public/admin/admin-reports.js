@@ -245,6 +245,16 @@
     }
   }
 
+  function toggleReportsSection(toggleBtn) {
+    const panelId = toggleBtn.getAttribute('aria-controls');
+    const panel = panelId ? document.getElementById(panelId) : null;
+    const open = toggleBtn.getAttribute('aria-expanded') === 'true';
+    const nextOpen = !open;
+    toggleBtn.setAttribute('aria-expanded', String(nextOpen));
+    toggleBtn.classList.toggle('open', nextOpen);
+    if (panel) panel.hidden = !nextOpen;
+  }
+
   function activate() {
     active = true;
     if (reportsPanelEl) reportsPanelEl.hidden = false;
@@ -279,6 +289,10 @@
       event.preventDefault();
       loadOrderDetails();
     }
+  });
+
+  document.querySelectorAll('.reports-chevron-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => toggleReportsSection(btn));
   });
 
   window.AdminReports = {
