@@ -4,7 +4,7 @@ import SwiftUI
 struct CloudStoreListerApp: App {
     var body: some Scene {
         WindowGroup {
-            InventoryLookupView()
+            ContentView()
         }
     }
 }

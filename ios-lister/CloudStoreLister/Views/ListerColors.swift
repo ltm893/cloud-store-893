@@ -18,7 +18,8 @@ extension Color {
 
 extension View {
     func listerNavigationBar() -> some View {
-        toolbarBackground(Color.listerPrimary, for: .navigationBar)
+        navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.listerPrimary, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
     }
