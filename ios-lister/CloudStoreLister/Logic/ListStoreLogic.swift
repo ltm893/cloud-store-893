@@ -121,4 +121,105 @@ enum ListStoreLogic {
         }
         return updated
     }
+
+    /// Merges selected lists into a new list (dedupe by productId, sum pull counts).
+    static func unionLists(
+        ids: [UUID],
+        into newName: String,
+        in lists: [InventoryNamedList]
+    ) -> ([InventoryNamedList], UUID)? {
+        guard ids.count >= 2 else { return nil }
+
+        var merged: [Int: InventoryListItem] = [:]
+        for id in ids {
+            guard let list = lists.first(where: { $0.id == id }) else { continue }
+            for item in list.items {
+                if var existing = merged[item.productId] {
+                    existing.pullCount += item.pullCount
+                    merged[item.productId] = existing
+                } else {
+                    merged[item.productId] = item
+                }
+            }
+        }
+
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = trimmed.isEmpty ? "Union List" : trimmed
+        let listName = uniqueListName(base, existing: lists)
+        let newList = InventoryNamedList(
+            name: listName,
+            items: Array(merged.values),
+            isDefault: false
+        )
+        var updated = lists
+        updated.append(newList)
+        return (updated, newList.id)
+    }
+
+    static func diffLists(aId: UUID, bId: UUID, in lists: [InventoryNamedList]) -> ListDiffResult? {
+        guard let listA = lists.first(where: { $0.id == aId }),
+              let listB = lists.first(where: { $0.id == bId }) else { return nil }
+        let idsA = Set(listA.items.map(\.productId))
+        let idsB = Set(listB.items.map(\.productId))
+        let common = listA.items.filter { idsB.contains($0.productId) }
+        let onlyInA = listA.items.filter { !idsB.contains($0.productId) }
+        let onlyInB = listB.items.filter { !idsA.contains($0.productId) }
+        return ListDiffResult(
+            listAName: listA.name,
+            listBName: listB.name,
+            common: common,
+            onlyInA: onlyInA,
+            onlyInB: onlyInB
+        )
+    }
+
+    enum SplitMode: Equatable {
+        case byNumberOfLists(Int)
+        case byItemsPerList(Int)
+    }
+
+    /// Splits a list into multiple sublists appended to the collection.
+    static func splitList(
+        id: UUID,
+        mode: SplitMode,
+        prefix: String,
+        in lists: [InventoryNamedList]
+    ) -> ([InventoryNamedList], UUID)? {
+        guard let source = lists.first(where: { $0.id == id }),
+              !source.items.isEmpty else { return nil }
+
+        let items = source.items
+        let count = items.count
+
+        let chunkSize: Int
+        switch mode {
+        case .byNumberOfLists(let n):
+            chunkSize = Int(ceil(Double(count) / Double(max(1, n))))
+        case .byItemsPerList(let n):
+            chunkSize = max(1, n)
+        }
+
+        let cleanPrefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? source.name
+            : prefix.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var updated = lists
+        var partIndex = 1
+        var offset = 0
+        var lastId: UUID?
+
+        while offset < count {
+            let slice = Array(items[offset ..< min(offset + chunkSize, count)])
+            let rawName = "\(cleanPrefix)-\(partIndex)"
+            let listName = uniqueListName(rawName, existing: updated)
+            let newList = InventoryNamedList(name: listName, items: slice, isDefault: false)
+            updated.append(newList)
+            lastId = newList.id
+            offset += chunkSize
+            partIndex += 1
+        }
+
+        guard let lastId else { return nil }
+        return (updated, lastId)
+    }
 }

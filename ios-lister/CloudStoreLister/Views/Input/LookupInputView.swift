@@ -1,23 +1,32 @@
 import SwiftUI
 
+private enum InputDestination: Hashable {
+    case manual
+    case barcode
+}
+
 struct LookupInputView: View {
     @EnvironmentObject private var viewModel: InventoryLookupViewModel
-    @Environment(\.selectedTab) private var selectedTab
+    @State private var showCSVImport = false
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text(viewModel.inputText.isEmpty ? "Enter ID or barcode" : viewModel.inputText)
-                .font(.system(size: 28, weight: .medium, design: .monospaced))
-                .frame(maxWidth: .infinity)
-                .frame(height: 64)
-                .background(Color.listerHighlight)
-                .cornerRadius(10)
-                .colorScheme(.light)
-                .padding(.horizontal)
+        VStack(spacing: 20) {
+            Spacer()
 
-            NumericKeypadGrid(inputText: $viewModel.inputText) {
-                viewModel.lookup()
-                selectedTab.wrappedValue = 1
+            NavigationLink(value: InputDestination.barcode) {
+                inputButtonLabel("Barcode Scanner", systemImage: "barcode.viewfinder")
+            }
+            .padding(.horizontal)
+
+            NavigationLink(value: InputDestination.manual) {
+                inputButtonLabel("Manual", systemImage: "123.rectangle")
+            }
+            .padding(.horizontal)
+
+            Button {
+                showCSVImport = true
+            } label: {
+                inputButtonLabel("Import CSV", systemImage: "doc.text")
             }
             .padding(.horizontal)
 
@@ -32,6 +41,28 @@ struct LookupInputView: View {
         .background(Color.listerBackground)
         .navigationTitle("Search Input")
         .listerNavigationBar()
+        .navigationDestination(for: InputDestination.self) { destination in
+            switch destination {
+            case .manual:
+                ManualInputView()
+            case .barcode:
+                BarcodeScannerView()
+            }
+        }
+        .sheet(isPresented: $showCSVImport) {
+            CSVImportView()
+                .environmentObject(viewModel)
+        }
+    }
+
+    private func inputButtonLabel(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.title2)
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.listerPrimary)
+            .foregroundStyle(.white)
+            .cornerRadius(10)
     }
 }
 

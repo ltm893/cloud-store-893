@@ -28,6 +28,20 @@
 		L1000001000000000000001A /* ListItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000001F /* ListItemRow.swift */; };
 		L1000001000000000000001B /* AllListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000020 /* AllListsView.swift */; };
 		L1000001000000000000001C /* ListStoreLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000021 /* ListStoreLogicTests.swift */; };
+		L1000001000000000000001D /* ListOperationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000022 /* ListOperationsView.swift */; };
+		L1000001000000000000001E /* ListQueryLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000023 /* ListQueryLogic.swift */; };
+		L1000001000000000000001F /* ListQueryOperationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000024 /* ListQueryOperationView.swift */; };
+		L10000010000000000000020 /* ListQueryLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000025 /* ListQueryLogicTests.swift */; };
+		L10000010000000000000021 /* ListExportLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000026 /* ListExportLogic.swift */; };
+		L10000010000000000000022 /* ActivityShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000027 /* ActivityShareSheet.swift */; };
+		L10000010000000000000023 /* ListExportLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000028 /* ListExportLogicTests.swift */; };
+		L10000010000000000000024 /* ListSortLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000029 /* ListSortLogic.swift */; };
+		L10000010000000000000025 /* ListSortLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002A /* ListSortLogicTests.swift */; };
+		L10000010000000000000026 /* ManualInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002B /* ManualInputView.swift */; };
+		L10000010000000000000027 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002C /* BarcodeScannerView.swift */; };
+		L10000010000000000000028 /* CSVImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002D /* CSVImportView.swift */; };
+		L10000010000000000000029 /* CSVImportLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002E /* CSVImportLogic.swift */; };
+		L1000001000000000000002A /* CSVImportLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002F /* CSVImportLogicTests.swift */; };
 		L1000001000000000000000D /* AppConfigLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000D /* AppConfigLogicTests.swift */; };
 		L1000001000000000000000E /* InventoryDisplayLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000E /* InventoryDisplayLogicTests.swift */; };
 		L1000001000000000000000F /* InfoPlistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000F /* InfoPlistTests.swift */; };
@@ -55,6 +69,20 @@
 		L1000002000000000000001F /* ListItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemRow.swift; sourceTree = "<group>"; };
 		L10000020000000000000020 /* AllListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllListsView.swift; sourceTree = "<group>"; };
 		L10000020000000000000021 /* ListStoreLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListStoreLogicTests.swift; sourceTree = "<group>"; };
+		L10000020000000000000022 /* ListOperationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListOperationsView.swift; sourceTree = "<group>"; };
+		L10000020000000000000023 /* ListQueryLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListQueryLogic.swift; sourceTree = "<group>"; };
+		L10000020000000000000024 /* ListQueryOperationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListQueryOperationView.swift; sourceTree = "<group>"; };
+		L10000020000000000000025 /* ListQueryLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListQueryLogicTests.swift; sourceTree = "<group>"; };
+		L10000020000000000000026 /* ListExportLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListExportLogic.swift; sourceTree = "<group>"; };
+		L10000020000000000000027 /* ActivityShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityShareSheet.swift; sourceTree = "<group>"; };
+		L10000020000000000000028 /* ListExportLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListExportLogicTests.swift; sourceTree = "<group>"; };
+		L10000020000000000000029 /* ListSortLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSortLogic.swift; sourceTree = "<group>"; };
+		L1000002000000000000002A /* ListSortLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSortLogicTests.swift; sourceTree = "<group>"; };
+		L1000002000000000000002B /* ManualInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualInputView.swift; sourceTree = "<group>"; };
+		L1000002000000000000002C /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
+		L1000002000000000000002D /* CSVImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportView.swift; sourceTree = "<group>"; };
+		L1000002000000000000002E /* CSVImportLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportLogic.swift; sourceTree = "<group>"; };
+		L1000002000000000000002F /* CSVImportLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportLogicTests.swift; sourceTree = "<group>"; };
 		L1000002000000000000000D /* AppConfigLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigLogicTests.swift; sourceTree = "<group>"; };
 		L1000002000000000000000E /* InventoryDisplayLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryDisplayLogicTests.swift; sourceTree = "<group>"; };
 		L1000002000000000000000F /* InfoPlistTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoPlistTests.swift; sourceTree = "<group>"; };
@@ -144,6 +172,10 @@
 				L1000002000000000000000D /* AppConfigLogicTests.swift */,
 				L1000002000000000000000E /* InventoryDisplayLogicTests.swift */,
 				L10000020000000000000021 /* ListStoreLogicTests.swift */,
+				L10000020000000000000025 /* ListQueryLogicTests.swift */,
+				L10000020000000000000028 /* ListExportLogicTests.swift */,
+				L1000002000000000000002A /* ListSortLogicTests.swift */,
+				L1000002000000000000002F /* CSVImportLogicTests.swift */,
 				L1000002000000000000000F /* InfoPlistTests.swift */,
 			);
 			path = CloudStoreListerTests;
@@ -171,6 +203,10 @@
 			children = (
 				L10000020000000000000007 /* InventoryDisplayLogic.swift */,
 				L1000002000000000000001C /* ListStoreLogic.swift */,
+				L10000020000000000000023 /* ListQueryLogic.swift */,
+				L10000020000000000000026 /* ListExportLogic.swift */,
+				L10000020000000000000029 /* ListSortLogic.swift */,
+				L1000002000000000000002E /* CSVImportLogic.swift */,
 			);
 			path = Logic;
 			sourceTree = "<group>";
@@ -194,6 +230,7 @@
 				L1000004000000000000000B /* Input */,
 				L1000004000000000000000C /* Results */,
 				L1000004000000000000000D /* Lists */,
+				L1000004000000000000000E /* Operations */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -202,6 +239,9 @@
 			isa = PBXGroup;
 			children = (
 				L10000020000000000000019 /* LookupInputView.swift */,
+				L1000002000000000000002B /* ManualInputView.swift */,
+				L1000002000000000000002C /* BarcodeScannerView.swift */,
+				L1000002000000000000002D /* CSVImportView.swift */,
 			);
 			path = Input;
 			sourceTree = "<group>";
@@ -220,8 +260,18 @@
 				L1000002000000000000001B /* ListsView.swift */,
 				L1000002000000000000001F /* ListItemRow.swift */,
 				L10000020000000000000020 /* AllListsView.swift */,
+				L10000020000000000000027 /* ActivityShareSheet.swift */,
 			);
 			path = Lists;
+			sourceTree = "<group>";
+		};
+		L1000004000000000000000E /* Operations */ = {
+			isa = PBXGroup;
+			children = (
+				L10000020000000000000022 /* ListOperationsView.swift */,
+				L10000020000000000000024 /* ListQueryOperationView.swift */,
+			);
+			path = Operations;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -342,6 +392,16 @@
 				L10000010000000000000019 /* ProductFieldRow.swift in Sources */,
 				L1000001000000000000001A /* ListItemRow.swift in Sources */,
 				L1000001000000000000001B /* AllListsView.swift in Sources */,
+				L1000001000000000000001D /* ListOperationsView.swift in Sources */,
+				L1000001000000000000001E /* ListQueryLogic.swift in Sources */,
+				L1000001000000000000001F /* ListQueryOperationView.swift in Sources */,
+				L10000010000000000000021 /* ListExportLogic.swift in Sources */,
+				L10000010000000000000022 /* ActivityShareSheet.swift in Sources */,
+				L10000010000000000000024 /* ListSortLogic.swift in Sources */,
+				L10000010000000000000026 /* ManualInputView.swift in Sources */,
+				L10000010000000000000027 /* BarcodeScannerView.swift in Sources */,
+				L10000010000000000000028 /* CSVImportView.swift in Sources */,
+				L10000010000000000000029 /* CSVImportLogic.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -352,6 +412,10 @@
 				L1000001000000000000000D /* AppConfigLogicTests.swift in Sources */,
 				L1000001000000000000000E /* InventoryDisplayLogicTests.swift in Sources */,
 				L1000001000000000000001C /* ListStoreLogicTests.swift in Sources */,
+				L10000010000000000000020 /* ListQueryLogicTests.swift in Sources */,
+				L10000010000000000000023 /* ListExportLogicTests.swift in Sources */,
+				L10000010000000000000025 /* ListSortLogicTests.swift in Sources */,
+				L1000001000000000000002A /* CSVImportLogicTests.swift in Sources */,
 				L1000001000000000000000F /* InfoPlistTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

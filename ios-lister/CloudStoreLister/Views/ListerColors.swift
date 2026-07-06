@@ -23,4 +23,9 @@ extension View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
     }
+
+    func listerSegmentedPicker() -> some View {
+        pickerStyle(.segmented)
+            .tint(Color.listerAccent)
+    }
 }

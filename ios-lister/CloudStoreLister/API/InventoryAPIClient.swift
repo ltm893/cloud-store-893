@@ -42,4 +42,8 @@ final class InventoryAPIClient {
         }
         return try JSONDecoder().decode(InventoryProduct.self, from: data)
     }
+
+    func lookup(productId: Int) async throws -> InventoryProduct {
+        try await lookup(query: "\(productId)")
+    }
 }

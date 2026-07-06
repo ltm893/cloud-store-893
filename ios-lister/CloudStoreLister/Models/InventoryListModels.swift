@@ -57,6 +57,44 @@ struct InventoryListItem: Identifiable, Codable, Equatable {
             stockEmphasis: product.lowStock || !product.inStock
         )
     }
+
+    func refreshed(from product: InventoryProduct, preservingPullCount pullCount: Int? = nil) -> InventoryListItem {
+        InventoryListItem(
+            productId: product.id,
+            barcode: product.barcode,
+            name: product.name,
+            productType: product.productType,
+            manufacturer: product.manufacturer,
+            priceLabel: InventoryDisplayLogic.priceDetail(
+                regularPrice: product.regularPrice,
+                onSale: product.onSale,
+                salePrice: product.salePrice
+            ),
+            stockLabel: InventoryDisplayLogic.stockLabel(
+                trackInventory: product.trackInventory,
+                quantityOnHand: product.quantityOnHand,
+                inStock: product.inStock,
+                lowStock: product.lowStock
+            ),
+            stockEmphasis: product.lowStock || !product.inStock,
+            pullCount: pullCount ?? self.pullCount
+        )
+    }
+
+    func withLookupFailure(_ message: String) -> InventoryListItem {
+        InventoryListItem(
+            id: id,
+            productId: productId,
+            barcode: barcode,
+            name: name,
+            productType: productType,
+            manufacturer: manufacturer,
+            priceLabel: priceLabel,
+            stockLabel: message,
+            stockEmphasis: true,
+            pullCount: pullCount
+        )
+    }
 }
 
 struct InventoryNamedList: Identifiable, Codable, Equatable {
@@ -76,4 +114,12 @@ struct InventoryNamedList: Identifiable, Codable, Equatable {
 enum InventoryListDefaults {
     static let myListId = UUID(uuidString: "A0000000-0000-4000-8000-000000000001")!
     static let myListName = "MyList"
+}
+
+struct ListDiffResult {
+    let listAName: String
+    let listBName: String
+    let common: [InventoryListItem]
+    let onlyInA: [InventoryListItem]
+    let onlyInB: [InventoryListItem]
 }
