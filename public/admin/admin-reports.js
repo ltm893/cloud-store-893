@@ -250,11 +250,13 @@
     if (reportsPanelEl) reportsPanelEl.hidden = false;
     if (anchorInputEl && !anchorInputEl.value) anchorInputEl.value = todayAnchor();
     loadReports();
+    window.AdminBarcodesReport?.activate?.();
   }
 
   function deactivate() {
     active = false;
     if (reportsPanelEl) reportsPanelEl.hidden = true;
+    window.AdminBarcodesReport?.deactivate?.();
   }
 
   function openPanel() {
