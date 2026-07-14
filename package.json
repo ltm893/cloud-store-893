@@ -35,6 +35,8 @@
     "ios-lister:local-config": "./scripts/ios/sync-lister-local-config.sh",
     "migrate-db:till": "./scripts/db/migrate/migrate-login-approval-till.sh",
     "db:run-sql": "./scripts/db/run-sql.sh",
+    "db:pg:up": "docker compose up -d postgres",
+    "db:pg:migrate": "./scripts/db/postgres/migrate.sh",
     "verify:test-sales-matrix": "./scripts/db/run-sql.sh scripts/db/verify-test-sales-matrix.sql",
     "ios:local-config": "./scripts/ios/sync-local-config.sh",
     "ios:testflight": "./scripts/ios/testflight-upload.sh both",
@@ -48,6 +50,7 @@
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "jose": "^6.0.11"
+    "jose": "^6.0.11",
+    "pg": "^8.22.0"
   }
 }

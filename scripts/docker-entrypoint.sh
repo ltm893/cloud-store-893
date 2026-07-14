@@ -1,6 +1,11 @@
 #!/bin/sh
 # Start Node and optionally Cloudflare Tunnel (when CLOUDFLARE_TUNNEL_TOKEN is set).
+# If arguments are passed (ECS command / docker run …), exec them instead of the app server.
 set -e
+
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
 
 PORT="${PORT:-3000}"
 NODE_PID=""

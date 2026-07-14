@@ -1,0 +1,24 @@
+# Copy to terraform.tfvars and adjust. Do not commit terraform.tfvars with real secrets.
+
+aws_region      = "us-east-1"
+environment     = "dev"
+project_name    = "cloud-store-893"
+app_hostname    = "aws.cloudstore893.com"
+route53_zone_name = "cloudstore893.com"
+create_dns_record = true
+
+# PINs (also written into Secrets Manager)
+cashier_pin = "8930"
+admin_pin   = "8930"
+
+# Image tag applied by terraform; redeploy script overrides via -var or updates service
+image_tag = "latest"
+
+fargate_cpu    = 512
+fargate_memory = 1024
+desired_count  = 1
+
+aurora_min_capacity = 0.5
+aurora_max_capacity = 2
+db_name             = "cloudstore"
+db_master_username  = "cloudstore"

@@ -3,13 +3,6 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const ORDS_BASE = process.env.ORDS_BASE_URL;
-
-if (!ORDS_BASE) {
-  console.error('❌ ORDS_BASE_URL is not set. Create a .env file — see .env.example');
-  process.exit(1);
-}
-
 app.use(express.json());
 
 const { getBuildInfo } = require('./lib/build-info');
@@ -17,18 +10,34 @@ const { getBuildInfo } = require('./lib/build-info');
 const { registerSystemsRoutes } = require('./lib/systems-routes');
 registerSystemsRoutes(app);
 
-// ── ORDS client ───────────────────────────────────────────────────────────
+// ── Data client (ORDS on OCI / Postgres on AWS) ────────────────────────────
 
-const { createOrdsClient } = require('./lib/ords-client');
+const { createDataClient } = require('./lib/pg/data-client');
 const { asyncHandler } = require('./lib/async-handler');
-const {
-  ordsGet,
-  ordsTryGet,
-  ordsPost,
-  ordsPut,
-  ordsDelete,
-  ordsTimestamp,
-} = createOrdsClient(ORDS_BASE);
+
+let dataBackend;
+let ordsGet;
+let ordsTryGet;
+let ordsPost;
+let ordsPut;
+let ordsDelete;
+let ordsTimestamp;
+
+try {
+  const data = createDataClient();
+  dataBackend = data.backend;
+  ({
+    ordsGet,
+    ordsTryGet,
+    ordsPost,
+    ordsPut,
+    ordsDelete,
+    ordsTimestamp,
+  } = data.client);
+} catch (err) {
+  console.error(`❌ ${err.message}`);
+  process.exit(1);
+}
 
 const { createLoginApprovalStore } = require('./lib/login-approval');
 const loginApprovalStore = createLoginApprovalStore({
@@ -107,7 +116,7 @@ const { posRatesFromEnv } = require('./lib/pos-pricing');
 const POS_RATES = posRatesFromEnv();
 
 app.get('/api/build-info', (req, res) => {
-  res.json({ ...getBuildInfo(), posRates: POS_RATES });
+  res.json({ ...getBuildInfo(), posRates: POS_RATES, dataBackend });
 });
 
 /** Post sales row; retry without cash-rounding columns when DB migration is not applied yet. */
@@ -756,7 +765,7 @@ const { startServer } = require('./lib/start-server');
 const { server, scheme } = startServer(app, PORT);
 server.on('listening', () => {
   console.log(`✅ Cart app running on ${scheme}://localhost:${PORT}`);
-  console.log(`🗄  ORDS base: ${ORDS_BASE}`);
+  console.log(`🗄  Data backend: ${dataBackend}`);
   if (loginApprovalStore?.probeTillColumns) {
     loginApprovalStore
       .probeTillColumns()

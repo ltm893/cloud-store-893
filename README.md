@@ -1,6 +1,8 @@
 # Cloud Store 893
 
-Is an open source containerized Node.js Point of Sale System running Oracle Cloud Infrastructure (OCI).
+Is an open source containerized Node.js Point of Sale System. Production POC runs on **Oracle Cloud Infrastructure (OCI)**; a parallel environment runs on **AWS** (`aws.cloudstore893.com`).
+
+See [docs/aws-deploy.md](docs/aws-deploy.md) for the AWS stack (Terraform, Fargate, Aurora PostgreSQL).
 
 
 ---

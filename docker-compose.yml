@@ -1,0 +1,21 @@
+# Local Postgres for DATA_BACKEND=postgres (does not replace OCI ORDS).
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cloud-store-893-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: cloudstore
+      POSTGRES_PASSWORD: cloudstore
+      POSTGRES_DB: cloudstore
+    volumes:
+      - cloud_store_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudstore -d cloudstore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  cloud_store_pg_data:

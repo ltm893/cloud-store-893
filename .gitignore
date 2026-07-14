@@ -53,6 +53,14 @@ terraform/terraform.dev.tfstate
 terraform/terraform.dev.tfstate.backup
 terraform/terraform.dev.tfstate.*.backup
 
+# AWS Terraform (parallel stack — see terraform-aws/)
+terraform-aws/terraform.tfvars
+terraform-aws/.terraform/
+terraform-aws/tfplan
+terraform-aws/terraform.tfstate
+terraform-aws/terraform.tfstate.backup
+terraform-aws/terraform.tfstate.*.backup
+
 # Dev OCI env (local ORDS pointer — optional)
 .env.dev
 
