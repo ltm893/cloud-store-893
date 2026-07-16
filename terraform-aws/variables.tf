@@ -72,26 +72,26 @@ variable "desired_count" {
   default     = 1
 }
 
-variable "aurora_min_capacity" {
-  description = "Aurora Serverless v2 minimum ACU"
-  type        = number
-  default     = 0.5
+variable "db_instance_class" {
+  description = "RDS PostgreSQL instance class"
+  type        = string
+  default     = "db.t4g.micro"
 }
 
-variable "aurora_max_capacity" {
-  description = "Aurora Serverless v2 maximum ACU"
+variable "db_allocated_storage" {
+  description = "RDS allocated storage in GB"
   type        = number
-  default     = 2
+  default     = 20
 }
 
 variable "db_name" {
-  description = "Initial Aurora database name"
+  description = "Initial RDS database name"
   type        = string
   default     = "cloudstore"
 }
 
 variable "db_master_username" {
-  description = "Aurora master username"
+  description = "RDS master username"
   type        = string
   default     = "cloudstore"
 }

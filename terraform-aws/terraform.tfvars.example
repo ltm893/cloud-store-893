@@ -1,9 +1,9 @@
 # Copy to terraform.tfvars and adjust. Do not commit terraform.tfvars with real secrets.
 
-aws_region      = "us-east-1"
-environment     = "dev"
-project_name    = "cloud-store-893"
-app_hostname    = "aws.cloudstore893.com"
+aws_region        = "us-east-1"
+environment       = "dev"
+project_name      = "cloud-store-893"
+app_hostname      = "aws.cloudstore893.com"
 route53_zone_name = "cloudstore893.com"
 create_dns_record = true
 
@@ -18,7 +18,8 @@ fargate_cpu    = 512
 fargate_memory = 1024
 desired_count  = 1
 
-aurora_min_capacity = 0.5
-aurora_max_capacity = 2
-db_name             = "cloudstore"
-db_master_username  = "cloudstore"
+# RDS PostgreSQL (destroy-friendly POC sizing)
+db_instance_class    = "db.t4g.micro"
+db_allocated_storage = 20
+db_name              = "cloudstore"
+db_master_username   = "cloudstore"

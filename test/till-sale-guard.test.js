@@ -91,7 +91,7 @@ test('assertOpenForSale allows active till and POS session', async () => {
     tillStore,
     posSessionStore,
     shiftCloseStore,
-    getActiveCashierSession: () => ({ tillId: 10, posSessionId: 99 }),
+    getActiveCashierSession: async () => ({ tillId: 10, posSessionId: 99 }),
   });
 
   const result = await guard.assertOpenForSale({});
@@ -118,7 +118,7 @@ test('assertOpenForSale rejects force-closed till with supervisor message', asyn
     tillStore,
     posSessionStore,
     shiftCloseStore,
-    getActiveCashierSession: () => ({ tillId: 10, posSessionId: 99 }),
+    getActiveCashierSession: async () => ({ tillId: 10, posSessionId: 99 }),
   });
 
   const result = await guard.assertOpenForSale({});
@@ -146,7 +146,7 @@ test('sessionFlags reports blocked sale for force-closed till', async () => {
     tillStore,
     posSessionStore,
     shiftCloseStore,
-    getActiveCashierSession: () => ({ tillId: 10, posSessionId: 99 }),
+    getActiveCashierSession: async () => ({ tillId: 10, posSessionId: 99 }),
   });
 
   const flags = await guard.sessionFlags({ tillId: 10, posSessionId: 99 });

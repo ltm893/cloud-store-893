@@ -2,9 +2,37 @@
 
 **Onboard another developer:** [docs/developer-handoff.md](docs/developer-handoff.md) (tarball, IAM, dev IdP, tablet).
 
-Last updated: 2026-07-14
+Last updated: 2026-07-15
 
 Use this file to resume work in a new session. Canonical setup details live in [README.md](README.md).
+
+---
+
+## Changelog (2026-07-15)
+
+| Area | Change |
+|------|--------|
+| **AWS hybrid** | Aurora → **RDS Postgres** (`db.t4g.micro`) + **DynamoDB** on-demand table; ECS `DATA_BACKEND=hybrid`. |
+| **App** | `lib/dynamo/*` (sessions/cart/products/events); pluggable `SESSION_BACKEND`; checkout commits to RDS then clears Dynamo cart. |
+| **Phase A keys** | Reserved `OFFLINE#` / `ORDER#` in `lib/dynamo/keys.js` (unused until server drain). |
+| **Local** | `docker compose --profile hybrid` for DynamoDB Local; see [docs/aws-deploy.md](docs/aws-deploy.md). |
+
+### AWS resume (pick up later)
+
+| | |
+|--|--|
+| Public URL | `https://aws.cloudstore893.com/` (when applied) |
+| Region | `us-east-1` |
+| IaC | `terraform-aws/` — **RDS Postgres** + **DynamoDB** hybrid; apply/destroy for cost control |
+| Data | `DATA_BACKEND=hybrid`: Dynamo sessions/carts/cache/events; RDS sales/inventory/tills |
+| Offline | Phase B (client-local queues). Phase A: reserved `OFFLINE#` keys in `lib/dynamo/keys.js` |
+| Auth (v1) | PIN only. Cognito later. |
+| Redeploy | `./scripts/aws/redeploy-app-code.sh` |
+| Full deploy | `./scripts/aws/deploy.sh` |
+| Tear down | `cd terraform-aws && terraform destroy` |
+| Smoke (after apply) | `GET /api/build-info` → `hybrid: true`; PIN unlock; add to cart; checkout |
+
+**Still open:** Cognito; phase A offline drain; optional Multi-AZ RDS.
 
 ---
 
@@ -12,28 +40,10 @@ Use this file to resume work in a new session. Canonical setup details live in [
 
 | Area | Change |
 |------|--------|
-| **AWS parallel env** | `terraform-aws/` — VPC, ECR, ECS Fargate (ARM64), ALB+ACM, Aurora PostgreSQL Serverless v2, Secrets Manager, Route 53 `aws.cloudstore893.com`. Live: `https://aws.cloudstore893.com/` (`DATA_BACKEND=postgres`). OCI unchanged. |
-| **Dual data backend** | `DATA_BACKEND=ords\|postgres`; Postgres AutoREST shim in `lib/pg/`; schema/seed in `scripts/db/postgres/`. |
+| **AWS parallel env** | `terraform-aws/` — VPC, ECR, ECS Fargate, ALB+ACM, Secrets Manager, Route 53 `aws.cloudstore893.com`. OCI unchanged. |
+| **Dual/hybrid data** | Early postgres path; later superseded by hybrid (see 2026-07-15). |
 | **Deploy** | `./scripts/aws/deploy.sh`, `./scripts/aws/redeploy-app-code.sh`, [docs/aws-deploy.md](docs/aws-deploy.md). |
 | **Credit-only till guard** | `lib/till-sale-guard.js` allows PIN sessions without a till when `OPENING_CASH_FLOAT` is unset. |
-
-### AWS resume (pick up later)
-
-| | |
-|--|--|
-| Public URL | `https://aws.cloudstore893.com/` |
-| Region | `us-east-1` |
-| IaC | `terraform-aws/` (local state on deploy machine — **not** committed; `terraform.tfvars` gitignored) |
-| App data | Aurora Postgres via `DATA_BACKEND=postgres` + Secrets Manager `DATABASE_URL` |
-| Auth (v1) | PIN only (`CASHIER_PIN` / `ADMIN_PIN` in Secrets Manager). **Cognito later.** |
-| Redeploy | `./scripts/aws/redeploy-app-code.sh` |
-| Full deploy | `./scripts/aws/deploy.sh` |
-| Local PG | `docker compose up -d postgres` → `npm run db:pg:migrate` → `DATA_BACKEND=postgres` |
-| Smoke done | `/api/build-info` (`dataBackend: postgres`), PIN unlock, card checkout |
-| Tear down | `cd terraform-aws && terraform destroy` (~$110–160/mo while running) |
-| Tablets | Defaults still OCI; override `API_BASE_URL` / xcconfig to hit AWS |
-
-**Still open:** Cognito IdP wiring; optional multi-AZ / larger Fargate; shared/remote Terraform state (S3 backend).
 
 ---
 
@@ -65,7 +75,7 @@ Session notes for work landed this day — see linked docs for detail.
 | **iPad POS** (`ios-pos/`) | Auth + opening till + register selling + till close + offline queue (P0–P3.3, P3.5). See [ios-pos/README.md](ios-pos/README.md). |
 | **Local dev** | `npm run dev:up` + `.env` |
 | **OCI app URL** | **`https://oci.cloudstore893.com/`** (no `:3000`) — LB :443 → container :3000 |
-| **AWS app URL** | **`https://aws.cloudstore893.com/`** — ALB :443 → Fargate :3000; Aurora Postgres (`DATA_BACKEND=postgres`). See [docs/aws-deploy.md](docs/aws-deploy.md). |
+| **AWS app URL** | **`https://aws.cloudstore893.com/`** when stack is applied — ALB → Fargate; hybrid RDS+DynamoDB. See [docs/aws-deploy.md](docs/aws-deploy.md). |
 | **HTTPS / TLS** | OCI: Let's Encrypt via OCI Certificates; AWS: ACM |
 | **DNS** | `oci.cloudstore893.com` → OCI DNS; `aws.cloudstore893.com` → AWS ALB (Route 53 alias) |
 | **Git** | Feature work on branch `feature/aws-aurora-fargate` (merged to `dev` when ready) |

@@ -31,7 +31,7 @@ terraform apply -input=false -auto-approve \
   -target=aws_route_table_association.private \
   -target=aws_security_group.alb \
   -target=aws_security_group.ecs \
-  -target=aws_security_group.aurora
+  -target=aws_security_group.rds
 
 ECR_URL="$(terraform output -raw ecr_repository_url 2>/dev/null || true)"
 if [[ -z "${ECR_URL}" ]]; then

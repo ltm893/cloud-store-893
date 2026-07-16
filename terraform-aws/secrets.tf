@@ -7,7 +7,7 @@ resource "random_password" "db" {
 
 resource "aws_secretsmanager_secret" "db" {
   name                    = "${local.name_prefix}/db"
-  description             = "Aurora master credentials and connection info"
+  description             = "RDS PostgreSQL credentials and connection info"
   recovery_window_in_days = 0
 }
 
@@ -16,11 +16,11 @@ resource "aws_secretsmanager_secret_version" "db" {
   secret_string = jsonencode({
     username = var.db_master_username
     password = random_password.db.result
-    host     = aws_rds_cluster.main.endpoint
-    port     = 5432
+    host     = aws_db_instance.main.address
+    port     = aws_db_instance.main.port
     dbname   = var.db_name
     engine   = "postgres"
-    url      = "postgresql://${var.db_master_username}:${urlencode(random_password.db.result)}@${aws_rds_cluster.main.endpoint}:5432/${var.db_name}"
+    url      = "postgresql://${var.db_master_username}:${urlencode(random_password.db.result)}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${var.db_name}"
   })
 }
 

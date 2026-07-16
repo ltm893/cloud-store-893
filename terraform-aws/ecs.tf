@@ -102,7 +102,10 @@ resource "aws_ecs_task_definition" "app" {
 
       environment = [
         { name = "PORT", value = "3000" },
-        { name = "DATA_BACKEND", value = "postgres" },
+        { name = "DATA_BACKEND", value = "hybrid" },
+        { name = "SESSION_BACKEND", value = "dynamo" },
+        { name = "DYNAMODB_TABLE", value = aws_dynamodb_table.app.name },
+        { name = "AWS_REGION", value = var.aws_region },
         { name = "CASHIER_SESSION_SECURE", value = "true" },
         { name = "TRUST_PROXY", value = "true" },
         { name = "APP_PUBLIC_URL", value = "https://${var.app_hostname}" },
@@ -167,7 +170,8 @@ resource "aws_ecs_service" "app" {
   depends_on = [
     aws_lb_listener.https,
     aws_iam_role_policy.ecs_execution_secrets,
-    aws_rds_cluster_instance.writer,
+    aws_iam_role_policy.ecs_task_dynamodb,
+    aws_db_instance.main,
   ]
 }
 

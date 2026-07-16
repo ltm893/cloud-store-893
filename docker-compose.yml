@@ -1,4 +1,7 @@
 # Local Postgres for DATA_BACKEND=postgres (does not replace OCI ORDS).
+# Optional DynamoDB Local for hybrid experiments:
+#   docker compose --profile hybrid up -d
+#   DYNAMODB_ENDPOINT=http://127.0.0.1:8000 DYNAMODB_TABLE=...
 services:
   postgres:
     image: postgres:16-alpine
@@ -16,6 +19,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  dynamodb:
+    image: amazon/dynamodb-local:2.5.2
+    container_name: cloud-store-893-dynamodb
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    profiles:
+      - hybrid
 
 volumes:
   cloud_store_pg_data:

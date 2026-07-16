@@ -28,6 +28,8 @@ function mockReq(cookieHeader) {
 
 beforeEach(() => {
   delete process.env.DEV_PERSIST_AUTH_SESSIONS;
+  delete process.env.SESSION_BACKEND;
+  delete process.env.DATA_BACKEND;
 });
 
 test('createSessionStore requires cookieName and storeKey', () => {
@@ -37,17 +39,17 @@ test('createSessionStore requires cookieName and storeKey', () => {
   );
 });
 
-test('createSession and isValidSession round-trip', () => {
+test('createSession and isValidSession round-trip', async () => {
   const store = createSessionStore({ cookieName: 'test_session', storeKey: 'test' });
-  const id = store.createSession({ auth: 'pin', email: 'a@b.com' });
+  const id = await store.createSession({ auth: 'pin', email: 'a@b.com' });
   assert.match(id, /^[a-f0-9]{48}$/);
-  assert.equal(store.isValidSession(id), true);
-  assert.equal(store.getSession(id)?.email, 'a@b.com');
+  assert.equal(await store.isValidSession(id), true);
+  assert.equal((await store.getSession(id))?.email, 'a@b.com');
 });
 
-test('getSessionId reads cookie from request', () => {
+test('getSessionId reads cookie from request', async () => {
   const store = createSessionStore({ cookieName: 'cashier_session', storeKey: 'cashier' });
-  const id = store.createSession();
+  const id = await store.createSession();
   const encoded = encodeURIComponent(id);
   assert.equal(store.getSessionId(mockReq(`cashier_session=${encoded}`)), id);
 });
@@ -100,35 +102,31 @@ test('secure callback is evaluated per cookie', () => {
   assert.match(res.headers['Set-Cookie'], /Secure/);
 });
 
-test('expired sessions are invalid', () => {
+test('expired sessions are invalid', async () => {
   const store = createSessionStore({
     cookieName: 'test_session',
     storeKey: 'test',
     sessionMs: 1,
   });
-  const id = store.createSession();
-  assert.equal(store.isValidSession(id), true);
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      assert.equal(store.isValidSession(id), false);
-      assert.equal(store.getSession(id), null);
-      resolve();
-    }, 5);
-  });
+  const id = await store.createSession();
+  assert.equal(await store.isValidSession(id), true);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(await store.isValidSession(id), false);
+  assert.equal(await store.getSession(id), null);
 });
 
-test('deleteSession removes entry', () => {
+test('deleteSession removes entry', async () => {
   const store = createSessionStore({ cookieName: 'test_session', storeKey: 'test' });
-  const id = store.createSession();
-  store.deleteSession(id);
-  assert.equal(store.isValidSession(id), false);
+  const id = await store.createSession();
+  await store.deleteSession(id);
+  assert.equal(await store.isValidSession(id), false);
 });
 
-test('getSessionFromRequest returns session metadata', () => {
+test('getSessionFromRequest returns session metadata', async () => {
   const store = createSessionStore({ cookieName: 'test_session', storeKey: 'test' });
-  const id = store.createSession({ auth: 'oidc' });
+  const id = await store.createSession({ auth: 'oidc' });
   const req = mockReq(`test_session=${encodeURIComponent(id)}`);
-  assert.equal(store.getSessionFromRequest(req)?.auth, 'oidc');
+  assert.equal((await store.getSessionFromRequest(req))?.auth, 'oidc');
 });
 
 test('DEFAULT_SESSION_MS is eight hours', () => {

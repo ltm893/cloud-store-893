@@ -6,10 +6,27 @@ Parallel environment next to OCI. **OCI stays as-is**; this stack does not modif
 |--|----------------|----------------|
 | URL | `https://oci.cloudstore893.com/` | `https://aws.cloudstore893.com/` |
 | Compute | Container Instance | ECS Fargate (ARM64) |
-| DB | Autonomous DB + ORDS | Aurora PostgreSQL Serverless v2 |
-| App env | `ORDS_BASE_URL` | `DATA_BACKEND=postgres` + `DATABASE_URL` |
+| DB | Autonomous DB + ORDS | **RDS PostgreSQL** + **DynamoDB** (hybrid) |
+| App env | `ORDS_BASE_URL` | `DATA_BACKEND=hybrid` + `DATABASE_URL` + `DYNAMODB_TABLE` |
 | Auth (v1) | PIN + optional IdP | **PIN only** (Cognito later) |
 | IaC | `terraform/` | `terraform-aws/` |
+
+## Hybrid map (phase B)
+
+| DynamoDB | RDS Postgres |
+|----------|--------------|
+| Sessions (TTL) | `sales` / `sale_items` / `sale_payments` |
+| Live carts | Inventory + movements |
+| Product cache (TTL) | Tills / pos_sessions / approvals |
+| Event logs | Customers, products (source of truth) |
+
+**Phase A later:** DynamoDB `OFFLINE#…` / `ORDER#…` keys (reserved in `lib/dynamo/keys.js`) + server drain into Postgres checkout. Tablets keep local offline queues for now.
+
+## Cost control
+
+`terraform apply` when you need the env; **`terraform destroy` when idle**. After a clean destroy you should not pay for RDS/NAT/ALB/Fargate/Dynamo for this stack.
+
+Rough cost **while up** (us-east-1): RDS `db.t4g.micro` ~$14–20 + NAT ~$32 + ALB ~$16–22 + Dynamo pennies + Fargate while tasks run.
 
 ## Prerequisites
 
@@ -17,7 +34,7 @@ Parallel environment next to OCI. **OCI stays as-is**; this stack does not modif
 - Terraform ≥ 1.5
 - Docker (build/push to ECR)
 - `jq`
-- Route 53 public hosted zone for `cloudstore893.com` (already used for OCI delegation)
+- Route 53 public hosted zone for `cloudstore893.com`
 
 ## One-time setup
 
@@ -33,27 +50,11 @@ cp terraform.tfvars.example terraform.tfvars
 ./scripts/aws/deploy.sh
 ```
 
-What it does:
-
-1. `terraform apply` — VPC, NAT, ECR, Aurora, Secrets Manager, ACM, ALB, ECS, Route 53 `aws.cloudstore893.com`
-2. Builds `linux/arm64` image and pushes to ECR
-3. Re-applies with the new `image_tag`
-4. Runs a one-shot ECS migrate task (`scripts/db/postgres/migrate.js` — schema + seed)
-5. Waits for the ECS service to stabilize
-
 Smoke:
 
 ```bash
 curl -sS https://aws.cloudstore893.com/api/build-info
-# expect dataBackend: "postgres"
-```
-
-PIN unlock (cashier defaults from tfvars / Secrets Manager):
-
-```bash
-curl -sS -X POST https://aws.cloudstore893.com/api/cashier/unlock \
-  -H 'Content-Type: application/json' \
-  -d '{"pin":"8930"}' -c /tmp/aws-cashier.txt
+# expect dataBackend: "hybrid", hybrid: true
 ```
 
 ## Redeploy app code only
@@ -62,7 +63,13 @@ curl -sS -X POST https://aws.cloudstore893.com/api/cashier/unlock \
 ./scripts/aws/redeploy-app-code.sh
 ```
 
-## Local Postgres (dual-backend dev)
+## Tear down
+
+```bash
+cd terraform-aws && terraform destroy
+```
+
+## Local Postgres (SQL-only, not full hybrid)
 
 ```bash
 docker compose up -d postgres
@@ -73,16 +80,27 @@ export DATABASE_SSL=false
 npm start
 ```
 
-OCI/local ORDS continues to work with the default `DATA_BACKEND=ords` + `ORDS_BASE_URL`.
+Local hybrid (optional):
 
-## Cost note
+```bash
+docker compose --profile hybrid up -d
+export DATA_BACKEND=hybrid SESSION_BACKEND=dynamo
+export DATABASE_URL=postgresql://cloudstore:cloudstore@127.0.0.1:5432/cloudstore
+export DATABASE_SSL=false
+export DYNAMODB_TABLE=cloud-store-893-dev
+export DYNAMODB_ENDPOINT=http://127.0.0.1:8000
+export AWS_REGION=us-east-1
+# Create the local table once (PK=pk, SK=sk, TTL=expiresAt) then:
+./scripts/db/postgres/migrate.sh
+npm start
+```
 
-Dev-sized stack (single NAT, Fargate 0.5 vCPU / 1 GB, Aurora ~0.5 ACU) is roughly **$110–160/mo** in `us-east-1` when left running 24/7. Tear down with `cd terraform-aws && terraform destroy` when not needed.
+OCI/local ORDS continues with default `DATA_BACKEND=ords` + `ORDS_BASE_URL`.
 
 ## Cognito
 
-Not wired in v1. Node OIDC helpers remain for OCI; AWS task definition leaves IdP env unset and relies on PIN unlock.
+Not wired in v1.
 
 ## Tablet apps
 
-Default Android/iOS builds still target OCI. To test AWS, rebuild with `API_BASE_URL=https://aws.cloudstore893.com/` (Android) or update the iOS xcconfig accordingly.
+Default builds still target OCI. To test AWS, rebuild with `API_BASE_URL=https://aws.cloudstore893.com/`.

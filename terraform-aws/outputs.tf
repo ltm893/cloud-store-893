@@ -33,14 +33,19 @@ output "migrate_task_definition_arn" {
   value       = aws_ecs_task_definition.migrate.arn
 }
 
-output "aurora_endpoint" {
-  description = "Aurora cluster writer endpoint (non-secret host)"
-  value       = aws_rds_cluster.main.endpoint
+output "rds_endpoint" {
+  description = "RDS PostgreSQL endpoint (non-secret host)"
+  value       = aws_db_instance.main.address
 }
 
-output "aurora_db_name" {
-  description = "Aurora database name"
+output "rds_db_name" {
+  description = "RDS database name"
   value       = var.db_name
+}
+
+output "dynamodb_table_name" {
+  description = "DynamoDB table for sessions/carts/cache/events"
+  value       = aws_dynamodb_table.app.name
 }
 
 output "db_secret_arn" {

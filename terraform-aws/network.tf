@@ -168,9 +168,9 @@ resource "aws_security_group" "ecs" {
   }
 }
 
-resource "aws_security_group" "aurora" {
-  name        = "${local.name_prefix}-aurora-sg"
-  description = "Aurora from ECS tasks"
+resource "aws_security_group" "rds" {
+  name        = "${local.name_prefix}-rds-sg"
+  description = "RDS Postgres from ECS tasks"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -189,6 +189,6 @@ resource "aws_security_group" "aurora" {
   }
 
   tags = {
-    Name = "${local.name_prefix}-aurora-sg"
+    Name = "${local.name_prefix}-rds-sg"
   }
 }

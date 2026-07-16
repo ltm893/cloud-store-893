@@ -16,6 +16,7 @@ const { createDataClient } = require('./lib/pg/data-client');
 const { asyncHandler } = require('./lib/async-handler');
 
 let dataBackend;
+let hybridMode = false;
 let ordsGet;
 let ordsTryGet;
 let ordsPost;
@@ -26,6 +27,7 @@ let ordsTimestamp;
 try {
   const data = createDataClient();
   dataBackend = data.backend;
+  hybridMode = Boolean(data.hybrid);
   ({
     ordsGet,
     ordsTryGet,
@@ -38,6 +40,10 @@ try {
   console.error(`❌ ${err.message}`);
   process.exit(1);
 }
+
+const dynamoCart = require('./lib/dynamo/cart');
+const dynamoProducts = require('./lib/dynamo/products');
+const { appendEvent } = require('./lib/dynamo/events');
 
 const { createLoginApprovalStore } = require('./lib/login-approval');
 const loginApprovalStore = createLoginApprovalStore({
@@ -116,7 +122,12 @@ const { posRatesFromEnv } = require('./lib/pos-pricing');
 const POS_RATES = posRatesFromEnv();
 
 app.get('/api/build-info', (req, res) => {
-  res.json({ ...getBuildInfo(), posRates: POS_RATES, dataBackend });
+  res.json({
+    ...getBuildInfo(),
+    posRates: POS_RATES,
+    dataBackend,
+    hybrid: hybridMode,
+  });
 });
 
 /** Post sales row; retry without cash-rounding columns when DB migration is not applied yet. */
@@ -293,6 +304,11 @@ app.get('/api/products', asyncHandler(async (req, res) => {
     ordsGet('products/'),
     loadInventoryMap(ordsGet),
   ]);
+  if (hybridMode) {
+    await dynamoProducts.putProducts(products).catch((err) => {
+      console.warn(`product cache warm failed: ${err.message}`);
+    });
+  }
   res.json(products.map((p) => mapProductForCashier(p, inventoryMap)));
 }));
 
@@ -332,12 +348,23 @@ async function resolveLinked893FromRequest(req) {
   return { linked893: is893Member(row), error: null };
 }
 
-async function fetchCartSummary(linked893) {
-  const [cart, productsById] = await Promise.all([
-    ordsGet('cart_view/'),
-    loadProductsById(),
-  ]);
-  const rows = Array.isArray(cart) ? cart : [];
+async function fetchCartSummary(linked893, req) {
+  let rows;
+  let productsById;
+  if (hybridMode) {
+    await getActiveCashierSession(req);
+    const cartId = dynamoCart.resolveCartId(req);
+    const cartItems = await dynamoCart.listCartItems(cartId);
+    productsById = await loadProductsById();
+    rows = dynamoCart.cartViewRows(cartItems, productsById);
+  } else {
+    const [cart, map] = await Promise.all([
+      ordsGet('cart_view/'),
+      loadProductsById(),
+    ]);
+    productsById = map;
+    rows = Array.isArray(cart) ? cart : [];
+  }
   return summarizeCart(rows, linked893, productsById);
 }
 
@@ -347,17 +374,28 @@ async function respondWithCart(req, res) {
     res.status(400).json({ error });
     return;
   }
-  res.json(await fetchCartSummary(linked893));
+  res.json(await fetchCartSummary(linked893, req));
 }
 
 async function getProductById(productId) {
+  if (hybridMode) {
+    const cached = await dynamoProducts.getProductById(productId);
+    if (cached) return cached;
+  }
   const filter = encodeURIComponent(JSON.stringify({ id: { $eq: Number(productId) } }));
   const products = await ordsGet(`products/?q=${filter}`);
-  return products.length > 0 ? products[0] : null;
+  const product = products.length > 0 ? products[0] : null;
+  if (hybridMode && product) {
+    await dynamoProducts.putProduct(product).catch(() => {});
+  }
+  return product;
 }
 
 async function loadProductsById() {
   const products = await ordsGet('products/');
+  if (hybridMode) {
+    await dynamoProducts.putProducts(products).catch(() => {});
+  }
   return new Map(products.map((p) => [Number(p.id), p]));
 }
 
@@ -412,10 +450,34 @@ function cartLinesAfterQuantityChange(cartItems, productId, newQty) {
   return lines;
 }
 
-async function upsertCartLine(productId, quantityDelta = 1) {
+async function upsertCartLine(productId, quantityDelta = 1, req = null) {
   const product = await getProductById(productId);
   if (!product) {
     return { error: 'Product not found', status: 404 };
+  }
+
+  if (hybridMode) {
+    await getActiveCashierSession(req);
+    const cartId = dynamoCart.resolveCartId(req);
+    const cartItems = await dynamoCart.listCartItems(cartId);
+    const existing = cartItems.find((r) => Number(r.product_id) === Number(productId));
+    const currentCartQty = existing ? Number(existing.quantity) : 0;
+    const newQty = currentCartQty + quantityDelta;
+    const cartLines = cartLinesAfterQuantityChange(cartItems, productId, newQty);
+    const validation = await validateCartLines(cartLines);
+    if (validation.error) {
+      return {
+        error: validation.error,
+        status: validation.status || 409,
+        maxOrderable: validation.maxOrderable,
+      };
+    }
+    if (newQty <= 0) {
+      await dynamoCart.deleteCartItem(cartId, productId);
+    } else {
+      await dynamoCart.putCartItem(cartId, productId, newQty);
+    }
+    return { ok: true };
   }
 
   const filter = encodeURIComponent(JSON.stringify({ product_id: { $eq: productId } }));
@@ -465,7 +527,7 @@ app.post('/api/cart', asyncHandler(async (req, res) => {
     }
   }
 
-  const result = await upsertCartLine(productId, quantityDelta);
+  const result = await upsertCartLine(productId, quantityDelta, req);
   if (result.error) {
     const body = { error: result.error };
     if (result.maxOrderable != null && result.maxOrderable > 0) body.maxOrderable = result.maxOrderable;
@@ -486,7 +548,7 @@ app.post('/api/cart/barcode', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Product not found' });
   }
 
-  const result = await upsertCartLine(Number(product.id));
+  const result = await upsertCartLine(Number(product.id), 1, req);
   if (result.error) {
     const body = { error: result.error };
     if (result.maxOrderable != null && result.maxOrderable > 0) body.maxOrderable = result.maxOrderable;
@@ -500,13 +562,7 @@ app.post('/api/cart/replace', asyncHandler(async (req, res) => {
   if (await rejectClosedTillSale(req, res)) return;
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
 
-  const existing = await ordsGet('cart_items/');
-  for (const row of existing) {
-    await ordsDelete(`cart_items/${row.id}`);
-  }
-
   const requestedByProduct = new Map();
-
   for (const line of items) {
     const productId = Number(line.productId);
     const quantity = Number(line.quantity);
@@ -525,8 +581,21 @@ app.post('/api/cart/replace', asyncHandler(async (req, res) => {
     return res.status(validation.status || 409).json(body);
   }
 
-  for (const [productId, quantity] of requestedByProduct.entries()) {
-    await ordsPost('cart_items/', { product_id: productId, quantity });
+  if (hybridMode) {
+    await getActiveCashierSession(req);
+    const cartId = dynamoCart.resolveCartId(req);
+    await dynamoCart.clearCart(cartId);
+    for (const [productId, quantity] of requestedByProduct.entries()) {
+      await dynamoCart.putCartItem(cartId, productId, quantity);
+    }
+  } else {
+    const existing = await ordsGet('cart_items/');
+    for (const row of existing) {
+      await ordsDelete(`cart_items/${row.id}`);
+    }
+    for (const [productId, quantity] of requestedByProduct.entries()) {
+      await ordsPost('cart_items/', { product_id: productId, quantity });
+    }
   }
 
   await respondWithCart(req, res);
@@ -538,6 +607,32 @@ app.put('/api/cart/:id', asyncHandler(async (req, res) => {
   const quantity = Number(req.body?.quantity);
   if (!Number.isFinite(quantity)) {
     return res.status(400).json({ error: 'quantity must be a number' });
+  }
+
+  if (hybridMode) {
+    await getActiveCashierSession(req);
+    const cartId = dynamoCart.resolveCartId(req);
+    const productId = Number(String(cartItemId).includes(':')
+      ? String(cartItemId).split(':').pop()
+      : cartItemId);
+    if (!Number.isFinite(productId)) {
+      return res.status(400).json({ error: 'Invalid cart item id' });
+    }
+    const cartItems = await dynamoCart.listCartItems(cartId);
+    const cartLines = cartLinesAfterQuantityChange(cartItems, productId, quantity);
+    const validation = await validateCartLines(cartLines);
+    if (validation.error) {
+      const body = { error: validation.error };
+      if (validation.maxOrderable != null && validation.maxOrderable > 0) body.maxOrderable = validation.maxOrderable;
+      return res.status(validation.status || 409).json(body);
+    }
+    if (quantity <= 0) {
+      await dynamoCart.deleteCartItem(cartId, productId);
+    } else {
+      await dynamoCart.putCartItem(cartId, productId, quantity);
+    }
+    await respondWithCart(req, res);
+    return;
   }
 
   if (quantity <= 0) {
@@ -566,7 +661,18 @@ app.put('/api/cart/:id', asyncHandler(async (req, res) => {
 
 app.delete('/api/cart/:id', asyncHandler(async (req, res) => {
   if (await rejectClosedTillSale(req, res)) return;
-  await ordsDelete(`cart_items/${req.params.id}`);
+  if (hybridMode) {
+    await getActiveCashierSession(req);
+    const cartId = dynamoCart.resolveCartId(req);
+    const productId = Number(String(req.params.id).includes(':')
+      ? String(req.params.id).split(':').pop()
+      : req.params.id);
+    if (Number.isFinite(productId)) {
+      await dynamoCart.deleteCartItem(cartId, productId);
+    }
+  } else {
+    await ordsDelete(`cart_items/${req.params.id}`);
+  }
   await respondWithCart(req, res);
 }));
 
@@ -579,8 +685,17 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: checkoutTotalResult.error });
   }
   const clientCheckoutTotal = checkoutTotalResult?.checkoutTotal ?? null;
-  const cartRows = await ordsGet('cart_view/');
-  const rows = Array.isArray(cartRows) ? cartRows : [];
+  let rows;
+  if (hybridMode) {
+    await getActiveCashierSession(req);
+    const cartId = dynamoCart.resolveCartId(req);
+    const cartItems = await dynamoCart.listCartItems(cartId);
+    const productsByIdForView = await loadProductsById();
+    rows = dynamoCart.cartViewRows(cartItems, productsByIdForView);
+  } else {
+    const cartRows = await ordsGet('cart_view/');
+    rows = Array.isArray(cartRows) ? cartRows : [];
+  }
 
   if (!rows.length) {
     return res.status(400).json({ error: 'Cart is empty' });
@@ -630,7 +745,7 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
     payments: persistedPayments,
   } = settlement;
 
-  const cashierSession = getActiveCashierSession(req);
+  const cashierSession = await getActiveCashierSession(req);
   const cashAllowed = sessionAllowsCashPayments(cashierSession);
   const cashPayments = persistedPayments.filter((p) => p.method === 'cash');
   const singleCash = paymentMethod === 'cash';
@@ -712,9 +827,23 @@ app.post('/api/checkout', asyncHandler(async (req, res) => {
     });
   }
 
-  const cartItems = await ordsGet('cart_items/');
-  for (const item of cartItems) {
-    await ordsDelete(`cart_items/${item.id}`);
+  if (hybridMode) {
+    await getActiveCashierSession(req);
+    await dynamoCart.clearCart(dynamoCart.resolveCartId(req));
+  } else {
+    const cartItems = await ordsGet('cart_items/');
+    for (const item of cartItems) {
+      await ordsDelete(`cart_items/${item.id}`);
+    }
+  }
+
+  if (hybridMode) {
+    await appendEvent('checkout', {
+      orderNumber,
+      total: recordedTotal,
+      paymentMethod: recordedPaymentMethod,
+      itemCount: summary.items.reduce((sum, item) => sum + Number(item.quantity), 0),
+    });
   }
 
   return res.json({
