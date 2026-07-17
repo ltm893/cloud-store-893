@@ -63,6 +63,16 @@ curl -sS https://aws.cloudstore893.com/api/build-info
 ./scripts/aws/redeploy-app-code.sh
 ```
 
+## List resources
+
+```bash
+./scripts/aws/list-resources.sh
+# ./scripts/aws/list-resources.sh --region us-east-1
+# ./scripts/aws/list-resources.sh --json
+```
+
+Shows terraform outputs (if state exists), ECS/RDS/Dynamo status, and all resources tagged `Project=cloud-store-893` / `ManagedBy=terraform-aws`.
+
 ## Tear down
 
 ```bash
