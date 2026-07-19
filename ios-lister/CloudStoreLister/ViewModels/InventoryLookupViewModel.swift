@@ -172,6 +172,32 @@ final class InventoryLookupViewModel: ObservableObject {
         saveLists()
     }
 
+    @discardableResult
+    func copyItem(_ item: InventoryListItem, toListId: UUID) -> Bool {
+        guard let updated = ListStoreLogic.copyItem(
+            item,
+            fromActiveListId: activeListId,
+            toListId: toListId,
+            in: lists
+        ) else { return false }
+        lists = updated
+        saveLists()
+        return true
+    }
+
+    @discardableResult
+    func moveItem(_ item: InventoryListItem, toListId: UUID) -> Bool {
+        guard let updated = ListStoreLogic.moveItem(
+            item,
+            fromActiveListId: activeListId,
+            toListId: toListId,
+            in: lists
+        ) else { return false }
+        lists = updated
+        saveLists()
+        return true
+    }
+
     func deleteAllActiveItems() {
         guard let listIndex = lists.firstIndex(where: { $0.id == activeListId }) else { return }
         lists[listIndex].items = []

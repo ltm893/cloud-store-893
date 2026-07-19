@@ -27,6 +27,7 @@
 		L10000010000000000000019 /* ProductFieldRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000001E /* ProductFieldRow.swift */; };
 		L1000001000000000000001A /* ListItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000001F /* ListItemRow.swift */; };
 		L1000001000000000000001B /* AllListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000020 /* AllListsView.swift */; };
+		L1000001000000000000003C /* DestinationListPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000003F /* DestinationListPickerSheet.swift */; };
 		L1000001000000000000001C /* ListStoreLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000021 /* ListStoreLogicTests.swift */; };
 		L1000001000000000000001D /* ListOperationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000022 /* ListOperationsView.swift */; };
 		L1000001000000000000001E /* ListQueryLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000023 /* ListQueryLogic.swift */; };
@@ -82,6 +83,7 @@
 		L1000002000000000000001E /* ProductFieldRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductFieldRow.swift; sourceTree = "<group>"; };
 		L1000002000000000000001F /* ListItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemRow.swift; sourceTree = "<group>"; };
 		L10000020000000000000020 /* AllListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllListsView.swift; sourceTree = "<group>"; };
+		L1000002000000000000003F /* DestinationListPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationListPickerSheet.swift; sourceTree = "<group>"; };
 		L10000020000000000000021 /* ListStoreLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListStoreLogicTests.swift; sourceTree = "<group>"; };
 		L10000020000000000000022 /* ListOperationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListOperationsView.swift; sourceTree = "<group>"; };
 		L10000020000000000000023 /* ListQueryLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListQueryLogic.swift; sourceTree = "<group>"; };
@@ -319,6 +321,7 @@
 			children = (
 				L1000002000000000000001B /* ListsView.swift */,
 				L1000002000000000000001F /* ListItemRow.swift */,
+				L1000002000000000000003F /* DestinationListPickerSheet.swift */,
 				L10000020000000000000020 /* AllListsView.swift */,
 				L10000020000000000000027 /* ActivityShareSheet.swift */,
 			);
@@ -451,6 +454,7 @@
 				L10000010000000000000018 /* InventoryListModels.swift in Sources */,
 				L10000010000000000000019 /* ProductFieldRow.swift in Sources */,
 				L1000001000000000000001A /* ListItemRow.swift in Sources */,
+				L1000001000000000000003C /* DestinationListPickerSheet.swift in Sources */,
 				L1000001000000000000001B /* AllListsView.swift in Sources */,
 				L1000001000000000000001D /* ListOperationsView.swift in Sources */,
 				L1000001000000000000001E /* ListQueryLogic.swift in Sources */,

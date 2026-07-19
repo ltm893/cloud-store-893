@@ -92,6 +92,41 @@ object ListStoreLogic {
         return updated
     }
 
+    /**
+     * Copies [item] into [targetListId] (new id). Same product on target increments pull count.
+     * Returns null if target is missing or equals the source (active) list.
+     */
+    fun copyItem(
+        lists: List<InventoryNamedList>,
+        activeListId: String,
+        item: InventoryListItem,
+        targetListId: String,
+    ): List<InventoryNamedList>? {
+        if (targetListId == activeListId) return null
+        if (lists.none { it.id == targetListId }) return null
+        val clone = item.copy(id = java.util.UUID.randomUUID().toString())
+        return addItem(clone, targetListId, lists)
+    }
+
+    /**
+     * Moves [item] from the active list into [targetListId].
+     * Returns null if the transfer is invalid.
+     */
+    fun moveItem(
+        lists: List<InventoryNamedList>,
+        activeListId: String,
+        item: InventoryListItem,
+        targetListId: String,
+    ): List<InventoryNamedList>? {
+        val source = lists.firstOrNull { it.id == activeListId } ?: return null
+        if (source.items.none { it.id == item.id }) return null
+        val copied = copyItem(lists, activeListId, item, targetListId) ?: return null
+        return copied.map { list ->
+            if (list.id != activeListId) list
+            else list.copy(items = list.items.filter { it.id != item.id })
+        }
+    }
+
     fun incrementPullCount(itemId: String, items: List<InventoryListItem>): List<InventoryListItem> {
         val index = items.indexOfFirst { it.id == itemId }
         if (index < 0) return items

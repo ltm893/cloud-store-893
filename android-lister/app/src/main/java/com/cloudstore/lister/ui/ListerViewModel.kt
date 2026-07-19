@@ -234,6 +234,22 @@ class ListerViewModel(
     fun deleteItem(itemId: String) = mutateActiveItems { it.filter { row -> row.id != itemId } }
     fun clearActiveList() = mutateActiveItems { emptyList() }
 
+    fun copyItem(item: InventoryListItem, toListId: String): Boolean {
+        val current = _state.value
+        val updated = ListStoreLogic.copyItem(current.lists, current.activeListId, item, toListId) ?: return false
+        _state.update { it.copy(lists = updated) }
+        saveLists(updated)
+        return true
+    }
+
+    fun moveItem(item: InventoryListItem, toListId: String): Boolean {
+        val current = _state.value
+        val updated = ListStoreLogic.moveItem(current.lists, current.activeListId, item, toListId) ?: return false
+        _state.update { it.copy(lists = updated) }
+        saveLists(updated)
+        return true
+    }
+
     fun openListOperations() {
         _state.update { it.copy(showListOperations = true) }
     }

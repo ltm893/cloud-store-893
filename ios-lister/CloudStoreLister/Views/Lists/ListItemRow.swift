@@ -4,6 +4,8 @@ struct ListItemRow: View {
     let item: InventoryListItem
     @ObservedObject var viewModel: InventoryLookupViewModel
 
+    @State private var transferMode: ItemTransferMode? = nil
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ProductFieldRow(label: "Name:", value: item.name, valueFont: .headline)
@@ -68,6 +70,24 @@ struct ListItemRow: View {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+            .tint(Color.listerPrimary)
+
+            Button {
+                transferMode = .move
+            } label: {
+                Label("Move", systemImage: "arrow.right.doc.on.clipboard")
+            }
+            .tint(Color.listerRose)
+
+            Button {
+                transferMode = .copy
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            .tint(Color.listerAccent)
+        }
+        .sheet(item: $transferMode) { mode in
+            DestinationListPickerSheet(viewModel: viewModel, item: item, mode: mode)
         }
     }
 }

@@ -169,7 +169,102 @@ final class ListStoreLogicTests: XCTestCase {
         XCTAssertEqual(newLists.map(\.items.count), [2, 2, 1])
     }
 
-    private func sampleItem(productId: Int, name: String = "Sample") -> InventoryListItem {
+    func testCopyItemKeepsSourceAndClonesToTarget() {
+        var lists = ListStoreLogic.bootstrapLists(nil)
+        var targetId: UUID
+        (lists, targetId) = ListStoreLogic.createList(name: "Target", in: lists)
+        let source = sampleItem(productId: 1, name: "Widget", pullCount: 2)
+        lists = ListStoreLogic.addItem(source, toListId: InventoryListDefaults.myListId, in: lists)
+        let stored = lists.first { $0.id == InventoryListDefaults.myListId }!.items.first!
+
+        let updated = ListStoreLogic.copyItem(
+            stored,
+            fromActiveListId: InventoryListDefaults.myListId,
+            toListId: targetId,
+            in: lists
+        )!
+
+        let sourceList = updated.first { $0.id == InventoryListDefaults.myListId }!
+        let targetList = updated.first { $0.id == targetId }!
+        XCTAssertEqual(sourceList.items.count, 1)
+        XCTAssertEqual(targetList.items.count, 1)
+        XCTAssertEqual(targetList.items[0].productId, 1)
+        XCTAssertNotEqual(targetList.items[0].id, stored.id)
+        XCTAssertEqual(targetList.items[0].pullCount, 2)
+    }
+
+    func testCopyItemIncrementsPullWhenProductExistsOnTarget() {
+        var lists = ListStoreLogic.bootstrapLists(nil)
+        var targetId: UUID
+        (lists, targetId) = ListStoreLogic.createList(name: "Target", in: lists)
+        lists = ListStoreLogic.addItem(sampleItem(productId: 1, pullCount: 1), toListId: InventoryListDefaults.myListId, in: lists)
+        lists = ListStoreLogic.addItem(sampleItem(productId: 1, pullCount: 3), toListId: targetId, in: lists)
+        let stored = lists.first { $0.id == InventoryListDefaults.myListId }!.items.first!
+
+        let updated = ListStoreLogic.copyItem(
+            stored,
+            fromActiveListId: InventoryListDefaults.myListId,
+            toListId: targetId,
+            in: lists
+        )!
+
+        let targetList = updated.first { $0.id == targetId }!
+        XCTAssertEqual(targetList.items.count, 1)
+        XCTAssertEqual(targetList.items[0].pullCount, 4)
+    }
+
+    func testCopyItemFailsWhenDestinationIsActiveList() {
+        var lists = ListStoreLogic.bootstrapLists(nil)
+        lists = ListStoreLogic.addItem(sampleItem(productId: 1), toListId: InventoryListDefaults.myListId, in: lists)
+        let stored = lists[0].items.first!
+
+        XCTAssertNil(
+            ListStoreLogic.copyItem(
+                stored,
+                fromActiveListId: InventoryListDefaults.myListId,
+                toListId: InventoryListDefaults.myListId,
+                in: lists
+            )
+        )
+    }
+
+    func testMoveItemRemovesFromSource() {
+        var lists = ListStoreLogic.bootstrapLists(nil)
+        var targetId: UUID
+        (lists, targetId) = ListStoreLogic.createList(name: "Target", in: lists)
+        lists = ListStoreLogic.addItem(sampleItem(productId: 1, name: "Widget"), toListId: InventoryListDefaults.myListId, in: lists)
+        let stored = lists.first { $0.id == InventoryListDefaults.myListId }!.items.first!
+
+        let updated = ListStoreLogic.moveItem(
+            stored,
+            fromActiveListId: InventoryListDefaults.myListId,
+            toListId: targetId,
+            in: lists
+        )!
+
+        let sourceList = updated.first { $0.id == InventoryListDefaults.myListId }!
+        let targetList = updated.first { $0.id == targetId }!
+        XCTAssertTrue(sourceList.items.isEmpty)
+        XCTAssertEqual(targetList.items.count, 1)
+        XCTAssertEqual(targetList.items[0].productId, 1)
+    }
+
+    func testMoveItemFailsForUnknownDestination() {
+        var lists = ListStoreLogic.bootstrapLists(nil)
+        lists = ListStoreLogic.addItem(sampleItem(productId: 1), toListId: InventoryListDefaults.myListId, in: lists)
+        let stored = lists[0].items.first!
+
+        XCTAssertNil(
+            ListStoreLogic.moveItem(
+                stored,
+                fromActiveListId: InventoryListDefaults.myListId,
+                toListId: UUID(),
+                in: lists
+            )
+        )
+    }
+
+    private func sampleItem(productId: Int, name: String = "Sample", pullCount: Int = 1) -> InventoryListItem {
         InventoryListItem(
             productId: productId,
             barcode: nil,
@@ -178,7 +273,8 @@ final class ListStoreLogicTests: XCTestCase {
             manufacturer: nil,
             priceLabel: "$9.99",
             stockLabel: "5",
-            stockEmphasis: false
+            stockEmphasis: false,
+            pullCount: pullCount
         )
     }
 }

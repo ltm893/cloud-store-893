@@ -99,6 +99,51 @@ enum ListStoreLogic {
         return updated
     }
 
+    /// Copies `item` into another list (new UUID). If the product already exists there,
+    /// pull count is incremented — same rules as `addItem`.
+    /// Returns `nil` when the destination is missing or equals the source (active) list.
+    static func copyItem(
+        _ item: InventoryListItem,
+        fromActiveListId activeListId: UUID,
+        toListId: UUID,
+        in lists: [InventoryNamedList]
+    ) -> [InventoryNamedList]? {
+        guard toListId != activeListId,
+              lists.contains(where: { $0.id == toListId }) else { return nil }
+        let clone = InventoryListItem(
+            productId: item.productId,
+            barcode: item.barcode,
+            name: item.name,
+            productType: item.productType,
+            manufacturer: item.manufacturer,
+            priceLabel: item.priceLabel,
+            stockLabel: item.stockLabel,
+            stockEmphasis: item.stockEmphasis,
+            pullCount: item.pullCount
+        )
+        return addItem(clone, toListId: toListId, in: lists)
+    }
+
+    /// Moves `item` from the active list into another list.
+    /// Returns `nil` when the transfer is invalid.
+    static func moveItem(
+        _ item: InventoryListItem,
+        fromActiveListId activeListId: UUID,
+        toListId: UUID,
+        in lists: [InventoryNamedList]
+    ) -> [InventoryNamedList]? {
+        guard let sourceIndex = lists.firstIndex(where: { $0.id == activeListId }),
+              lists[sourceIndex].items.contains(where: { $0.id == item.id }),
+              let copied = copyItem(item, fromActiveListId: activeListId, toListId: toListId, in: lists)
+        else { return nil }
+        var updated = copied
+        guard let listIndex = updated.firstIndex(where: { $0.id == activeListId }),
+              let itemIndex = updated[listIndex].items.firstIndex(where: { $0.id == item.id })
+        else { return nil }
+        updated[listIndex].items.remove(at: itemIndex)
+        return updated
+    }
+
     static func deleteItems(at offsets: IndexSet, in items: [InventoryListItem]) -> [InventoryListItem] {
         var updated = items
         updated.remove(atOffsets: offsets)

@@ -344,6 +344,8 @@ private fun MainTabs(viewModel: ListerViewModel, user: String) {
                     onIncrement = viewModel::incrementPull,
                     onDecrement = viewModel::decrementPull,
                     onDeleteItem = viewModel::deleteItem,
+                    onCopyItem = viewModel::copyItem,
+                    onMoveItem = viewModel::moveItem,
                     modifier = Modifier.fillMaxSize(),
                 )
             }

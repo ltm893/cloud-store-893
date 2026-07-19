@@ -1,15 +1,11 @@
 package com.cloudstore.lister.ui.tabs
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,9 +18,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.RemoveCircle
@@ -35,16 +33,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -72,6 +69,12 @@ import com.cloudstore.lister.ui.theme.ListerDanger
 import com.cloudstore.lister.ui.theme.ListerHighlight
 import com.cloudstore.lister.ui.theme.ListerMuted
 import com.cloudstore.lister.ui.theme.ListerPrimary
+import com.cloudstore.lister.ui.theme.ListerRose
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 
 @Composable
 fun ListsTab(
@@ -80,11 +83,32 @@ fun ListsTab(
     onIncrement: (String) -> Unit,
     onDecrement: (String) -> Unit,
     onDeleteItem: (String) -> Unit,
+    onCopyItem: (InventoryListItem, String) -> Unit,
+    onMoveItem: (InventoryListItem, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val active = lists.firstOrNull { it.id == activeListId }
     val items = active?.items.orEmpty()
     val summary = ListExportLogic.summary(items)
+    var transferItem by remember { mutableStateOf<InventoryListItem?>(null) }
+    var transferMode by remember { mutableStateOf<ItemTransferMode?>(null) }
+
+    val pendingItem = transferItem
+    val pendingMode = transferMode
+    if (pendingItem != null && pendingMode != null) {
+        DestinationListPickerDialog(
+            lists = lists,
+            activeListId = activeListId,
+            item = pendingItem,
+            mode = pendingMode,
+            onDismiss = {
+                transferItem = null
+                transferMode = null
+            },
+            onCopy = onCopyItem,
+            onMove = onMoveItem,
+        )
+    }
 
     Box(
         modifier
@@ -122,12 +146,23 @@ fun ListsTab(
                     )
                 }
                 items(items, key = { it.id }) { item ->
-                    SwipeableListItemCard(
-                        item = item,
-                        onIncrement = { onIncrement(item.id) },
-                        onDecrement = { onDecrement(item.id) },
+                    SwipeActionsCard(
+                        onCopy = {
+                            transferItem = item
+                            transferMode = ItemTransferMode.Copy
+                        },
+                        onMove = {
+                            transferItem = item
+                            transferMode = ItemTransferMode.Move
+                        },
                         onDelete = { onDeleteItem(item.id) },
-                    )
+                    ) {
+                        ListItemCard(
+                            item = item,
+                            onIncrement = { onIncrement(item.id) },
+                            onDecrement = { onDecrement(item.id) },
+                        )
+                    }
                 }
             }
         }
@@ -186,47 +221,152 @@ private fun ListCountSummary(itemCount: Int, totalPullCount: Int) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SwipeableListItemCard(
-    item: InventoryListItem,
-    onIncrement: () -> Unit,
-    onDecrement: () -> Unit,
+private fun SwipeActionsCard(
+    onCopy: () -> Unit,
+    onMove: () -> Unit,
     onDelete: () -> Unit,
+    content: @Composable () -> Unit,
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onDelete()
-                true
+    val density = LocalDensity.current
+    val actionWidthPx = with(density) { 72.dp.toPx() }
+    val maxReveal = actionWidthPx * 3f
+    var offsetX by remember { mutableFloatStateOf(0f) }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(start = 8.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            SwipeActionButton(
+                label = "Copy",
+                icon = Icons.Filled.ContentCopy,
+                color = ListerAccent,
+                onClick = {
+                    offsetX = 0f
+                    onCopy()
+                },
+            )
+            SwipeActionButton(
+                label = "Move",
+                icon = Icons.AutoMirrored.Filled.DriveFileMove,
+                color = ListerRose,
+                onClick = {
+                    offsetX = 0f
+                    onMove()
+                },
+            )
+            SwipeActionButton(
+                label = "Delete",
+                icon = Icons.Filled.Delete,
+                color = ListerPrimary,
+                onClick = {
+                    offsetX = 0f
+                    onDelete()
+                },
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(offsetX.roundToInt(), 0) }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            offsetX = if (offsetX < -maxReveal * 0.4f) -maxReveal else 0f
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            offsetX = (offsetX + dragAmount).coerceIn(-maxReveal, 0f)
+                        },
+                    )
+                },
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun RowScope.SwipeActionButton(
+    label: String,
+    icon: ImageVector,
+    color: Color,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .width(72.dp)
+            .fillMaxHeight()
+            .background(color, RoundedCornerShape(8.dp))
+            .padding(4.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        IconButton(onClick = onClick) {
+            Icon(icon, contentDescription = label, tint = Color.White)
+        }
+        Text(label, color = Color.White, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+private enum class ItemTransferMode { Copy, Move }
+
+@Composable
+private fun DestinationListPickerDialog(
+    lists: List<InventoryNamedList>,
+    activeListId: String,
+    item: InventoryListItem,
+    mode: ItemTransferMode,
+    onDismiss: () -> Unit,
+    onCopy: (InventoryListItem, String) -> Unit,
+    onMove: (InventoryListItem, String) -> Unit,
+) {
+    val destinations = lists.filter { it.id != activeListId }
+    val title = if (mode == ItemTransferMode.Copy) "Copy to List" else "Move to List"
+    val displayName = item.name.ifEmpty { item.productId.toString() }
+    val prompt = if (mode == ItemTransferMode.Copy) {
+        "Copy \"$displayName\" to:"
+    } else {
+        "Move \"$displayName\" to:"
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            if (destinations.isEmpty()) {
+                Text(
+                    if (mode == ItemTransferMode.Copy) {
+                        "Create another list to copy this item into."
+                    } else {
+                        "Create another list to move this item into."
+                    },
+                )
             } else {
-                false
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(prompt)
+                    destinations.forEach { list ->
+                        TextButton(
+                            onClick = {
+                                when (mode) {
+                                    ItemTransferMode.Copy -> onCopy(item, list.id)
+                                    ItemTransferMode.Move -> onMove(item, list.id)
+                                }
+                                onDismiss()
+                            },
+                        ) {
+                            Text("${list.name}  (${list.items.size})")
+                        }
+                    }
+                }
             }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
-
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = false,
-        backgroundContent = {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(ListerDanger)
-                    .padding(horizontal = 20.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Text("Delete", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.SemiBold)
-            }
-        },
-    ) {
-        ListItemCard(
-            item = item,
-            onIncrement = onIncrement,
-            onDecrement = onDecrement,
-        )
-    }
 }
 
 @Composable
