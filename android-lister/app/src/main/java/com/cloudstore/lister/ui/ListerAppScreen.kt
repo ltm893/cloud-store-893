@@ -105,6 +105,7 @@ fun ListerAppScreen(viewModel: ListerViewModel) {
                     onBatchQuery = viewModel::batchListQuery,
                     onCancelBatch = viewModel::cancelBatchQuery,
                     onDiff = viewModel::diffLists,
+                    onSaveAsNewList = viewModel::saveItemsAsNewList,
                 )
             } else {
                 MainTabs(viewModel, gate.user)
@@ -123,7 +124,7 @@ private fun SignInScreen(hostLabel: String, errorMessage: String?, onSignIn: () 
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Cloud Store Lister", style = MaterialTheme.typography.headlineMedium)
+        Text("Cloud Store 893 Lister", style = MaterialTheme.typography.headlineMedium)
         Text(
             "Sign in with your store account to look up inventory.",
             textAlign = TextAlign.Center,

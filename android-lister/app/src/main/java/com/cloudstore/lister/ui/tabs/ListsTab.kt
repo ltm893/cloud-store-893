@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -70,11 +69,13 @@ import com.cloudstore.lister.ui.theme.ListerHighlight
 import com.cloudstore.lister.ui.theme.ListerMuted
 import com.cloudstore.lister.ui.theme.ListerPrimary
 import com.cloudstore.lister.ui.theme.ListerRose
+import com.cloudstore.lister.ui.theme.ListerRoseHighlight
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 
 @Composable
 fun ListsTab(
@@ -92,6 +93,11 @@ fun ListsTab(
     val summary = ListExportLogic.summary(items)
     var transferItem by remember { mutableStateOf<InventoryListItem?>(null) }
     var transferMode by remember { mutableStateOf<ItemTransferMode?>(null) }
+    var roseHighlightedIds by remember { mutableStateOf(setOf<String>()) }
+
+    LaunchedEffect(activeListId) {
+        roseHighlightedIds = emptySet()
+    }
 
     val pendingItem = transferItem
     val pendingMode = transferMode
@@ -146,6 +152,7 @@ fun ListsTab(
                     )
                 }
                 items(items, key = { it.id }) { item ->
+                    val highlighted = item.id in roseHighlightedIds
                     SwipeActionsCard(
                         onCopy = {
                             transferItem = item
@@ -156,9 +163,17 @@ fun ListsTab(
                             transferMode = ItemTransferMode.Move
                         },
                         onDelete = { onDeleteItem(item.id) },
+                        onLongPress = {
+                            roseHighlightedIds = if (highlighted) {
+                                roseHighlightedIds - item.id
+                            } else {
+                                roseHighlightedIds + item.id
+                            }
+                        },
                     ) {
                         ListItemCard(
                             item = item,
+                            highlighted = highlighted,
                             onIncrement = { onIncrement(item.id) },
                             onDecrement = { onDecrement(item.id) },
                         )
@@ -226,6 +241,7 @@ private fun SwipeActionsCard(
     onCopy: () -> Unit,
     onMove: () -> Unit,
     onDelete: () -> Unit,
+    onLongPress: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -236,8 +252,7 @@ private fun SwipeActionsCard(
     Box(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
-                .matchParentSize()
-                .padding(start = 8.dp),
+                .matchParentSize(),
             horizontalArrangement = Arrangement.End,
         ) {
             SwipeActionButton(
@@ -273,6 +288,9 @@ private fun SwipeActionsCard(
             modifier = Modifier
                 .offset { IntOffset(offsetX.roundToInt(), 0) }
                 .pointerInput(Unit) {
+                    detectTapGestures(onLongPress = { onLongPress() })
+                }
+                .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             offsetX = if (offsetX < -maxReveal * 0.4f) -maxReveal else 0f
@@ -289,7 +307,7 @@ private fun SwipeActionsCard(
 }
 
 @Composable
-private fun RowScope.SwipeActionButton(
+private fun SwipeActionButton(
     label: String,
     icon: ImageVector,
     color: Color,
@@ -299,15 +317,26 @@ private fun RowScope.SwipeActionButton(
         modifier = Modifier
             .width(72.dp)
             .fillMaxHeight()
-            .background(color, RoundedCornerShape(8.dp))
-            .padding(4.dp),
+            .background(color)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        IconButton(onClick = onClick) {
-            Icon(icon, contentDescription = label, tint = Color.White)
-        }
-        Text(label, color = Color.White, style = MaterialTheme.typography.labelSmall)
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = Color.White,
+            modifier = Modifier.height(20.dp),
+        )
+        Text(
+            label,
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+        )
     }
 }
 
@@ -372,6 +401,7 @@ private fun DestinationListPickerDialog(
 @Composable
 private fun ListItemCard(
     item: InventoryListItem,
+    highlighted: Boolean,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
 ) {
@@ -379,7 +409,7 @@ private fun ListItemCard(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(ListerHighlight)
+            .background(if (highlighted) ListerRoseHighlight else ListerHighlight)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         ListerFieldRow(label = "Name:", value = item.name, valueBold = true)

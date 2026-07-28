@@ -76,6 +76,23 @@ class ListStoreLogicCopyMoveTest {
         assertNull(ListStoreLogic.moveItem(lists, InventoryListDefaults.MY_LIST_ID, stored, "missing-id"))
     }
 
+    @Test
+    fun createListWithItemsClonesIntoNewList() {
+        var lists = ListStoreLogic.bootstrapLists(null)
+        lists = ListStoreLogic.addItem(sampleItem(1, name = "Widget", pullCount = 3), InventoryListDefaults.MY_LIST_ID, lists)
+        lists = ListStoreLogic.addItem(sampleItem(2, name = "Gadget"), InventoryListDefaults.MY_LIST_ID, lists)
+        val sourceItems = lists.first { it.id == InventoryListDefaults.MY_LIST_ID }.items
+
+        val (updated, newId) = ListStoreLogic.createListWithItems("Diff Common", sourceItems, lists)
+
+        val newList = updated.first { it.id == newId }
+        assertEquals("Diff Common", newList.name)
+        assertEquals(2, newList.items.size)
+        assertEquals(3, newList.items.first { it.productId == 1 }.pullCount)
+        assertNotEquals(sourceItems.first().id, newList.items.first { it.productId == 1 }.id)
+        assertEquals(2, updated.first { it.id == InventoryListDefaults.MY_LIST_ID }.items.size)
+    }
+
     private fun sampleItem(productId: Int, name: String = "Sample", pullCount: Int = 1) =
         InventoryListItem(
             productId = productId,

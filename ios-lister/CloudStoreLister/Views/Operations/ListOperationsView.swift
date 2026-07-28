@@ -173,6 +173,8 @@ private struct UnionOperationView: View {
 
 private struct DiffOperationView: View {
     @EnvironmentObject private var viewModel: InventoryLookupViewModel
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.selectedTab) private var selectedTab
 
     @State private var listAId: UUID?
     @State private var listBId: UUID?
@@ -231,14 +233,23 @@ private struct DiffOperationView: View {
 
             if let result {
                 List {
-                    DiffSection(title: "Common (\(result.common.count))", items: result.common)
+                    DiffSection(
+                        title: "Common (\(result.common.count))",
+                        items: result.common,
+                        defaultListName: "Common",
+                        onSaveAsNewList: saveAsNewList
+                    )
                     DiffSection(
                         title: "Only in \(result.listAName) (\(result.onlyInA.count))",
-                        items: result.onlyInA
+                        items: result.onlyInA,
+                        defaultListName: "Only in \(result.listAName)",
+                        onSaveAsNewList: saveAsNewList
                     )
                     DiffSection(
                         title: "Only in \(result.listBName) (\(result.onlyInB.count))",
-                        items: result.onlyInB
+                        items: result.onlyInB,
+                        defaultListName: "Only in \(result.listBName)",
+                        onSaveAsNewList: saveAsNewList
                     )
                 }
                 .scrollContentBackground(.hidden)
@@ -249,11 +260,22 @@ private struct DiffOperationView: View {
         }
         .background(Color.listerBackground)
     }
+
+    private func saveAsNewList(name: String, items: [InventoryListItem]) {
+        guard viewModel.saveItemsAsNewList(name: name, items: items) != nil else { return }
+        selectedTab.wrappedValue = 2
+        dismiss()
+    }
 }
 
 private struct DiffSection: View {
     let title: String
     let items: [InventoryListItem]
+    let defaultListName: String
+    let onSaveAsNewList: (String, [InventoryListItem]) -> Void
+
+    @State private var showNameAlert = false
+    @State private var listName = ""
 
     var body: some View {
         Section {
@@ -281,6 +303,13 @@ private struct DiffSection: View {
                     }
                     .listRowBackground(Color.listerBackground)
                 }
+                Button("Put into New List") {
+                    listName = defaultListName
+                    showNameAlert = true
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.listerAccent)
+                .listRowBackground(Color.listerBackground)
             }
         } header: {
             HStack(spacing: 6) {
@@ -291,6 +320,15 @@ private struct DiffSection: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.listerPrimary)
             }
+        }
+        .alert("New List", isPresented: $showNameAlert) {
+            TextField("List name", text: $listName)
+            Button("Create") {
+                onSaveAsNewList(listName, items)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Enter a name for the new list")
         }
     }
 }

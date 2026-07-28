@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -59,12 +61,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.cloudstore.pos.R
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
@@ -293,7 +300,7 @@ fun PosScreen(viewModel: PosViewModel) {
         if (!state.isAuthenticated) return
     }
 
-    if (adminOpen) {
+    if (adminOpen && !BuildConfig.STUB_BACKEND) {
         AdminWebScreen(
             apiBaseUrl = BuildConfig.API_BASE_URL,
             onClose = { adminOpen = false },
@@ -356,13 +363,15 @@ fun PosScreen(viewModel: PosViewModel) {
                             },
                         )
                     }
-                    DrawerMenuButton(
-                        text = "Admin",
-                        onClick = {
-                            adminOpen = true
-                            scope.launch { drawerState.close() }
-                        },
-                    )
+                    if (!BuildConfig.STUB_BACKEND) {
+                        DrawerMenuButton(
+                            text = "Admin",
+                            onClick = {
+                                adminOpen = true
+                                scope.launch { drawerState.close() }
+                            },
+                        )
+                    }
                     DrawerMenuButton(
                         text = "Sign out",
                         onClick = {
@@ -370,13 +379,15 @@ fun PosScreen(viewModel: PosViewModel) {
                             scope.launch { drawerState.close() }
                         },
                     )
-                    DrawerMenuButton(
-                        text = "Close till",
-                        onClick = {
-                            viewModel.beginCloseTill()
-                            scope.launch { drawerState.close() }
-                        },
-                    )
+                    if (!BuildConfig.STUB_BACKEND) {
+                        DrawerMenuButton(
+                            text = "Close till",
+                            onClick = {
+                                viewModel.beginCloseTill()
+                                scope.launch { drawerState.close() }
+                            },
+                        )
+                    }
                 }
             }
         },
@@ -414,7 +425,7 @@ fun PosScreen(viewModel: PosViewModel) {
                     )
                 }
                 Text(
-                    text = "Cloud Store 893 POS",
+                    text = stringResource(R.string.pos_header_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = PosBackground,
@@ -1285,6 +1296,7 @@ private fun CartLineRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            StubCartLineThumbnail(productId = item.productId)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.name,
@@ -1351,6 +1363,28 @@ private fun CartLineRow(
             )
         }
     }
+}
+
+/** Stub flavor maps productId → drawable; prod returns null (no thumbnail). */
+@Composable
+private fun StubCartLineThumbnail(productId: Int) {
+    val key = StubProductImages.drawableNameFor(productId)?.trim().orEmpty()
+    if (key.isEmpty()) return
+    val context = LocalContext.current
+    val resId = remember(key) {
+        context.resources.getIdentifier(key, "drawable", context.packageName)
+    }
+    if (resId == 0) return
+    Image(
+        painter = painterResource(id = resId),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .padding(end = 10.dp)
+            .size(56.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .border(BorderStroke(1.dp, PosBorder), RoundedCornerShape(8.dp)),
+    )
 }
 
 @Composable

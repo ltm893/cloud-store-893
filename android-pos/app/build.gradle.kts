@@ -113,6 +113,23 @@ android {
         buildConfigField("String", "POS_TAX_RATE", "\"$posTaxRate\"")
     }
 
+    flavorDimensions += "backend"
+    productFlavors {
+        create("prod") {
+            dimension = "backend"
+            isDefault = true
+            buildConfigField("boolean", "STUB_BACKEND", "false")
+        }
+        create("stub") {
+            dimension = "backend"
+            applicationIdSuffix = ".stub"
+            versionNameSuffix = "-stub"
+            buildConfigField("boolean", "STUB_BACKEND", "true")
+            // Placeholder — unused by StubPosRepository; keeps BuildConfig.API_BASE_URL valid.
+            buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:3000/\"")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

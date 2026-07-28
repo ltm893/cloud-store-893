@@ -76,6 +76,34 @@ enum ListStoreLogic {
         return (updated, newList.id)
     }
 
+    /// Creates a new named list pre-filled with clones of `items` (fresh item ids).
+    static func createListWithItems(
+        name: String,
+        items: [InventoryListItem],
+        in lists: [InventoryNamedList]
+    ) -> ([InventoryNamedList], UUID) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = trimmed.isEmpty ? "New List" : trimmed
+        let listName = uniqueListName(base, existing: lists)
+        let clones = items.map { item in
+            InventoryListItem(
+                productId: item.productId,
+                barcode: item.barcode,
+                name: item.name,
+                productType: item.productType,
+                manufacturer: item.manufacturer,
+                priceLabel: item.priceLabel,
+                stockLabel: item.stockLabel,
+                stockEmphasis: item.stockEmphasis,
+                pullCount: item.pullCount
+            )
+        }
+        let newList = InventoryNamedList(name: listName, items: clones, isDefault: false)
+        var updated = lists
+        updated.append(newList)
+        return (updated, newList.id)
+    }
+
     static func uniqueListName(_ base: String, existing lists: [InventoryNamedList]) -> String {
         let existingNames = Set(lists.map(\.name))
         guard existingNames.contains(base) else { return base }

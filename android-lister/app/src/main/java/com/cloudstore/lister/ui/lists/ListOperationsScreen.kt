@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.List
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -94,6 +95,7 @@ fun ListOperationsScreen(
     onBatchQuery: (String, String) -> Unit,
     onCancelBatch: () -> Unit,
     onDiff: (String, String) -> ListDiffResult?,
+    onSaveAsNewList: (String, List<InventoryListItem>) -> Unit,
 ) {
     var mode by remember { mutableStateOf(OperationMode.Union) }
 
@@ -147,6 +149,7 @@ fun ListOperationsScreen(
                 OperationMode.Diff -> DiffOperationView(
                     lists = lists,
                     onDiff = onDiff,
+                    onSaveAsNewList = onSaveAsNewList,
                 )
                 OperationMode.Split -> SplitOperationView(
                     lists = lists,
@@ -324,6 +327,7 @@ private fun UnionOperationView(
 private fun DiffOperationView(
     lists: List<InventoryNamedList>,
     onDiff: (String, String) -> ListDiffResult?,
+    onSaveAsNewList: (String, List<InventoryListItem>) -> Unit,
 ) {
     var listAId by remember { mutableStateOf<String?>(null) }
     var listBId by remember { mutableStateOf<String?>(null) }
@@ -366,13 +370,28 @@ private fun DiffOperationView(
                     .padding(top = 8.dp),
             ) {
                 item {
-                    DiffSection("Common (${diff.common.size})", diff.common)
+                    DiffSection(
+                        title = "Common (${diff.common.size})",
+                        items = diff.common,
+                        defaultListName = "Common",
+                        onSaveAsNewList = onSaveAsNewList,
+                    )
                 }
                 item {
-                    DiffSection("Only in ${diff.listAName} (${diff.onlyInA.size})", diff.onlyInA)
+                    DiffSection(
+                        title = "Only in ${diff.listAName} (${diff.onlyInA.size})",
+                        items = diff.onlyInA,
+                        defaultListName = "Only in ${diff.listAName}",
+                        onSaveAsNewList = onSaveAsNewList,
+                    )
                 }
                 item {
-                    DiffSection("Only in ${diff.listBName} (${diff.onlyInB.size})", diff.onlyInB)
+                    DiffSection(
+                        title = "Only in ${diff.listBName} (${diff.onlyInB.size})",
+                        items = diff.onlyInB,
+                        defaultListName = "Only in ${diff.listBName}",
+                        onSaveAsNewList = onSaveAsNewList,
+                    )
                 }
             }
         } ?: Spacer(Modifier.weight(1f))
@@ -970,7 +989,15 @@ private fun ListDropdownPicker(
 }
 
 @Composable
-private fun DiffSection(title: String, items: List<InventoryListItem>) {
+private fun DiffSection(
+    title: String,
+    items: List<InventoryListItem>,
+    defaultListName: String,
+    onSaveAsNewList: (String, List<InventoryListItem>) -> Unit,
+) {
+    var showNameDialog by remember { mutableStateOf(false) }
+    var listName by remember { mutableStateOf(defaultListName) }
+
     Column(Modifier.fillMaxWidth()) {
         Row(
             Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -1021,7 +1048,48 @@ private fun DiffSection(title: String, items: List<InventoryListItem>) {
                     }
                 }
             }
+            TextButton(
+                onClick = {
+                    listName = defaultListName
+                    showNameDialog = true
+                },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text("Put into New List", color = ListerAccent, fontWeight = FontWeight.SemiBold)
+            }
         }
+    }
+
+    if (showNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showNameDialog = false },
+            title = { Text("New List") },
+            text = {
+                Column {
+                    Text("Enter a name for the new list")
+                    OutlinedTextField(
+                        value = listName,
+                        onValueChange = { listName = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        singleLine = true,
+                        label = { Text("List name") },
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onSaveAsNewList(listName, items)
+                        showNameDialog = false
+                    },
+                ) { Text("Create") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNameDialog = false }) { Text("Cancel") }
+            },
+        )
     }
 }
 

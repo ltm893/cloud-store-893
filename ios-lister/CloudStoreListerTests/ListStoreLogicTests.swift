@@ -264,6 +264,22 @@ final class ListStoreLogicTests: XCTestCase {
         )
     }
 
+    func testCreateListWithItemsClonesIntoNewList() {
+        var lists = ListStoreLogic.bootstrapLists(nil)
+        lists = ListStoreLogic.addItem(sampleItem(productId: 1, name: "Widget", pullCount: 3), toListId: InventoryListDefaults.myListId, in: lists)
+        lists = ListStoreLogic.addItem(sampleItem(productId: 2, name: "Gadget"), toListId: InventoryListDefaults.myListId, in: lists)
+        let sourceItems = lists.first { $0.id == InventoryListDefaults.myListId }!.items
+
+        let (updated, newId) = ListStoreLogic.createListWithItems(name: "Diff Common", items: sourceItems, in: lists)
+
+        let newList = updated.first { $0.id == newId }!
+        XCTAssertEqual(newList.name, "Diff Common")
+        XCTAssertEqual(newList.items.count, 2)
+        XCTAssertEqual(newList.items.first { $0.productId == 1 }?.pullCount, 3)
+        XCTAssertNotEqual(sourceItems.first!.id, newList.items.first { $0.productId == 1 }!.id)
+        XCTAssertEqual(updated.first { $0.id == InventoryListDefaults.myListId }!.items.count, 2)
+    }
+
     private func sampleItem(productId: Int, name: String = "Sample", pullCount: Int = 1) -> InventoryListItem {
         InventoryListItem(
             productId: productId,

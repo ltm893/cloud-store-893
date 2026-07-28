@@ -11,7 +11,7 @@ import androidx.compose.ui.Modifier
 import com.cloudstore.pos.data.CashierUserStore
 import com.cloudstore.pos.data.OfflineQueueStore
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.cloudstore.pos.data.PosRepository
+import com.cloudstore.pos.data.PosBackendFactory
 import com.cloudstore.pos.data.TabletRegisterId
 import com.cloudstore.pos.ui.PosScreen
 import com.cloudstore.pos.ui.PosViewModel
@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val repository = PosRepository(baseUrl = BuildConfig.API_BASE_URL)
+        val repository = PosBackendFactory.create()
         val queueStore = OfflineQueueStore(applicationContext)
         val userStore = CashierUserStore(applicationContext)
         val registerId = TabletRegisterId.get(applicationContext)

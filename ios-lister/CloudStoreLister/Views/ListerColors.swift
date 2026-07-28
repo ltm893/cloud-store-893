@@ -13,6 +13,7 @@ extension Color {
     static let listerPrimary = Color(hex: 0x872434)
     static let listerAccent = Color(hex: 0x114B5F)
     static let listerRose = Color(hex: 0xC47884)
+    static let listerRoseHighlight = Color(hex: 0xF0D6DB)
     static let listerBackground = Color(hex: 0xFAF3DF)
     static let listerHighlight = Color(hex: 0xD0E4EB)
 }

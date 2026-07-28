@@ -69,6 +69,27 @@ object ListStoreLogic {
         return lists + newList to newList.id
     }
 
+    /**
+     * Creates a new named list pre-filled with clones of [items] (fresh item ids).
+     */
+    fun createListWithItems(
+        name: String,
+        items: List<InventoryListItem>,
+        lists: List<InventoryNamedList>,
+    ): Pair<List<InventoryNamedList>, String> {
+        val trimmed = name.trim()
+        val base = trimmed.ifEmpty { "New List" }
+        val listName = uniqueListName(base, lists)
+        val clones = items.map { it.copy(id = java.util.UUID.randomUUID().toString()) }
+        val newList = InventoryNamedList(
+            id = java.util.UUID.randomUUID().toString(),
+            name = listName,
+            items = clones,
+            isDefault = false,
+        )
+        return lists + newList to newList.id
+    }
+
     fun uniqueListName(base: String, lists: List<InventoryNamedList>): String {
         val existing = lists.map { it.name }.toSet()
         if (!existing.contains(base)) return base

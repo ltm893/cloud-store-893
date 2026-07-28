@@ -5,6 +5,8 @@
 #   ./RebuildReinstall.sh
 #
 # Optional env:
+#   STUB=1                  Stub flavor (PIN demo, no Node). Installs beside prod as
+#                           applicationId com.cloudstore.pos.stub
 #   API_BASE_URL=https://dev.oci.cloudstore893.com/   Full cloud URL (overrides OCI_API_HOST)
 #   OCI_API_HOST=dev.oci.cloudstore893.com            Cloud host when API_BASE_URL unset
 #   LAN_IP=192.168.1.10     Local Mac IP for dev against npm run dev:up
@@ -36,94 +38,109 @@ else
 fi
 
 ADB="${ADB:-adb}"
-APK="app/build/outputs/apk/debug/app-debug.apk"
 OCI_API_HOST="${OCI_API_HOST:-oci.cloudstore893.com}"
 OCI_API_SCHEME="${OCI_API_SCHEME:-https}"
 OCI_API_PORT="${OCI_API_PORT-}"
 APP_PORT="${PORT:-3000}"
 
-detect_lan_ip() {
-  if [[ -n "${LAN_IP:-}" ]]; then
-    echo "$LAN_IP"
-    return
-  fi
-  if command -v ipconfig >/dev/null 2>&1; then
-    for iface in en0 en1; do
-      local ip
-      ip="$(ipconfig getifaddr "$iface" 2>/dev/null || true)"
-      if [[ -n "$ip" ]]; then
-        echo "$ip"
-        return
-      fi
-    done
-  fi
-  echo ""
-}
+USE_STUB=0
+if [[ "${STUB:-}" == "1" || "${STUB_BACKEND:-}" == "1" || "${STUB_BACKEND:-}" == "true" ]]; then
+  USE_STUB=1
+fi
 
-if [[ -n "${API_BASE_URL:-}" ]]; then
-  export RELEASE_API_BASE_URL="${API_BASE_URL%/}/"
-  unset LAN_IP
-  echo "==> API_BASE_URL=${RELEASE_API_BASE_URL} (from env)"
+if [[ "$USE_STUB" == "1" ]]; then
+  GRADLE_TASK=":app:assembleStubDebug"
+  APK="app/build/outputs/apk/stub/debug/app-stub-debug.apk"
+  echo "==> Flavor=stub (PIN demo, applicationId com.cloudstore.pos.stub)"
+  echo "==> No Node / no network — StubPosRepository + dance-shop catalog"
 else
-  if [[ -n "${LAN_IP:-}" ]]; then
-    API_HOST="$LAN_IP"
-  elif [[ -n "${LAN_IP+x}" && -z "$LAN_IP" ]]; then
-    # e.g. LAN_IP=$(ipconfig getifaddr en0) when en0 has no address — do not silently use OCI
-    API_HOST="$(detect_lan_ip)"
-    if [[ -z "$API_HOST" ]]; then
-      echo "error: LAN_IP is empty (en0/en1 have no address). Set LAN_IP explicitly, e.g.:" >&2
-      echo "  LAN_IP=\$(ipconfig getifaddr en1) ./RebuildReinstall.sh" >&2
-      echo "  USE_LOCAL=1 ./RebuildReinstall.sh" >&2
-      exit 1
-    fi
-    echo "==> LAN_IP was empty; using detected Mac IP $API_HOST"
-  elif [[ "${USE_LOCAL:-}" == "1" ]]; then
-    API_HOST="$(detect_lan_ip)"
-    if [[ -z "$API_HOST" ]]; then
-      echo "error: USE_LOCAL=1 but could not detect Mac LAN IP — set LAN_IP=192.168.x.x" >&2
-      exit 1
-    fi
-  else
-    API_HOST="$OCI_API_HOST"
-  fi
+  GRADLE_TASK=":app:assembleProdDebug"
+  APK="app/build/outputs/apk/prod/debug/app-prod-debug.apk"
 
-  if [[ "${USE_LOCAL:-}" == "1" || "$API_HOST" != "$OCI_API_HOST" ]]; then
-    export LAN_IP="$API_HOST"
-  else
+  detect_lan_ip() {
+    if [[ -n "${LAN_IP:-}" ]]; then
+      echo "$LAN_IP"
+      return
+    fi
+    if command -v ipconfig >/dev/null 2>&1; then
+      for iface in en0 en1; do
+        local ip
+        ip="$(ipconfig getifaddr "$iface" 2>/dev/null || true)"
+        if [[ -n "$ip" ]]; then
+          echo "$ip"
+          return
+        fi
+      done
+    fi
+    echo ""
+  }
+
+  if [[ -n "${API_BASE_URL:-}" ]]; then
+    export RELEASE_API_BASE_URL="${API_BASE_URL%/}/"
     unset LAN_IP
-  fi
-
-  if [[ "${USE_LOCAL:-}" == "1" || "$API_HOST" != "$OCI_API_HOST" ]]; then
-    API_SCHEME="http"
-    API_PORT="${APP_PORT}"
-  elif [[ -n "$OCI_API_PORT" ]]; then
-    API_SCHEME="$OCI_API_SCHEME"
-    API_PORT="$OCI_API_PORT"
+    echo "==> API_BASE_URL=${RELEASE_API_BASE_URL} (from env)"
   else
-    API_SCHEME="$OCI_API_SCHEME"
-    API_PORT=""
-  fi
-
-  port_suffix=""
-  if [[ -n "$API_PORT" ]]; then
-    if [[ "$API_SCHEME" == "https" && "$API_PORT" == "443" ]] || [[ "$API_SCHEME" == "http" && "$API_PORT" == "80" ]]; then
-      port_suffix=""
+    if [[ -n "${LAN_IP:-}" ]]; then
+      API_HOST="$LAN_IP"
+    elif [[ -n "${LAN_IP+x}" && -z "$LAN_IP" ]]; then
+      API_HOST="$(detect_lan_ip)"
+      if [[ -z "$API_HOST" ]]; then
+        echo "error: LAN_IP is empty (en0/en1 have no address). Set LAN_IP explicitly, e.g.:" >&2
+        echo "  LAN_IP=\$(ipconfig getifaddr en1) ./RebuildReinstall.sh" >&2
+        echo "  USE_LOCAL=1 ./RebuildReinstall.sh" >&2
+        exit 1
+      fi
+      echo "==> LAN_IP was empty; using detected Mac IP $API_HOST"
+    elif [[ "${USE_LOCAL:-}" == "1" ]]; then
+      API_HOST="$(detect_lan_ip)"
+      if [[ -z "$API_HOST" ]]; then
+        echo "error: USE_LOCAL=1 but could not detect Mac LAN IP — set LAN_IP=192.168.x.x" >&2
+        exit 1
+      fi
     else
-      port_suffix=":${API_PORT}"
+      API_HOST="$OCI_API_HOST"
     fi
-  fi
 
-  export RELEASE_API_BASE_URL="${API_SCHEME}://${API_HOST}${port_suffix}/"
-  echo "==> API_BASE_URL=${RELEASE_API_BASE_URL}"
-  if [[ "$API_HOST" == "$OCI_API_HOST" && "${USE_LOCAL:-}" != "1" ]]; then
-    echo "    (OCI prod — dev cloud: API_BASE_URL=https://dev.oci.cloudstore893.com/ ./RebuildReinstall.sh)"
-    echo "    (local dev: USE_LOCAL=1 or LAN_IP=192.168.x.x ./RebuildReinstall.sh)"
+    if [[ "${USE_LOCAL:-}" == "1" || "$API_HOST" != "$OCI_API_HOST" ]]; then
+      export LAN_IP="$API_HOST"
+    else
+      unset LAN_IP
+    fi
+
+    if [[ "${USE_LOCAL:-}" == "1" || "$API_HOST" != "$OCI_API_HOST" ]]; then
+      API_SCHEME="http"
+      API_PORT="${APP_PORT}"
+    elif [[ -n "$OCI_API_PORT" ]]; then
+      API_SCHEME="$OCI_API_SCHEME"
+      API_PORT="$OCI_API_PORT"
+    else
+      API_SCHEME="$OCI_API_SCHEME"
+      API_PORT=""
+    fi
+
+    port_suffix=""
+    if [[ -n "$API_PORT" ]]; then
+      if [[ "$API_SCHEME" == "https" && "$API_PORT" == "443" ]] || [[ "$API_SCHEME" == "http" && "$API_PORT" == "80" ]]; then
+        port_suffix=""
+      else
+        port_suffix=":${API_PORT}"
+      fi
+    fi
+
+    export RELEASE_API_BASE_URL="${API_SCHEME}://${API_HOST}${port_suffix}/"
+    echo "==> Flavor=prod API_BASE_URL=${RELEASE_API_BASE_URL}"
+    if [[ "$API_HOST" == "$OCI_API_HOST" && "${USE_LOCAL:-}" != "1" ]]; then
+      echo "    (OCI prod — dev cloud: API_BASE_URL=https://dev.oci.cloudstore893.com/ ./RebuildReinstall.sh)"
+      echo "    (local dev: USE_LOCAL=1 or LAN_IP=192.168.x.x ./RebuildReinstall.sh)"
+      echo "    (offline PIN stub: STUB=1 ./RebuildReinstall.sh)"
+    fi
   fi
 fi
-echo "==> ./gradlew --stop (refresh API_BASE_URL in BuildConfig)"
+
+echo "==> ./gradlew --stop (refresh BuildConfig)"
 ./gradlew --stop >/dev/null 2>&1 || true
-echo "==> ./gradlew :app:assembleDebug"
-./gradlew :app:assembleDebug
+echo "==> ./gradlew $GRADLE_TASK"
+./gradlew "$GRADLE_TASK"
 
 if [[ ! -f "$APK" ]]; then
   echo "error: APK not found at $APK" >&2
@@ -155,4 +172,8 @@ fi
 echo "==> $ADB -s \"$ADB_SERIAL\" install -r $APK"
 "$ADB" -s "$ADB_SERIAL" install -r "$APK"
 
-echo "==> Done. Cloud Store POS debug APK installed."
+if [[ "$USE_STUB" == "1" ]]; then
+  echo "==> Done. Stub POS installed (com.cloudstore.pos.stub) — can sit beside prod."
+else
+  echo "==> Done. Prod POS debug APK installed (com.cloudstore.pos)."
+fi

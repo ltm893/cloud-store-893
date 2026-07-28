@@ -216,17 +216,38 @@
     * { box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 16px; color: #111; }
     h1 { font-size: 1.1rem; margin: 0 0 12px; }
-    .barcode-print-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .barcode-print-card { border: 1px solid #ccc; border-radius: 8px; padding: 12px; break-inside: avoid; page-break-inside: avoid; }
+    .barcode-print-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .barcode-print-card { border: 1px solid #ccc; border-radius: 8px; padding: 16px 20px; break-inside: avoid; page-break-inside: avoid; }
     .barcode-print-card h2 { font-size: 0.95rem; margin: 0 0 4px; line-height: 1.25; }
     .barcode-print-meta, .barcode-print-mfr { margin: 0 0 6px; font-size: 0.75rem; color: #555; }
     .barcode-print-svg { display: block; width: 100%; height: 56px; }
     .barcode-print-code { margin: 4px 0 0; font-family: ui-monospace, monospace; font-size: 0.85rem; letter-spacing: 0.04em; text-align: center; }
     .barcode-print-missing { margin: 8px 0 0; font-size: 0.8rem; color: #a00; font-style: italic; }
     @media print {
-      body { margin: 8mm; }
-      h1 { margin-bottom: 8mm; }
-      .barcode-print-grid { grid-template-columns: repeat(2, 1fr); gap: 8mm; }
+      @page { margin: 10mm; }
+      body { margin: 0; }
+      h1 { display: none; }
+      .barcode-print-grid { gap: 0; }
+      .barcode-print-card {
+        height: 25vh;
+        padding: 8mm 10mm;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        border-top: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .barcode-print-card:nth-child(4n) {
+        break-after: page;
+        page-break-after: always;
+      }
+      .barcode-print-card:last-child {
+        break-after: auto;
+        page-break-after: auto;
+      }
+      .barcode-print-svg { height: 72px; }
     }
   </style>
 </head>

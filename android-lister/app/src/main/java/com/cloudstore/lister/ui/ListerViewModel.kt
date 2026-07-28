@@ -212,6 +212,21 @@ class ListerViewModel(
         return newId
     }
 
+    fun saveItemsAsNewList(name: String, items: List<InventoryListItem>): String? {
+        if (items.isEmpty()) return null
+        val (updated, newId) = ListStoreLogic.createListWithItems(name, items, _state.value.lists)
+        _state.update {
+            it.copy(
+                lists = updated,
+                activeListId = newId,
+                showListOperations = false,
+                selectedTab = ListerTab.Lists,
+            )
+        }
+        saveLists(updated, newId)
+        return newId
+    }
+
     fun renameList(id: String, name: String) {
         val updated = ListStoreLogic.renameList(id, name, _state.value.lists) ?: return
         _state.update { it.copy(lists = updated) }

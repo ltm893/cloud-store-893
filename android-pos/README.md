@@ -6,7 +6,7 @@ Kotlin + Jetpack Compose. Theming: **Lister palette** (`ui/theme/`).
 ## Capabilities
 
 - **Cashier login** — on-screen numpad + **Done** when PIN is allowed; **Sign in with Oracle** (WebView → `/oauth/login?client_kind=tablet`) when IdP / Model B is on; supervisor approval waiting screen with poll + cancel
-- **☰ Menu** — **Show status** (API message + offline queue), **Find customer**, **Admin**, **Sign out**, **Close till**
+- **☰ Menu** — **Show status** (API message + offline queue), **Find customer**, **Sign out**; prod also has **Admin** and **Close till** (hidden in stub)
 - **Status overlay** — full-screen dim + centered card (auto-opens on cart/API errors such as insufficient stock); hides register until dismissed
 - Barcode / product ID entry (`POST /api/cart`, `POST /api/cart/barcode`)
 - Camera scanning (CameraX + ML Kit)
@@ -61,9 +61,31 @@ API_BASE_URL=https://dev.oci.cloudstore893.com/ ./RebuildReinstall.sh
 # Local Mac dev (npm run dev:up)
 USE_LOCAL=1 ./RebuildReinstall.sh
 # or: LAN_IP=192.168.1.10 ./RebuildReinstall.sh
+
+# Offline PIN stub (no Node, no network — in-memory catalog/cart)
+STUB=1 ./RebuildReinstall.sh
 ```
 
 `RebuildReinstall.sh` builds debug and installs via `adb`. **Rebuild required** after changing the API host — the URL is compiled in.
+
+### Stub mode (PIN, no server)
+
+`STUB=1` builds the **stub** product flavor (`com.cloudstore.pos.stub`) so it can sit on
+the tablet next to the real POS (`com.cloudstore.pos`). Stub code, dance-shop catalog,
+and product images live only under `src/stub/` — they are **not** in the prod APK.
+
+```bash
+STUB=1 ./RebuildReinstall.sh   # → assembleStubDebug
+./RebuildReinstall.sh          # → assembleProdDebug (OCI/local API)
+```
+
+- Unlock with any PIN of **4+ digits** (e.g. `8930`)
+- Sample products/customers live in memory; cart and sales reset when the process dies
+- Not production data — for UI/dev only
+- Status line shows **Stub mode — no server**
+- Product thumbnails appear in **Current Sale** (stub drawables only)
+
+Launcher label: **Scouty's Store 893**. Header: **Scouty's Store 893 POS**.
 
 **Wrong URL symptoms:** `Failed to connect`, login **404** (server missing `/api/cashier/unlock` — redeploy Docker image), or **401** (wrong PIN).
 
@@ -184,11 +206,15 @@ app/src/main/java/com/cloudstore/pos/
 │   ├── PosLayoutMetrics.kt
 │   └── theme/           Color.kt · Theme.kt · Type.kt
 └── data/                ← API, models, persistence
-    ├── PosApi.kt
+    ├── PosApi.kt            Retrofit + PosRepository
+    ├── PosBackend.kt        Repository interface
     ├── PosModels.kt
-    ├── PosRepository.kt
     ├── MemoryCookieJar.kt
     └── …
+
+Flavor source sets (not under main):
+  src/prod/   PosBackendFactory → PosRepository
+  src/stub/   PosBackendFactory → StubPosRepository, dance catalog + product_*.png
 ```
 
 `domain/` has no Compose or Android framework imports — every function in it can be unit-tested with plain JUnit without Robolectric or an emulator.

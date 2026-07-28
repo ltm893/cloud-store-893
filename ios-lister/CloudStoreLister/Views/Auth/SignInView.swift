@@ -10,7 +10,7 @@ struct SignInView: View {
             Image(systemName: "list.bullet.rectangle")
                 .font(.system(size: 56))
                 .foregroundStyle(Color.listerAccent)
-            Text("Cloud Store Lister")
+            Text("Cloud Store 893 Lister")
                 .font(.title.bold())
             Text("Sign in with your store account to look up inventory.")
                 .font(.body)

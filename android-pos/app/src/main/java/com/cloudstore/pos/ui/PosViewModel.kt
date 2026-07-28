@@ -18,7 +18,7 @@ import com.cloudstore.pos.data.OfflineQueueStore
 import com.cloudstore.pos.data.PosIdentityLog
 import com.cloudstore.pos.data.PendingCheckout
 import com.cloudstore.pos.data.QueuedCartLine
-import com.cloudstore.pos.data.PosRepository
+import com.cloudstore.pos.data.PosBackend
 import com.cloudstore.pos.data.Product
 import com.cloudstore.pos.data.Sale
 import com.cloudstore.pos.data.StoreCustomer
@@ -151,7 +151,7 @@ data class PosUiState(
 }
 
 class PosViewModel(
-    private val repository: PosRepository,
+    private val repository: PosBackend,
     private val queueStore: OfflineQueueStore,
     private val userStore: CashierUserStore,
     private val registerId: String,
@@ -190,6 +190,7 @@ class PosViewModel(
             it.copy(
                 queuedCheckoutCount = queueStore.all().size,
                 loggedInUser = storedUser,
+                status = if (BuildConfig.STUB_BACKEND) "Stub mode — no server" else it.status,
             )
         }
         probeCashierSession()
@@ -2117,7 +2118,7 @@ class PosViewModel(
 }
 
 class PosViewModelFactory(
-    private val repository: PosRepository,
+    private val repository: PosBackend,
     private val queueStore: OfflineQueueStore,
     private val userStore: CashierUserStore,
     private val registerId: String,

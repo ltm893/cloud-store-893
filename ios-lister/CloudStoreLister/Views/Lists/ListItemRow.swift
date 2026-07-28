@@ -5,6 +5,7 @@ struct ListItemRow: View {
     @ObservedObject var viewModel: InventoryLookupViewModel
 
     @State private var transferMode: ItemTransferMode? = nil
+    @State private var isRoseHighlighted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -58,12 +59,16 @@ struct ListItemRow: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
-        .background(Color.listerHighlight)
+        .background(isRoseHighlighted ? Color.listerRoseHighlight : Color.listerHighlight)
         .cornerRadius(10)
         .colorScheme(.light)
+        .contentShape(Rectangle())
+        .onLongPressGesture {
+            isRoseHighlighted.toggle()
+        }
         .listRowBackground(Color.clear)
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
                 if let index = viewModel.activeListItems.firstIndex(where: { $0.id == item.id }) {
                     viewModel.deleteItems(at: IndexSet([index]))
                 }

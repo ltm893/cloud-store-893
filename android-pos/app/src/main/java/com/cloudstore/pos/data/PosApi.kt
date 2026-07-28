@@ -100,7 +100,7 @@ interface PosApi {
     suspend fun cancelCloseTill(): OkResponse
 }
 
-class PosRepository(baseUrl: String) {
+class PosRepository(baseUrl: String) : PosBackend {
     private val api: PosApi
     private val normalizedBaseUrl: String
     val cookieJar = MemoryCookieJar()
@@ -135,22 +135,22 @@ class PosRepository(baseUrl: String) {
         api = retrofit.create(PosApi::class.java)
     }
 
-    suspend fun products() = api.getProducts()
-    suspend fun customers() = api.getCustomers()
-    suspend fun cart(customerId: Int?) = api.getCart(customerId)
-    suspend fun addProduct(productId: Int, customerId: Int?) =
+    override suspend fun products() = api.getProducts()
+    override suspend fun customers() = api.getCustomers()
+    override suspend fun cart(customerId: Int?) = api.getCart(customerId)
+    override suspend fun addProduct(productId: Int, customerId: Int?) =
         api.addToCart(mapOf("productId" to productId), customerId)
 
-    suspend fun addProductByBarcode(barcode: String, customerId: Int?) =
+    override suspend fun addProductByBarcode(barcode: String, customerId: Int?) =
         api.addByBarcode(mapOf("barcode" to barcode), customerId)
 
-    suspend fun removeCartItem(cartItemId: Int, customerId: Int?) =
+    override suspend fun removeCartItem(cartItemId: Int, customerId: Int?) =
         api.removeFromCart(cartItemId, customerId)
 
-    suspend fun updateCartItemQuantity(cartItemId: Int, quantity: Int, customerId: Int?) =
+    override suspend fun updateCartItemQuantity(cartItemId: Int, quantity: Int, customerId: Int?) =
         api.updateCartQuantity(cartItemId, mapOf("quantity" to quantity), customerId)
 
-    suspend fun replaceCart(lines: List<QueuedCartLine>, customerId: Int?) =
+    override suspend fun replaceCart(lines: List<QueuedCartLine>, customerId: Int?) =
         api.replaceCart(
             CartReplaceRequest(
                 items = lines.map { CartLineQuantity(it.productId, it.quantity) },
@@ -158,11 +158,11 @@ class PosRepository(baseUrl: String) {
             ),
         )
 
-    suspend fun checkout(
+    override suspend fun checkout(
         paymentMethod: String,
         customerId: Int?,
-        payments: List<CheckoutPayment>? = null,
-        checkoutTotal: Double? = null,
+        payments: List<CheckoutPayment>?,
+        checkoutTotal: Double?,
     ) = api.checkout(
         CheckoutRequest(
             paymentMethod = paymentMethod,
@@ -172,36 +172,36 @@ class PosRepository(baseUrl: String) {
         ),
     )
 
-    suspend fun recentSales() = api.getRecentSales()
+    override suspend fun recentSales() = api.getRecentSales()
 
-    suspend fun cashierSession() = api.cashierSession()
+    override suspend fun cashierSession() = api.cashierSession()
 
-    suspend fun pollApprovalStatus() = api.approvalStatus()
+    override suspend fun pollApprovalStatus() = api.approvalStatus()
 
-    suspend fun cancelApproval() = api.cancelApproval()
+    override suspend fun cancelApproval() = api.cancelApproval()
 
-    suspend fun tillConfig() = api.tillConfig()
+    override suspend fun tillConfig() = api.tillConfig()
 
-    fun applySessionAuth(session: CashierSessionResponse) {
+    override fun applySessionAuth(session: CashierSessionResponse) {
         stashAwaitingTillToken(session.awaitingTillToken)
     }
 
-    fun stashAwaitingTillToken(token: String?) {
+    override fun stashAwaitingTillToken(token: String?) {
         val trimmed = token?.trim().orEmpty()
         if (trimmed.isEmpty()) return
         storedAwaitingTillToken = trimmed
         pinAwaitingTillToken(trimmed)
     }
 
-    fun awaitingTillTokenForSubmit(): String? = storedAwaitingTillToken?.trim()?.takeIf { it.isNotEmpty() }
+    override fun awaitingTillTokenForSubmit(): String? = storedAwaitingTillToken?.trim()?.takeIf { it.isNotEmpty() }
 
-    fun prepareForTillSubmit() {
+    override fun prepareForTillSubmit() {
         syncWebViewCookies()
         pinAwaitingTillFromWebView()
         awaitingTillTokenForSubmit()?.let { pinAwaitingTillToken(it) }
     }
 
-    fun onTillSubmitSuccess(response: SubmitOpeningTillResponse) {
+    override fun onTillSubmitSuccess(response: SubmitOpeningTillResponse) {
         if (response.pending || response.ok) {
             clearAwaitingTillAuth()
         }
@@ -214,38 +214,38 @@ class PosRepository(baseUrl: String) {
         cookieJar.saveFromResponse(httpUrl, listOf(buildCookie(httpUrl, "cashier_awaiting_till", token)))
     }
 
-    fun clearAwaitingTillAuth() {
+    override fun clearAwaitingTillAuth() {
         storedAwaitingTillToken = null
         cookieJar.clearPinnedAwaitingTillToken()
     }
 
-    suspend fun submitOpeningTill(body: SubmitOpeningTillRequest): SubmitOpeningTillResponse {
+    override suspend fun submitOpeningTill(body: SubmitOpeningTillRequest): SubmitOpeningTillResponse {
         val response = api.submitOpeningTill(body)
         onTillSubmitSuccess(response)
         return response
     }
 
-    suspend fun cancelOpeningTill() = api.cancelOpeningTill()
+    override suspend fun cancelOpeningTill() = api.cancelOpeningTill()
 
-    fun syncWebViewCookies() {
+    override fun syncWebViewCookies() {
         WebViewCookieSync.sync(normalizedBaseUrl, cookieJar)
     }
 
-    fun pinAwaitingTillFromWebView(): Boolean {
+    override fun pinAwaitingTillFromWebView(): Boolean {
         val found = WebViewCookieSync.pinAwaitingTillFromWebView(normalizedBaseUrl, cookieJar)
         cookieJar.pinnedAwaitingTillToken?.let { storedAwaitingTillToken = it }
         return found
     }
 
-    fun clearPinnedPendingRequest() {
+    override fun clearPinnedPendingRequest() {
         cookieJar.clearPinnedPendingToken()
     }
 
-    fun clearPinnedAwaitingTill() {
+    override fun clearPinnedAwaitingTill() {
         clearAwaitingTillAuth()
     }
 
-    suspend fun clearStaleSignInCookies() {
+    override suspend fun clearStaleSignInCookies() {
         runCatching { cancelOpeningTill() }
         runCatching { cancelApproval() }
         clearAwaitingTillAuth()
@@ -255,7 +255,7 @@ class PosRepository(baseUrl: String) {
     }
 
     /** WebView→Retrofit bridge: inject pending token when CookieManager sync is unreliable. */
-    fun rememberPendingRequestToken(token: String?) {
+    override fun rememberPendingRequestToken(token: String?) {
         val trimmed = token?.trim().orEmpty()
         if (trimmed.isEmpty()) return
         cookieJar.pinnedPendingToken = trimmed
@@ -263,13 +263,13 @@ class PosRepository(baseUrl: String) {
         cookieJar.saveFromResponse(httpUrl, listOf(buildCookie(httpUrl, "cashier_pending", trimmed)))
     }
 
-    fun hasPendingRequestCookie(): Boolean {
+    override fun hasPendingRequestCookie(): Boolean {
         if (!cookieJar.pinnedPendingToken.isNullOrBlank()) return true
         val httpUrl = normalizedBaseUrl.toHttpUrlOrNull() ?: return false
         return cookieJar.loadForRequest(httpUrl).any { it.name == "cashier_pending" }
     }
 
-    fun hasCashierSessionCookie(): Boolean {
+    override fun hasCashierSessionCookie(): Boolean {
         if (!cookieJar.manualSessionId.isNullOrBlank()) return true
         val httpUrl = normalizedBaseUrl.toHttpUrlOrNull() ?: return false
         return cookieJar.loadForRequest(httpUrl).any { it.name == "cashier_session" }
@@ -284,11 +284,11 @@ class PosRepository(baseUrl: String) {
             .httpOnly()
             .build()
 
-    fun clearCashierCookies() {
+    override fun clearCashierCookies() {
         normalizedBaseUrl.toHttpUrlOrNull()?.host?.let { cookieJar.clearHost(it) }
     }
 
-    suspend fun unlockCashier(pin: String, registerId: String): CashierSessionResponse {
+    override suspend fun unlockCashier(pin: String, registerId: String): CashierSessionResponse {
         val res = api.unlockCashier(
             mapOf(
                 "pin" to pin,
@@ -305,26 +305,26 @@ class PosRepository(baseUrl: String) {
         return session
     }
 
-    suspend fun logoutCashier() {
+    override suspend fun logoutCashier() {
         runCatching { api.logoutCashier() }
         clearCashierCookies()
     }
 
-    suspend fun signOffCashier(registerId: String) {
+    override suspend fun signOffCashier(registerId: String) {
         runCatching { api.signOffCashier(mapOf("registerId" to registerId)) }
         clearCashierCookies()
         clearWebViewIdpSession()
     }
 
-    suspend fun closeTillPreview() = api.closeTillPreview()
+    override suspend fun closeTillPreview() = api.closeTillPreview()
 
-    suspend fun submitCloseTill(body: SubmitCloseTillRequest) = api.submitCloseTill(body)
+    override suspend fun submitCloseTill(body: SubmitCloseTillRequest) = api.submitCloseTill(body)
 
-    suspend fun closeTillStatus(closeToken: String? = null) = api.closeTillStatus(closeToken)
+    override suspend fun closeTillStatus(closeToken: String?) = api.closeTillStatus(closeToken)
 
-    suspend fun cancelCloseTill() = api.cancelCloseTill()
+    override suspend fun cancelCloseTill() = api.cancelCloseTill()
 
-    fun clearWebViewIdpSession() {
+    override fun clearWebViewIdpSession() {
         clearIdpWebViewCookies()
     }
 }

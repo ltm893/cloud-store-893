@@ -55,6 +55,17 @@ final class InventoryLookupViewModel: ObservableObject {
         return newId
     }
 
+    @discardableResult
+    func saveItemsAsNewList(name: String, items: [InventoryListItem]) -> UUID? {
+        guard !items.isEmpty else { return nil }
+        let (updated, newId) = ListStoreLogic.createListWithItems(name: name, items: items, in: lists)
+        lists = updated
+        activeListId = newId
+        saveLists()
+        saveActiveListId()
+        return newId
+    }
+
     func renameList(id: UUID, to name: String) {
         guard let updated = ListStoreLogic.renameList(id: id, to: name, in: lists) else { return }
         lists = updated
