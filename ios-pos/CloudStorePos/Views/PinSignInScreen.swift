@@ -47,20 +47,20 @@ struct PinSignInScreen: View {
                         .accessibilityLabel("PIN entry")
 
                     PosNumberPad(
-                        layout: .compact,
                         onDigit: onDigit,
                         onClear: onClear,
                         onBackspace: onBackspace
                     )
                     .padding(PosLayoutMetrics.numpadInnerPadding)
-                    .frame(width: PosLayoutMetrics.numpadColumnWidth)
-                    .frame(height: PosLayoutMetrics.numpadCardHeight)
+                    .numberPadHostSize()
                     .background(Color.white.opacity(0.55))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .frame(maxWidth: .infinity)
 
                     Button("Done") { onUnlock() }
                         .buttonStyle(PosFullWidthButtonStyle())
-                        .frame(width: PosLayoutMetrics.numpadColumnWidth)
+                        .frame(maxWidth: PosLayoutMetrics.numpadColumnWidth)
+                        .frame(maxWidth: .infinity)
                 }
 
                 if idpEnabled {

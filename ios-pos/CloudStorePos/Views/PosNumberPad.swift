@@ -1,14 +1,6 @@
 import SwiftUI
 
 struct PosNumberPad: View {
-    enum Layout {
-        /// Keys expand to fill available height (opening till).
-        case fill
-        /// Fixed key height for sale/register screen.
-        case compact
-    }
-
-    let layout: Layout
     let onDigit: (Character) -> Void
     let onClear: () -> Void
     let onBackspace: () -> Void
@@ -17,7 +9,6 @@ struct PosNumberPad: View {
     let onDown: (() -> Void)?
 
     init(
-        layout: Layout = .fill,
         onDigit: @escaping (Character) -> Void,
         onClear: @escaping () -> Void,
         onBackspace: @escaping () -> Void,
@@ -25,7 +16,6 @@ struct PosNumberPad: View {
         onUp: (() -> Void)? = nil,
         onDown: (() -> Void)? = nil
     ) {
-        self.layout = layout
         self.onDigit = onDigit
         self.onClear = onClear
         self.onBackspace = onBackspace
@@ -63,7 +53,7 @@ struct PosNumberPad: View {
                     navKey("↑", action: onUp)
                     navKey("↓", action: onDown)
                 }
-                .frame(width: 44)
+                .frame(width: PosLayoutMetrics.numpadNavKeyWidth)
             }
         }
     }
@@ -73,7 +63,7 @@ struct PosNumberPad: View {
         HStack(spacing: keyGap) {
             content()
         }
-        .modifier(KeyRowHeightModifier(layout: layout))
+        .frame(maxHeight: .infinity)
     }
 
     private func padKey(
@@ -83,8 +73,7 @@ struct PosNumberPad: View {
         Button(action: action) {
             Text(label)
                 .font(.title3.bold())
-                .frame(maxWidth: .infinity)
-                .modifier(KeyRowHeightModifier(layout: layout))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(PosColors.numpadKey)
                 .foregroundStyle(.primary)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -101,18 +90,5 @@ struct PosNumberPad: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
-    }
-}
-
-private struct KeyRowHeightModifier: ViewModifier {
-    let layout: PosNumberPad.Layout
-
-    func body(content: Content) -> some View {
-        switch layout {
-        case .fill:
-            content.frame(maxHeight: .infinity)
-        case .compact:
-            content.frame(height: PosLayoutMetrics.numpadKeyHeight)
-        }
     }
 }

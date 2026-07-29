@@ -52,10 +52,6 @@ struct CheckoutPaymentPanel: View {
             }
 
             amountRow("Sale total", CartTotalsLogic.formatMoney(saleTotal))
-            let collectedSale = CartTotalsLogic.collectedTotal(saleTotal)
-            if collectedSale + 0.005 < saleTotal {
-                amountRow("Payable (nickels)", CartTotalsLogic.formatMoney(collectedSale))
-            }
             amountRow("Balance due", CartTotalsLogic.formatMoney(balanceDue), bold: true)
             amountRow("Amount entered", CashEntryLogic.displayCashEntry(amountInput))
 
@@ -120,12 +116,16 @@ struct CheckoutPaymentPanel: View {
             }
 
             PosNumberPad(
-                layout: .compact,
                 onDigit: onAmountDigit,
                 onClear: onAmountClear,
                 onBackspace: onAmountBackspace,
                 onDecimal: onAmountDecimal
             )
+            .padding(PosLayoutMetrics.numpadInnerPadding)
+            .numberPadHostSize()
+            .background(Color.white.opacity(0.55))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .frame(maxWidth: .infinity)
 
             let nextAmount = CashEntryLogic.parseCashTendered(amountInput)
             let canPayCard = balanceDue > 0.005

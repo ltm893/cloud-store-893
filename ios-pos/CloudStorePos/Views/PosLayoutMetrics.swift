@@ -1,11 +1,19 @@
 import CoreGraphics
+import SwiftUI
 
 /// Layout constants aligned with Android `PosLayoutMetrics.kt`.
 enum PosLayoutMetrics {
-    static let numpadColumnWidth: CGFloat = 280
+    /// Max width for a standard number pad (no till nav column).
+    static let numpadColumnWidth: CGFloat = 270
+    /// Fixed height for every number-pad host.
     static let numpadCardHeight: CGFloat = 222
-    static let numpadKeyHeight: CGFloat = 48
     static let numpadKeyGap: CGFloat = 6
+    static let numpadInnerPadding: CGFloat = 9
+    /// Up/down denomination keys beside till-count numpad.
+    static let numpadNavKeyWidth: CGFloat = 40
+    /// Max width for till numpad including nav arrow column.
+    static let tillNumpadCardWidth: CGFloat = numpadColumnWidth + numpadNavKeyWidth + numpadKeyGap
+
     static let registerSideGutter: CGFloat = 16
     static let registerCenterGutter: CGFloat = 12
 
@@ -24,6 +32,16 @@ enum PosLayoutMetrics {
     /// Selected / action status strip.
     static let tillStatusBarVerticalPadding: CGFloat = 14
     static let tillStatusBarMinHeight: CGFloat = 56
+}
 
-    static let numpadInnerPadding: CGFloat = 9
+extension View {
+    /// Standard host size for a number pad: fixed height, width capped at the shared max.
+    func numberPadHostSize(withNavColumn: Bool = false) -> some View {
+        let maxWidth = withNavColumn
+            ? PosLayoutMetrics.tillNumpadCardWidth
+            : PosLayoutMetrics.numpadColumnWidth
+        return self
+            .frame(maxWidth: maxWidth)
+            .frame(height: PosLayoutMetrics.numpadCardHeight)
+    }
 }

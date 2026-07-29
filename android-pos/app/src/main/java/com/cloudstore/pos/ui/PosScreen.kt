@@ -700,6 +700,7 @@ fun PosScreen(viewModel: PosViewModel) {
                 modifier = Modifier
                     .weight(0.35f)
                     .fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 if (!checkout.open && !customerFindOpen) {
                     Spacer(modifier = Modifier.weight(1f))
@@ -716,12 +717,13 @@ fun PosScreen(viewModel: PosViewModel) {
                 }
                 Card(
                     modifier = Modifier
-                        .fillMaxWidth()
                         .then(
                             if (checkout.open || customerFindOpen) {
-                                Modifier.weight(1f)
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
                             } else {
-                                Modifier.height(PosNumpadCardHeight)
+                                Modifier.numberPadHostSize()
                             },
                         ),
                     colors = PosCardDefaults.numpadPanelColors(),
@@ -834,6 +836,7 @@ fun PosScreen(viewModel: PosViewModel) {
                         enabled = state.cart.isNotEmpty() && !setQuantityEnabled,
                         colors = PosButtonDefaults.teal(),
                         modifier = Modifier
+                            .widthIn(max = PosNumpadColumnWidth)
                             .fillMaxWidth()
                             .padding(top = 6.dp)
                             .height(44.dp),
@@ -1601,7 +1604,6 @@ private fun CashierLogin(
             elevation = PosCardDefaults.elevation(),
         ) {
             Column(
-                modifier = Modifier.padding(PosNumpadInnerPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 if (pinAllowed) {
@@ -1612,14 +1614,15 @@ private fun CashierLogin(
                         singleLine = true,
                         readOnly = true,
                         textStyle = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(PosNumpadCardHeight)
-                            .padding(top = PosNumpadInnerPadding),
-                    ) {
+                            .padding(
+                                start = PosNumpadInnerPadding,
+                                end = PosNumpadInnerPadding,
+                                top = PosNumpadInnerPadding,
+                            ),
+                    )
+                    Box(modifier = Modifier.numberPadHostSize()) {
                         NumberPad(
                             onDigit = { d -> onPinChange(pinInput + d) },
                             onClear = { onPinChange("") },
@@ -1634,7 +1637,12 @@ private fun CashierLogin(
                         colors = PosButtonDefaults.teal(),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp)
+                            .padding(
+                                start = PosNumpadInnerPadding,
+                                end = PosNumpadInnerPadding,
+                                top = 8.dp,
+                                bottom = PosNumpadInnerPadding,
+                            )
                             .height(52.dp),
                         contentPadding = PaddingValues(vertical = 4.dp),
                     ) {
@@ -1647,7 +1655,12 @@ private fun CashierLogin(
                         colors = PosButtonDefaults.teal(),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = if (pinAllowed) 8.dp else 0.dp)
+                            .padding(
+                                start = PosNumpadInnerPadding,
+                                end = PosNumpadInnerPadding,
+                                top = if (pinAllowed) 8.dp else PosNumpadInnerPadding,
+                                bottom = PosNumpadInnerPadding,
+                            )
                             .height(52.dp),
                         contentPadding = PaddingValues(vertical = 4.dp),
                     ) {

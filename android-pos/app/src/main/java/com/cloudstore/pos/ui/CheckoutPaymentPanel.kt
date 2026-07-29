@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -36,7 +38,6 @@ import com.cloudstore.pos.domain.checkout.paymentMethodLabel
 import com.cloudstore.pos.domain.pricing.cashQuickDenominations
 import com.cloudstore.pos.domain.pricing.formatMoney
 import com.cloudstore.pos.domain.pricing.roundMoney
-import com.cloudstore.pos.domain.pricing.roundToNickel
 import com.cloudstore.pos.ui.theme.PosButtonDefaults
 import com.cloudstore.pos.ui.theme.PosCardDefaults
 import com.cloudstore.pos.ui.theme.PosPrimary
@@ -160,14 +161,6 @@ fun CheckoutPaymentPanel(
             label = "Sale total",
             value = formatMoney(saleTotal),
         )
-        val collectedSaleTotal = roundToNickel(saleTotal)
-        if (collectedSaleTotal + 0.005 < saleTotal) {
-            CashAmountRow(
-                label = "Payable (nickels)",
-                value = formatMoney(collectedSaleTotal),
-                valueColor = MaterialTheme.colorScheme.tertiary,
-            )
-        }
         CashAmountRow(
             label = "Balance due",
             value = formatMoney(balanceDue),
@@ -226,6 +219,7 @@ fun CheckoutPaymentPanel(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(
                 modifier = Modifier
@@ -263,13 +257,8 @@ fun CheckoutPaymentPanel(
                     }
                 }
             }
-            // Shrink with available height so Cash / Charge Card stay on-screen (Fire / stub).
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .heightIn(max = PosNumpadCardHeight),
-            ) {
+            Spacer(modifier = Modifier.weight(1f))
+            Box(modifier = Modifier.numberPadHostSize()) {
                 NumberPad(
                     onDigit = { d ->
                         onAmountChange(appendCashDigitLimited(amountInput, d, maxCardEntry))

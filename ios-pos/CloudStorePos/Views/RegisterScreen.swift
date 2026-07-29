@@ -363,7 +363,6 @@ struct RegisterScreen: View {
                         )
                     }
                     PosNumberPad(
-                        layout: .compact,
                         onDigit: { digit in
                             if viewModel.quantityEditing {
                                 viewModel.appendQuantityEditDigit(digit)
@@ -386,10 +385,15 @@ struct RegisterScreen: View {
                             }
                         }
                     )
-                    .padding(PosLayoutMetrics.numpadKeyGap)
-                    .frame(height: PosLayoutMetrics.numpadCardHeight)
+                    .padding(PosLayoutMetrics.numpadInnerPadding)
+                    .numberPadHostSize()
+                    .background(Color.white.opacity(0.55))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .frame(maxWidth: .infinity)
                     Button("Pay") { viewModel.openCheckout() }
                         .buttonStyle(PosFullWidthButtonStyle())
+                        .frame(maxWidth: PosLayoutMetrics.numpadColumnWidth)
+                        .frame(maxWidth: .infinity)
                         .disabled(!viewModel.canOpenCheckout)
                 }
             }

@@ -140,7 +140,6 @@ struct OpeningTillScreen: View {
         VStack(spacing: 0) {
             Spacer(minLength: PosLayoutMetrics.tillPanelEdgeSpacer)
             PosNumberPad(
-                layout: .compact,
                 onDigit: onDigit,
                 onClear: onClearCount,
                 onBackspace: onBackspaceCount,
@@ -148,7 +147,10 @@ struct OpeningTillScreen: View {
                 onDown: onNextDenomination
             )
             .padding(PosLayoutMetrics.numpadInnerPadding)
-            .frame(height: PosLayoutMetrics.numpadCardHeight)
+            .numberPadHostSize(withNavColumn: true)
+            .background(Color.white.opacity(0.55))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .frame(maxWidth: .infinity)
             Spacer(minLength: PosLayoutMetrics.tillPanelEdgeSpacer)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

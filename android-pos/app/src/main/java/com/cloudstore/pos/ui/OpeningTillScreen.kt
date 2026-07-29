@@ -235,9 +235,7 @@ fun OpeningTillScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(PosNumpadCardHeight),
+                        modifier = Modifier.numberPadHostSize(withNavColumn = true),
                         colors = PosCardDefaults.numpadPanelColors(),
                         elevation = PosCardDefaults.elevation(),
                     ) {
