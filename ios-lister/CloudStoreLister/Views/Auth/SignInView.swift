@@ -12,7 +12,7 @@ struct SignInView: View {
                 .foregroundStyle(Color.listerAccent)
             Text("Cloud Store 893 Lister")
                 .font(.title.bold())
-            Text("Sign in with your store account to look up inventory.")
+            Text("Inventory Checker")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -21,7 +21,7 @@ struct SignInView: View {
                 .font(.caption)
                 .foregroundStyle(.tertiary)
             Button(action: onSignIn) {
-                Label("Sign in with Oracle", systemImage: "person.badge.key")
+                Label("Sign In", systemImage: "person.badge.key")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)

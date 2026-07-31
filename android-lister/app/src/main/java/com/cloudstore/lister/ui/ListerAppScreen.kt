@@ -126,7 +126,7 @@ private fun SignInScreen(hostLabel: String, errorMessage: String?, onSignIn: () 
     ) {
         Text("Cloud Store 893 Lister", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "Sign in with your store account to look up inventory.",
+            "Inventory Checker",
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(vertical = 16.dp),
         )
@@ -145,7 +145,7 @@ private fun SignInScreen(hostLabel: String, errorMessage: String?, onSignIn: () 
                 .fillMaxWidth()
                 .padding(top = 24.dp),
         ) {
-            Text("Sign in with Oracle")
+            Text("Sign In")
         }
     }
 }

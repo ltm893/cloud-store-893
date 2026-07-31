@@ -74,11 +74,11 @@ import kotlin.math.ceil
 import kotlin.math.min
 
 private enum class OperationMode(val label: String) {
-    Union("Union"),
     Diff("Diff"),
-    Split("Split"),
-    Sort("Sort"),
+    Union("Union"),
     Query("Query"),
+    Sort("Sort"),
+    Split("Split"),
 }
 
 private val SegmentedTrack = Color(0xFFE5E1D8)
@@ -97,7 +97,7 @@ fun ListOperationsScreen(
     onDiff: (String, String) -> ListDiffResult?,
     onSaveAsNewList: (String, List<InventoryListItem>) -> Unit,
 ) {
-    var mode by remember { mutableStateOf(OperationMode.Union) }
+    var mode by remember { mutableStateOf(OperationMode.Query) }
 
     Scaffold(
         containerColor = ListerBackground,
@@ -141,24 +141,14 @@ fun ListOperationsScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             )
             when (mode) {
-                OperationMode.Union -> UnionOperationView(
-                    lists = lists,
-                    onCreate = onUnion,
-                    onDone = onClose,
-                )
                 OperationMode.Diff -> DiffOperationView(
                     lists = lists,
                     onDiff = onDiff,
                     onSaveAsNewList = onSaveAsNewList,
                 )
-                OperationMode.Split -> SplitOperationView(
+                OperationMode.Union -> UnionOperationView(
                     lists = lists,
-                    onSplit = onSplit,
-                    onDone = onClose,
-                )
-                OperationMode.Sort -> SortOperationView(
-                    lists = lists,
-                    onSort = onSort,
+                    onCreate = onUnion,
                     onDone = onClose,
                 )
                 OperationMode.Query -> QueryOperationView(
@@ -166,6 +156,16 @@ fun ListOperationsScreen(
                     batchProgress = batchProgress,
                     onBatchQuery = onBatchQuery,
                     onCancelBatch = onCancelBatch,
+                )
+                OperationMode.Sort -> SortOperationView(
+                    lists = lists,
+                    onSort = onSort,
+                    onDone = onClose,
+                )
+                OperationMode.Split -> SplitOperationView(
+                    lists = lists,
+                    onSplit = onSplit,
+                    onDone = onClose,
                 )
             }
         }

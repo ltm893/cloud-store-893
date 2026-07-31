@@ -5,14 +5,14 @@ struct ListOperationsView: View {
     @Environment(\.dismiss) private var dismiss
 
     enum Mode: String, CaseIterable {
-        case union = "Union"
         case diff = "Diff"
-        case split = "Split"
-        case sort = "Sort"
+        case union = "Union"
         case listQuery = "Query"
+        case sort = "Sort"
+        case split = "Split"
     }
 
-    @State private var mode: Mode = .union
+    @State private var mode: Mode = .listQuery
 
     var body: some View {
         NavigationStack {
@@ -25,20 +25,20 @@ struct ListOperationsView: View {
                 .background(Color.listerBackground)
 
                 switch mode {
-                case .union:
-                    UnionOperationView()
-                        .environmentObject(viewModel)
                 case .diff:
                     DiffOperationView()
                         .environmentObject(viewModel)
-                case .split:
-                    SplitOperationView()
+                case .union:
+                    UnionOperationView()
+                        .environmentObject(viewModel)
+                case .listQuery:
+                    ListQueryOperationView()
                         .environmentObject(viewModel)
                 case .sort:
                     SortOperationView()
                         .environmentObject(viewModel)
-                case .listQuery:
-                    ListQueryOperationView()
+                case .split:
+                    SplitOperationView()
                         .environmentObject(viewModel)
                 }
             }
