@@ -260,8 +260,8 @@ class ListerViewModel(
     fun moveItem(item: InventoryListItem, toListId: String): Boolean {
         val current = _state.value
         val updated = ListStoreLogic.moveItem(current.lists, current.activeListId, item, toListId) ?: return false
-        _state.update { it.copy(lists = updated) }
-        saveLists(updated)
+        _state.update { it.copy(lists = updated, activeListId = toListId) }
+        saveLists(updated, toListId)
         return true
     }
 

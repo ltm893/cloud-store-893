@@ -205,7 +205,9 @@ final class InventoryLookupViewModel: ObservableObject {
             in: lists
         ) else { return false }
         lists = updated
+        activeListId = toListId
         saveLists()
+        saveActiveListId()
         return true
     }
 

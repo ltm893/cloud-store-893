@@ -24,7 +24,9 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.RemoveCircle
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -62,6 +64,7 @@ import kotlinx.coroutines.launch
 import com.cloudstore.lister.data.InventoryListItem
 import com.cloudstore.lister.data.InventoryNamedList
 import com.cloudstore.lister.domain.ListExportLogic
+import com.cloudstore.lister.domain.ListSearchLogic
 import com.cloudstore.lister.ui.theme.ListerAccent
 import com.cloudstore.lister.ui.theme.ListerBackground
 import com.cloudstore.lister.ui.theme.ListerDanger
@@ -90,13 +93,19 @@ fun ListsTab(
 ) {
     val active = lists.firstOrNull { it.id == activeListId }
     val items = active?.items.orEmpty()
-    val summary = ListExportLogic.summary(items)
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredItems = remember(items, searchQuery) {
+        ListSearchLogic.filtered(items, searchQuery)
+    }
+    val isFiltering = searchQuery.trim().isNotEmpty()
+    val summary = ListExportLogic.summary(filteredItems)
     var transferItem by remember { mutableStateOf<InventoryListItem?>(null) }
     var transferMode by remember { mutableStateOf<ItemTransferMode?>(null) }
     var roseHighlightedIds by remember { mutableStateOf(setOf<String>()) }
 
     LaunchedEffect(activeListId) {
         roseHighlightedIds = emptySet()
+        searchQuery = ""
     }
 
     val pendingItem = transferItem
@@ -145,38 +154,68 @@ fun ListsTab(
                     vertical = 12.dp,
                 ),
             ) {
+                item(key = "list_search") {
+                    ListSearchField(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                    )
+                }
                 item(key = "list_count_summary") {
                     ListCountSummary(
                         itemCount = summary.itemCount,
                         totalPullCount = summary.totalPullCount,
+                        totalItemCount = if (isFiltering) items.size else null,
                     )
                 }
-                items(items, key = { it.id }) { item ->
-                    val highlighted = item.id in roseHighlightedIds
-                    SwipeActionsCard(
-                        onCopy = {
-                            transferItem = item
-                            transferMode = ItemTransferMode.Copy
-                        },
-                        onMove = {
-                            transferItem = item
-                            transferMode = ItemTransferMode.Move
-                        },
-                        onDelete = { onDeleteItem(item.id) },
-                        onLongPress = {
-                            roseHighlightedIds = if (highlighted) {
-                                roseHighlightedIds - item.id
-                            } else {
-                                roseHighlightedIds + item.id
-                            }
-                        },
-                    ) {
-                        ListItemCard(
-                            item = item,
-                            highlighted = highlighted,
-                            onIncrement = { onIncrement(item.id) },
-                            onDecrement = { onDecrement(item.id) },
-                        )
+                if (filteredItems.isEmpty()) {
+                    item(key = "no_matches") {
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                "No Matches",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                "No items match \"${searchQuery.trim()}\"",
+                                modifier = Modifier.padding(top = 8.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                } else {
+                    items(filteredItems, key = { it.id }) { item ->
+                        val highlighted = item.id in roseHighlightedIds
+                        SwipeActionsCard(
+                            onCopy = {
+                                transferItem = item
+                                transferMode = ItemTransferMode.Copy
+                            },
+                            onMove = {
+                                transferItem = item
+                                transferMode = ItemTransferMode.Move
+                            },
+                            onDelete = { onDeleteItem(item.id) },
+                            onLongPress = {
+                                roseHighlightedIds = if (highlighted) {
+                                    roseHighlightedIds - item.id
+                                } else {
+                                    roseHighlightedIds + item.id
+                                }
+                            },
+                        ) {
+                            ListItemCard(
+                                item = item,
+                                highlighted = highlighted,
+                                onIncrement = { onIncrement(item.id) },
+                                onDecrement = { onDecrement(item.id) },
+                            )
+                        }
                     }
                 }
             }
@@ -211,8 +250,41 @@ fun ListsTabDialogs(
 }
 
 @Composable
-private fun ListCountSummary(itemCount: Int, totalPullCount: Int) {
+private fun ListSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        placeholder = { Text("Search list") },
+        leadingIcon = {
+            Icon(Icons.Default.Search, contentDescription = null, tint = ListerMuted)
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun ListCountSummary(
+    itemCount: Int,
+    totalPullCount: Int,
+    totalItemCount: Int? = null,
+) {
     val itemsLabel = if (itemCount == 1) "1 item" else "$itemCount items"
+    val countLabel = if (totalItemCount != null) {
+        "$itemsLabel of $totalItemCount · $totalPullCount pull"
+    } else {
+        "$itemsLabel · $totalPullCount pull"
+    }
     Row(
         Modifier
             .fillMaxWidth()
@@ -229,7 +301,7 @@ private fun ListCountSummary(itemCount: Int, totalPullCount: Int) {
             color = ListerAccent,
         )
         Text(
-            "$itemsLabel · $totalPullCount pull",
+            countLabel,
             style = MaterialTheme.typography.bodyMedium,
             color = ListerMuted,
         )

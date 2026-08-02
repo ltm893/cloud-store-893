@@ -38,6 +38,8 @@
 		L10000010000000000000023 /* ListExportLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000028 /* ListExportLogicTests.swift */; };
 		L10000010000000000000024 /* ListSortLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000029 /* ListSortLogic.swift */; };
 		L10000010000000000000025 /* ListSortLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002A /* ListSortLogicTests.swift */; };
+		L10000010000000000000040 /* ListSearchLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000040 /* ListSearchLogic.swift */; };
+		L10000010000000000000041 /* ListSearchLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000041 /* ListSearchLogicTests.swift */; };
 		L10000010000000000000026 /* ManualInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002B /* ManualInputView.swift */; };
 		L10000010000000000000027 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002C /* BarcodeScannerView.swift */; };
 		L10000010000000000000028 /* CSVImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000002D /* CSVImportView.swift */; };
@@ -94,6 +96,8 @@
 		L10000020000000000000028 /* ListExportLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListExportLogicTests.swift; sourceTree = "<group>"; };
 		L10000020000000000000029 /* ListSortLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSortLogic.swift; sourceTree = "<group>"; };
 		L1000002000000000000002A /* ListSortLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSortLogicTests.swift; sourceTree = "<group>"; };
+		L10000020000000000000040 /* ListSearchLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSearchLogic.swift; sourceTree = "<group>"; };
+		L10000020000000000000041 /* ListSearchLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSearchLogicTests.swift; sourceTree = "<group>"; };
 		L1000002000000000000002B /* ManualInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualInputView.swift; sourceTree = "<group>"; };
 		L1000002000000000000002C /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
 		L1000002000000000000002D /* CSVImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportView.swift; sourceTree = "<group>"; };
@@ -207,6 +211,7 @@
 				L10000020000000000000025 /* ListQueryLogicTests.swift */,
 				L10000020000000000000028 /* ListExportLogicTests.swift */,
 				L1000002000000000000002A /* ListSortLogicTests.swift */,
+				L10000020000000000000041 /* ListSearchLogicTests.swift */,
 				L1000002000000000000002F /* CSVImportLogicTests.swift */,
 				L1000002000000000000003B /* RegisterIdLogicTests.swift */,
 				L1000002000000000000003C /* ListerOidcRedirectLogicTests.swift */,
@@ -264,6 +269,7 @@
 				L10000020000000000000023 /* ListQueryLogic.swift */,
 				L10000020000000000000026 /* ListExportLogic.swift */,
 				L10000020000000000000029 /* ListSortLogic.swift */,
+				L10000020000000000000040 /* ListSearchLogic.swift */,
 				L1000002000000000000002E /* CSVImportLogic.swift */,
 				L1000002000000000000003D /* BarcodeNormalizeLogic.swift */,
 			);
@@ -462,6 +468,7 @@
 				L10000010000000000000021 /* ListExportLogic.swift in Sources */,
 				L10000010000000000000022 /* ActivityShareSheet.swift in Sources */,
 				L10000010000000000000024 /* ListSortLogic.swift in Sources */,
+				L10000010000000000000040 /* ListSearchLogic.swift in Sources */,
 				L10000010000000000000026 /* ManualInputView.swift in Sources */,
 				L10000010000000000000027 /* BarcodeScannerView.swift in Sources */,
 				L10000010000000000000028 /* CSVImportView.swift in Sources */,
@@ -491,6 +498,7 @@
 				L10000010000000000000020 /* ListQueryLogicTests.swift in Sources */,
 				L10000010000000000000023 /* ListExportLogicTests.swift in Sources */,
 				L10000010000000000000025 /* ListSortLogicTests.swift in Sources */,
+				L10000010000000000000041 /* ListSearchLogicTests.swift in Sources */,
 				L1000001000000000000002A /* CSVImportLogicTests.swift in Sources */,
 				L10000010000000000000036 /* RegisterIdLogicTests.swift in Sources */,
 				L10000010000000000000037 /* ListerOidcRedirectLogicTests.swift in Sources */,

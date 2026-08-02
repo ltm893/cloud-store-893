@@ -11,12 +11,27 @@ struct ListsView: View {
     @State private var showListOperations = false
     @State private var showDeleteAllAlert = false
     @State private var shareableFile: ShareableFile?
+    @State private var searchText = ""
+
+    private var filteredItems: [InventoryListItem] {
+        ListSearchLogic.filtered(viewModel.activeListItems, query: searchText)
+    }
+
+    private var isFiltering: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     private var listCountLabel: String {
-        let summary = viewModel.activeListSummary
-        let items = "\(summary.itemCount) item\(summary.itemCount == 1 ? "" : "s")"
-        let pulls = "\(summary.totalPullCount) pull"
-        return "\(items) · \(pulls)"
+        let items = filteredItems
+        let itemCount = items.count
+        let totalPull = items.reduce(0) { $0 + $1.pullCount }
+        let itemsLabel = "\(itemCount) item\(itemCount == 1 ? "" : "s")"
+        let pulls = "\(totalPull) pull"
+        if isFiltering {
+            let total = viewModel.activeListItems.count
+            return "\(itemsLabel) of \(total) · \(pulls)"
+        }
+        return "\(itemsLabel) · \(pulls)"
     }
 
     var body: some View {
@@ -26,29 +41,34 @@ struct ListsView: View {
             }
 
             Group {
-            if viewModel.activeListItems.isEmpty {
-                ContentUnavailableView(
-                    "No Items",
-                    systemImage: "list.bullet.rectangle",
-                    description: Text("Items you add will appear here")
-                )
-            } else {
-                List {
-                    ForEach(viewModel.activeListItems) { item in
-                        ListItemRow(item: item, viewModel: viewModel)
+                if viewModel.activeListItems.isEmpty {
+                    ContentUnavailableView(
+                        "No Items",
+                        systemImage: "list.bullet.rectangle",
+                        description: Text("Items you add will appear here")
+                    )
+                } else if filteredItems.isEmpty {
+                    ContentUnavailableView(
+                        "No Matches",
+                        systemImage: "magnifyingglass",
+                        description: Text("No items match \"\(searchText.trimmingCharacters(in: .whitespacesAndNewlines))\"")
+                    )
+                } else {
+                    List {
+                        ForEach(filteredItems) { item in
+                            ListItemRow(item: item, viewModel: viewModel)
+                        }
+                        .onDelete(perform: deleteFilteredItems)
                     }
-                    .onDelete { offsets in
-                        viewModel.deleteItems(at: offsets)
-                    }
+                    .scrollContentBackground(.hidden)
                 }
-                .scrollContentBackground(.hidden)
-            }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.listerBackground)
         .navigationTitle(viewModel.activeListName)
         .listerNavigationBar()
+        .searchable(text: $searchText, prompt: "Search list")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showAllLists = true } label: {
@@ -100,6 +120,17 @@ struct ListsView: View {
         } message: {
             Text("Are you sure you want to delete all \(viewModel.activeListItems.count) item(s) from \(viewModel.activeListName)? This action cannot be undone.")
         }
+        .onChange(of: viewModel.activeListId) { _, _ in
+            searchText = ""
+        }
+    }
+
+    private func deleteFilteredItems(at offsets: IndexSet) {
+        let ids = Set(offsets.map { filteredItems[$0].id })
+        let originalOffsets = IndexSet(
+            viewModel.activeListItems.indices.filter { ids.contains(viewModel.activeListItems[$0].id) }
+        )
+        viewModel.deleteItems(at: originalOffsets)
     }
 
     private var listCountSummary: some View {
