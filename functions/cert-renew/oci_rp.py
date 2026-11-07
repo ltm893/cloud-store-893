@@ -55,12 +55,19 @@ def cert_import(certificate_id: str, cert_path: str, key_path: str, chain_path: 
     with open(chain_path, encoding="utf-8") as handle:
         cert_chain_pem = handle.read()
 
-    details = oci.certificates_management.models.UpdateCertificateByImportingConfigDetails(
+    # SDK 2.x dropped update_certificate_by_importing_config_details. The import
+    # payload is the certificate_config on update_certificate, and stage CURRENT
+    # is what the load balancer serves.
+    config = oci.certificates_management.models.UpdateCertificateByImportingConfigDetails(
         certificate_pem=certificate_pem,
         private_key_pem=private_key_pem,
         cert_chain_pem=cert_chain_pem,
+        stage="CURRENT",
     )
-    client.update_certificate_by_importing_config_details(certificate_id, details)
+    details = oci.certificates_management.models.UpdateCertificateDetails(
+        certificate_config=config,
+    )
+    client.update_certificate(certificate_id, details)
 
 
 def main(argv: list[str] | None = None) -> int:

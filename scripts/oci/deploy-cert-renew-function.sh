@@ -52,8 +52,14 @@ IMAGE="$(resolve_image)"
 FN_OCID="$(cd "$TF_DIR" && terraform output -raw cert_renew_function_ocid 2>/dev/null || true)"
 
 echo "==> IMAGE=$IMAGE"
+# OCI Functions rejects an OCI image index. Buildx provenance/SBOM attestations
+# wrap a single amd64 image in an index and invoke fails with
+# FunctionInvokeImageNotAvailable ("Failed to pull function image").
 docker buildx build \
   --platform linux/amd64 \
+  --provenance=false \
+  --sbom=false \
+  --load \
   -t "$IMAGE" \
   "$PROJECT_ROOT/functions/cert-renew"
 

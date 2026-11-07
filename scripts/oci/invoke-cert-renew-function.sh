@@ -48,7 +48,9 @@ fi
 
 OUT="/tmp/cert-renew-invoke-$$.json"
 echo "==> Invoking $FN_OCID (body=$BODY)"
-oci fn function invoke \
+# Default CLI read timeout is 60s. DNS-01 waits 120s plus issuance, and the
+# function timeout is 300s, so a sync invoke must outlast that.
+oci --read-timeout 360 fn function invoke \
   --function-id "$FN_OCID" \
   --body "$BODY" \
   --file "$OUT"
