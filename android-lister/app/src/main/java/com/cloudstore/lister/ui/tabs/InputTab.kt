@@ -1,12 +1,5 @@
 package com.cloudstore.lister.ui.tabs
 
-import android.annotation.SuppressLint
-import android.util.Size
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,29 +25,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
 import com.cloudstore.lister.ui.theme.ListerBackground
 import com.cloudstore.lister.ui.theme.ListerHighlight
 import com.cloudstore.lister.ui.theme.ListerMuted
 import com.cloudstore.lister.ui.theme.ListerPrimary
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.common.InputImage
-import java.util.concurrent.Executors
 
 enum class InputRoute {
     Hub,
@@ -276,81 +259,4 @@ private fun NumpadKey(
             label != null -> Text(label, fontSize = 22.sp, fontWeight = FontWeight.Normal)
         }
     }
-}
-
-@Composable
-private fun BarcodeScannerScreen(
-    onBarcode: (String) -> Unit,
-    onCancel: () -> Unit,
-) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        BarcodeCamera(Modifier.weight(1f), onBarcode)
-        OutlinedButton(
-            onClick = onCancel,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = ListerPrimary),
-        ) {
-            Text("Cancel")
-        }
-    }
-}
-
-@SuppressLint("UnsafeOptInUsageError")
-@Composable
-private fun BarcodeCamera(modifier: Modifier, onBarcode: (String) -> Unit) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val previewView = remember { PreviewView(context) }
-    val executor = remember { Executors.newSingleThreadExecutor() }
-    val scanner = remember { BarcodeScanning.getClient() }
-    val delivered = remember { mutableStateOf(false) }
-
-    DisposableEffect(Unit) {
-        val future = ProcessCameraProvider.getInstance(context)
-        future.addListener({
-            val provider = future.get()
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-            val analysis = ImageAnalysis.Builder()
-                .setTargetResolution(Size(1280, 720))
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-            analysis.setAnalyzer(executor) { proxy ->
-                val media = proxy.image
-                if (media != null && !delivered.value) {
-                    val image = InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees)
-                    scanner.process(image)
-                        .addOnSuccessListener { codes ->
-                            val value = codes.firstNotNullOfOrNull { barcode ->
-                                barcode.rawValue?.takeIf { it.isNotBlank() }
-                            }
-                            if (value != null && !delivered.value) {
-                                delivered.value = true
-                                onBarcode(value)
-                            }
-                        }
-                        .addOnCompleteListener { proxy.close() }
-                } else {
-                    proxy.close()
-                }
-            }
-            provider.unbindAll()
-            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
-        }, ContextCompat.getMainExecutor(context))
-        onDispose {
-            executor.shutdown()
-            runCatching { ProcessCameraProvider.getInstance(context).get().unbindAll() }
-        }
-    }
-
-    AndroidView(
-        factory = { previewView },
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp)),
-    )
 }

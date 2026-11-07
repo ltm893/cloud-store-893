@@ -59,6 +59,8 @@
 		L10000010000000000000036 /* RegisterIdLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000003B /* RegisterIdLogicTests.swift */; };
 		L10000010000000000000038 /* BarcodeNormalizeLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000003D /* BarcodeNormalizeLogic.swift */; };
 		L10000010000000000000039 /* BarcodeNormalizeLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000003E /* BarcodeNormalizeLogicTests.swift */; };
+		L10000010000000000000042 /* ProductBarcode.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000042 /* ProductBarcode.swift */; };
+		L10000010000000000000043 /* ProductBarcodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10000020000000000000043 /* ProductBarcodeTests.swift */; };
 		L1000001000000000000000D /* AppConfigLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000D /* AppConfigLogicTests.swift */; };
 		L1000001000000000000000E /* InventoryDisplayLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000E /* InventoryDisplayLogicTests.swift */; };
 		L1000001000000000000000F /* InfoPlistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L1000002000000000000000F /* InfoPlistTests.swift */; };
@@ -104,6 +106,8 @@
 		L1000002000000000000002E /* CSVImportLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportLogic.swift; sourceTree = "<group>"; };
 		L1000002000000000000003D /* BarcodeNormalizeLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeNormalizeLogic.swift; sourceTree = "<group>"; };
 		L1000002000000000000003E /* BarcodeNormalizeLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeNormalizeLogicTests.swift; sourceTree = "<group>"; };
+		L10000020000000000000042 /* ProductBarcode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductBarcode.swift; sourceTree = "<group>"; };
+		L10000020000000000000043 /* ProductBarcodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductBarcodeTests.swift; sourceTree = "<group>"; };
 		L1000002000000000000002F /* CSVImportLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportLogicTests.swift; sourceTree = "<group>"; };
 		L10000020000000000000030 /* RegisterIdLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterIdLogic.swift; sourceTree = "<group>"; };
 		L10000020000000000000031 /* RegisterId.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterId.swift; sourceTree = "<group>"; };
@@ -216,6 +220,7 @@
 				L1000002000000000000003B /* RegisterIdLogicTests.swift */,
 				L1000002000000000000003C /* ListerOidcRedirectLogicTests.swift */,
 				L1000002000000000000003E /* BarcodeNormalizeLogicTests.swift */,
+				L10000020000000000000043 /* ProductBarcodeTests.swift */,
 				L1000002000000000000000F /* InfoPlistTests.swift */,
 			);
 			path = CloudStoreListerTests;
@@ -272,6 +277,7 @@
 				L10000020000000000000040 /* ListSearchLogic.swift */,
 				L1000002000000000000002E /* CSVImportLogic.swift */,
 				L1000002000000000000003D /* BarcodeNormalizeLogic.swift */,
+				L10000020000000000000042 /* ProductBarcode.swift */,
 			);
 			path = Logic;
 			sourceTree = "<group>";
@@ -474,6 +480,7 @@
 				L10000010000000000000028 /* CSVImportView.swift in Sources */,
 				L10000010000000000000029 /* CSVImportLogic.swift in Sources */,
 				L10000010000000000000038 /* BarcodeNormalizeLogic.swift in Sources */,
+				L10000010000000000000042 /* ProductBarcode.swift in Sources */,
 				L1000001000000000000002B /* RegisterIdLogic.swift in Sources */,
 				L1000001000000000000002C /* RegisterId.swift in Sources */,
 				L1000001000000000000002D /* CookieStore.swift in Sources */,
@@ -503,6 +510,7 @@
 				L10000010000000000000036 /* RegisterIdLogicTests.swift in Sources */,
 				L10000010000000000000037 /* ListerOidcRedirectLogicTests.swift in Sources */,
 				L10000010000000000000039 /* BarcodeNormalizeLogicTests.swift in Sources */,
+				L10000010000000000000043 /* ProductBarcodeTests.swift in Sources */,
 				L1000001000000000000000F /* InfoPlistTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
